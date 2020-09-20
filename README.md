@@ -1,7 +1,7 @@
 # AspNetCore.IgniteServer
 
 AspNetCore.IgniteServer.dll is an implementation of Ignite server that references necessary assemblies
-to provide server-side component for AspNetCore platform. Usually, every node runs one or more instances
+to provide server-side component for AspNetCore platform. Kubernetes ready, authentication and SSL enabled. Usually, every node runs one or more instances
 of the server.
 
 ## Usage:
