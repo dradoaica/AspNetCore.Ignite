@@ -1,0 +1,53 @@
+﻿# Build with docker build -t AspNetCore.ignite-server .
+FROM mcr.microsoft.com/dotnet/core/sdk:3.1 AS build-env
+WORKDIR /app
+# Copy csproj and restore as distinct layers
+COPY *.csproj ./
+RUN dotnet restore
+# Copy everything else and build
+COPY . ./
+RUN dotnet publish -c Release -o out
+
+# Build runtime image
+FROM openjdk:8
+RUN apt-get update
+RUN apt-get install apt-transport-https
+
+# Install dotnet runtime:
+RUN wget https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+RUN dpkg -i packages-microsoft-prod.deb
+
+RUN apt-get update
+RUN apt-get install -y apt-transport-https
+RUN apt-get install -y aspnetcore-runtime-3.1
+
+# Install IGNITE
+ENV IGNITE_VERSION 2.8.1
+
+# Ignite home
+ENV IGNITE_HOME /opt/ignite/apache-ignite-${IGNITE_VERSION}-bin
+
+# Do not rely on anything provided by base image(s), but be explicit, if they are installed already it is noop then
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        unzip \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/ignite
+
+RUN curl https://dist.apache.org/repos/dist/release/ignite/${IGNITE_VERSION}/apache-ignite-${IGNITE_VERSION}-bin.zip -o ignite.zip \
+    && unzip ignite.zip \
+    && rm ignite.
+    
+RUN mv apache-ignite-${IGNITE_VERSION}-bin/libs/optional/ignite-rest-http apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-rest-http
+
+RUN mv apache-ignite-${IGNITE_VERSION}-bin/libs/optional/ignite-kubernetes apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-kubernetes
+
+WORKDIR /app
+COPY --from=build-env /app/out .
+ENTRYPOINT ["dotnet", "AspNetCore.IgniteServer.dll"]
+
+EXPOSE 10800 10900 11211 47100 47500 49112 8080
+
+LABEL image="aspnetcore.ignite-server" \
+      version="1.0"

@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "AspNetCore.IgniteServer": {
+      "commandName": "Project",
+      "commandLineArgs": "-Onheap 1024 -Offheap 4024 -Cluster \"127.0.0.1:47500\""
+    }
+  }
+}

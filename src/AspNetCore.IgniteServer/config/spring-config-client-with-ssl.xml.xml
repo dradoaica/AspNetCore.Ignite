@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:util="http://www.springframework.org/schema/util"
+       xsi:schemaLocation="
+        http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/util
+        http://www.springframework.org/schema/util/spring-util.xsd">
+  <bean class="org.apache.ignite.configuration.IgniteConfiguration">
+    <property name="clientConnectorConfiguration">
+      <bean class="org.apache.ignite.configuration.ClientConnectorConfiguration">
+        <property name="sslEnabled" value="true"/>
+        <property name="useIgniteSslContextFactory" value="true"/>
+        <property name="sslClientAuth" value="true"/>
+      </bean>
+    </property>
+    <property name="discoverySpi">
+      <bean class="org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi">
+        <property name="ipFinder">
+          <bean class="org.apache.ignite.spi.discovery.tcp.ipfinder.kubernetes.TcpDiscoveryKubernetesIpFinder">
+            <property name="namespace" value="K8S_NAMESPACE"/>
+            <property name="serviceName" value="K8S_SERVICE_NAME"/>
+          </bean>
+        </property>
+      </bean>
+    </property>
+  </bean>
+</beans>
