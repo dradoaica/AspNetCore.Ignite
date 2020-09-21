@@ -11,8 +11,16 @@
     <property name="clientConnectorConfiguration">
       <bean class="org.apache.ignite.configuration.ClientConnectorConfiguration">
         <property name="sslEnabled" value="true"/>
-        <property name="useIgniteSslContextFactory" value="true"/>
+        <property name="useIgniteSslContextFactory" value="false"/>
         <property name="sslClientAuth" value="true"/>
+        <property name="sslContextFactory">
+          <bean class="org.apache.ignite.ssl.SslContextFactory">
+            <property name="keyStoreFilePath" value="SSL_KEY_STORE_FILE_PATH"/>
+            <property name="keyStorePassword" value="SSL_KEY_STORE_PASSWORD"/>
+            <property name="trustStoreFilePath" value="SSL_TRUST_STORE_FILE_PATH"/>
+            <property name="trustStorePassword" value="SSL_TRUST_STORE_PASSWORD"/>
+          </bean>
+        </property>
       </bean>
     </property>
     <property name="discoverySpi">
