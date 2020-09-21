@@ -52,7 +52,7 @@ namespace AspNetCore.IgniteServer
                 string springConfigPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config", useSsl ? "spring-config-client-with-ssl.xml" : "spring-config.xml");
                 string springConfigText = File.ReadAllText(springConfigPath, Encoding.UTF8);
                 springConfigText = springConfigText?.Replace("K8S_NAMESPACE", k8sNamespace)?.Replace("K8S_SERVICE_NAME", k8sServiceName);
-				if (useClientSsl)
+                if (useClientSsl)
                 {
                     springConfigText = springConfigText?.Replace("SSL_KEY_STORE_FILE_PATH", sslKeyStoreFilePath)?.Replace("SSL_KEY_STORE_PASSWORD", sslKeyStorePassword)
                         ?.Replace("SSL_TRUST_STORE_FILE_PATH", sslTrustStoreFilePath)?.Replace("SSL_TRUST_STORE_PASSWORD", sslTrustStorePassword);
