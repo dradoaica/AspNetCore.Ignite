@@ -69,7 +69,8 @@ namespace AspNetCore.IgniteServer
             _igniteConfiguration.Logger = new IgniteNLogLogger();
             LoggerConfiguration loggerConfiguration = new LoggerConfiguration().ReadFrom.Configuration(Program.Configuration);
             loggerConfiguration.Enrich.FromLogContext();
-            _logger = loggerConfiguration.CreateLogger();
+            Log.Logger = loggerConfiguration.CreateLogger();
+            _logger = Log.Logger;
         }
 
         public IIgnite Ignite { get; private set; }
