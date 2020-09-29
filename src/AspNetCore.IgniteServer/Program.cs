@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.CommandLineUtils;
+﻿using AspNetCore.IgniteServer.Utils;
+using Microsoft.Extensions.CommandLineUtils;
 using Microsoft.Extensions.Configuration;
 using NLog;
 using NLog.Config;
@@ -133,12 +134,8 @@ namespace AspNetCore.IgniteServer
                 Layout = @"[${date:format=HH\:mm\:ss}] ${level}: ${message} ${exception}"
             };
             config.AddTarget(consoleTarget);
-            FileTarget fileTarget = new FileTarget("errorfile")
-            {
-                FileName = "${basedir}/AspNetCore.IgniteServer.log",
-                Layout = "[${longdate}] ${level}: ${message}  ${exception}"
-            };
-            config.AddTarget(fileTarget);
+            SerilogTarget serilogTarget = new SerilogTarget();
+            config.AddTarget(nameof(SerilogTarget), serilogTarget);
             // Step 3. Define rules            
             config.AddRule(LogLevel.Info, LogLevel.Fatal, consoleTarget); // all to console
             // Step 4. Activate the configuration
