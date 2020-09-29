@@ -5,6 +5,7 @@ using NLog;
 using NLog.Config;
 using NLog.Targets;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
@@ -14,6 +15,7 @@ namespace AspNetCore.IgniteServer
     {
         private const int DEFAULT_OFF_HEAP_MEMORY = 4096;
         private const int DEFAULT_ON_HEAP_MEMORY = 1024;
+        private static readonly List<string> _defaultClusterEnpoints = new List<string> { $"{DnsUtils.GetLocalIPAddress()}:47500" };
         private enum EventIds : int { EVT_METRICS, EVT_IGNITE_STATUS };
 
         public static IConfiguration Configuration { get; private set; }
@@ -38,6 +40,7 @@ namespace AspNetCore.IgniteServer
             CommandOption persistenceEnabled = commandLineApplication.Option("-PersistenceEnabled", "If set, it enables persistence mode.", CommandOptionType.NoValue);
             commandLineApplication.OnExecute(async () =>
             {
+				bool useTcpDiscoveryStaticIpFinder = "true".Equals(Configuration["USE_TCP_DISCOVERY_STATIC_IP_FINDER"], StringComparison.InvariantCultureIgnoreCase);
                 bool enableAuthentication = "true".Equals(Configuration["ENABLE_AUTHENTICATION"], StringComparison.InvariantCultureIgnoreCase);
                 string k8sNamespace = Configuration["K8S_NAMESPACE"];
                 string k8sServiceName = Configuration["K8S_SERVICE_NAME"];
@@ -90,6 +93,10 @@ namespace AspNetCore.IgniteServer
                     if (clusterEnpointArgument.HasValue())
                     {
                         server.SetClusterEnpoints(clusterEnpointArgument.Values);
+                    }
+					else if (useTcpDiscoveryStaticIpFinder)
+                    {
+                         server.SetClusterEnpoints(_defaultClusterEnpoints);
                     }
 
                     if (consistentIdArgument.HasValue())

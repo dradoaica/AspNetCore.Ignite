@@ -85,6 +85,7 @@ namespace AspNetCore.IgniteServer
         {
             IgniteConfiguration cfg = new IgniteConfiguration
             {
+				Localhost = DnsUtils.GetLocalIPAddress(),
                 SpringConfigUrl = _useClientSsl ? "config/spring-config-client-with-ssl.xml" : "config/spring-config.xml",
                 JvmOptions = new[] {
                                      "-XX:+AlwaysPreTouch",
