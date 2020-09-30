@@ -145,6 +145,7 @@ namespace AspNetCore.IgniteServer
             config.AddTarget(nameof(SerilogTarget), serilogTarget);
             // Step 3. Define rules            
             config.AddRule(LogLevel.Info, LogLevel.Fatal, consoleTarget); // all to console
+	    config.AddRule(LogLevel.Info, LogLevel.Fatal, serilogTarget); // all to serilog
             // Step 4. Activate the configuration
             LogManager.Configuration = config;
         }
