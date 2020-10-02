@@ -61,6 +61,7 @@ namespace AspNetCore.IgniteServer
                     springConfigText = springConfigText?.Replace("SSL_KEY_STORE_FILE_PATH", sslKeyStoreFilePath)?.Replace("SSL_KEY_STORE_PASSWORD", sslKeyStorePassword)
                         ?.Replace("SSL_TRUST_STORE_FILE_PATH", sslTrustStoreFilePath)?.Replace("SSL_TRUST_STORE_PASSWORD", sslTrustStorePassword);
                 }
+		    
                 File.WriteAllText(springConfigPath, springConfigText, Encoding.UTF8);
                 string configFile = configFileArgument.HasValue() ? configFileArgument.Value() : null;
                 using (IgniteServerRunner server = new IgniteServerRunner(enableAuthentication, igniteUserPassword, configFile, useSsl,
