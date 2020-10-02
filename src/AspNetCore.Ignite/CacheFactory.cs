@@ -3,6 +3,7 @@ using Apache.Ignite.Core.Cache;
 using Apache.Ignite.Core.Cache.Configuration;
 using Apache.Ignite.Core.Client;
 using Apache.Ignite.Core.Client.Cache;
+using AspNetCore.Ignite.Utils;
 using System;
 using System.Security.Authentication;
 
@@ -60,7 +61,7 @@ namespace AspNetCore.Ignite
             {
                 Name = cacheName,
                 CacheMode = CacheMode.Partitioned,
-                GroupName = typeof(TData).FullName,
+                GroupName = typeof(TData).FullNameWithoutAssemblyInfo(),
                 QueryEntities = new[]
                 {
                     new QueryEntity
@@ -81,7 +82,7 @@ namespace AspNetCore.Ignite
             {
                 Name = cacheName,
                 CacheMode = CacheMode.Partitioned,
-                GroupName = typeof(TData).FullName,
+                GroupName = typeof(TData).FullNameWithoutAssemblyInfo(),
                 QueryEntities = new[]
                 {
                     new QueryEntity
