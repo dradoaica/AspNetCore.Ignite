@@ -86,7 +86,8 @@ namespace AspNetCore.IgniteServer
         {
             IgniteConfiguration cfg = new IgniteConfiguration
             {
-				Localhost = DnsUtils.GetLocalIPAddress(),
+                AutoGenerateIgniteInstanceName = true,
+                Localhost = DnsUtils.GetLocalIPAddress(),
                 SpringConfigUrl = _useClientSsl ? "config/spring-config-client-with-ssl.xml" : "config/spring-config.xml",
                 JvmOptions = new[] {
                                      "-XX:+AlwaysPreTouch",
@@ -197,8 +198,8 @@ namespace AspNetCore.IgniteServer
             bool? persistenceEnabled = _igniteConfiguration?.DataStorageConfiguration?.DefaultDataRegionConfiguration?.PersistenceEnabled;
             if (persistenceEnabled.HasValue && persistenceEnabled.Value)
             {
-                Ignite.GetCluster().SetActive(true);
                 Ignite.GetCluster().SetBaselineAutoAdjustEnabledFlag(true);
+                Ignite.GetCluster().SetActive(true);
                 if (!string.IsNullOrWhiteSpace(_igniteUserPassword))
                 {
                     try
@@ -220,7 +221,10 @@ namespace AspNetCore.IgniteServer
             }
 
             CancellationTokenSource cts = new CancellationTokenSource();
-            Ignite.Stopped += (s, e) => tcs.SetResult(e.ToString());
+            Ignite.Stopped += (s, e) =>
+            {
+                tcs.SetResult(e.ToString());
+            };
             int localSpidPort = (Ignite.GetConfiguration().DiscoverySpi as TcpDiscoverySpi).LocalPort;
             _logger.Information($"Ignite Server is running (Local SpiDiscovery Port={localSpidPort}), press CTRL+C to terminate.");
             await tcs.Task;
@@ -229,12 +233,20 @@ namespace AspNetCore.IgniteServer
 
         public void Terminate()
         {
-            Ignition.Stop(Ignite.Name, true);
+            if (Ignite != null)
+            {
+                Ignition.Stop(Ignite.Name, true);
+                Ignite = null;
+            }
         }
 
         public void Stop()
         {
-            Ignition.Stop(Ignite.Name, false);
+            if (Ignite != null)
+            {
+                Ignition.Stop(Ignite.Name, false);
+                Ignite = null;
+            }
         }
 
         protected virtual void Dispose(bool disposing)
