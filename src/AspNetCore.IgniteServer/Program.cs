@@ -23,8 +23,6 @@ namespace AspNetCore.IgniteServer
             EVT_IGNITE_STATUS
         };
 
-        private const int DEFAULT_OFF_HEAP_MEMORY = 4096;
-        private const int DEFAULT_ON_HEAP_MEMORY = 1024;
         private static readonly List<string> _defaultClusterEnpoints = new List<string> { $"{DnsUtils.GetLocalIPAddress()}:47500" };
         private static readonly MemoryCache _memoryCache = new MemoryCache(new MemoryCacheOptions { ExpirationScanFrequency = TimeSpan.FromSeconds(5) });
         private static volatile bool _shouldStart = true;
@@ -52,6 +50,16 @@ namespace AspNetCore.IgniteServer
             CommandOption persistenceEnabled = commandLineApplication.Option("-PersistenceEnabled", "If set, it enables persistence mode.", CommandOptionType.NoValue);
             commandLineApplication.OnExecute(async () =>
             {
+                if (!int.TryParse(Configuration["DEFAULT_ON_HEAP_MEMORY"], out int defaultOnHeapMemory))
+                {
+                    defaultOnHeapMemory = 1024;
+                }
+
+                if (!int.TryParse(Configuration["DEFAULT_OFF_HEAP_MEMORY"], out int defaultOffHeapMemory))
+                {
+                    defaultOffHeapMemory = 4096;
+                }
+
                 bool useTcpDiscoveryStaticIpFinder = "true".Equals(Configuration["USE_TCP_DISCOVERY_STATIC_IP_FINDER"], StringComparison.InvariantCultureIgnoreCase);
                 bool enableAuthentication = "true".Equals(Configuration["ENABLE_AUTHENTICATION"], StringComparison.InvariantCultureIgnoreCase);
                 string k8sNamespace = Configuration["K8S_NAMESPACE"];
@@ -85,7 +93,7 @@ namespace AspNetCore.IgniteServer
                 }
                 else
                 {
-                    _server.SetOffHeapMemoryLimit(DEFAULT_OFF_HEAP_MEMORY);
+                    _server.SetOffHeapMemoryLimit(defaultOffHeapMemory);
                 }
 
                 if (onheapArgument.HasValue())
@@ -94,7 +102,7 @@ namespace AspNetCore.IgniteServer
                 }
                 else
                 {
-                    _server.SetOnHeapMemoryLimit(DEFAULT_ON_HEAP_MEMORY);
+                    _server.SetOnHeapMemoryLimit(defaultOnHeapMemory);
                 }
 
                 if (serverPortArgument.HasValue())

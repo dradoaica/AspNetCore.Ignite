@@ -1,0 +1,15 @@
+[ ca ]
+default_ca = CertificateAuthority
+
+[ CertificateAuthority ]
+certificate = ./ca.crt
+database = ./index.txt
+private_key = ./ca.key
+new_certs_dir = ./
+default_md = default
+policy = policy_match
+serial = ./serial
+default_days = 365
+
+[policy_match]
+commonName = supplied
