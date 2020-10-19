@@ -129,33 +129,40 @@ namespace AspNetCore.IgniteServer
                     _server.SetPersistence(true);
                 }
 
-                FileSystemWatcher sslKeyStoreFsw = new FileSystemWatcher
+                FileSystemWatcher sslKeyStoreFsw = null;
+                FileSystemWatcher sslTrustStoreFsw = null;
+                FileSystemWatcher sslClientCertificateFsw = null;
+                if (useSsl || useClientSsl)
                 {
-                    Filter = Path.GetFileName(sslKeyStoreFilePath),
-                    Path = Path.GetDirectoryName(sslKeyStoreFilePath),
-                    IncludeSubdirectories = false,
-                    EnableRaisingEvents = true
-                };
-                sslKeyStoreFsw.Created += OnSslFileCreatedOrChanged;
-                sslKeyStoreFsw.Changed += OnSslFileCreatedOrChanged;
-                FileSystemWatcher sslTrustStoreFsw = new FileSystemWatcher
-                {
-                    Filter = Path.GetFileName(sslTrustStoreFilePath),
-                    Path = Path.GetDirectoryName(sslTrustStoreFilePath),
-                    IncludeSubdirectories = false,
-                    EnableRaisingEvents = true
-                };
-                sslTrustStoreFsw.Created += OnSslFileCreatedOrChanged;
-                sslTrustStoreFsw.Changed += OnSslFileCreatedOrChanged;
-                FileSystemWatcher sslClientCertificateFsw = new FileSystemWatcher
-                {
-                    Filter = Path.GetFileName(sslClientCertificatePath),
-                    Path = Path.GetDirectoryName(sslClientCertificatePath),
-                    IncludeSubdirectories = false,
-                    EnableRaisingEvents = true
-                };
-                sslClientCertificateFsw.Created += OnSslFileCreatedOrChanged;
-                sslClientCertificateFsw.Changed += OnSslFileCreatedOrChanged;
+                    sslKeyStoreFsw = new FileSystemWatcher
+                    {
+                        Filter = Path.GetFileName(sslKeyStoreFilePath),
+                        Path = Path.GetDirectoryName(sslKeyStoreFilePath),
+                        IncludeSubdirectories = false,
+                        EnableRaisingEvents = true
+                    };
+                    sslKeyStoreFsw.Created += OnSslFileCreatedOrChanged;
+                    sslKeyStoreFsw.Changed += OnSslFileCreatedOrChanged;
+                    sslTrustStoreFsw = new FileSystemWatcher
+                    {
+                        Filter = Path.GetFileName(sslTrustStoreFilePath),
+                        Path = Path.GetDirectoryName(sslTrustStoreFilePath),
+                        IncludeSubdirectories = false,
+                        EnableRaisingEvents = true
+                    };
+                    sslTrustStoreFsw.Created += OnSslFileCreatedOrChanged;
+                    sslTrustStoreFsw.Changed += OnSslFileCreatedOrChanged;
+                    sslClientCertificateFsw = new FileSystemWatcher
+                    {
+                        Filter = Path.GetFileName(sslClientCertificatePath),
+                        Path = Path.GetDirectoryName(sslClientCertificatePath),
+                        IncludeSubdirectories = false,
+                        EnableRaisingEvents = true
+                    };
+                    sslClientCertificateFsw.Created += OnSslFileCreatedOrChanged;
+                    sslClientCertificateFsw.Changed += OnSslFileCreatedOrChanged;
+                }
+
                 try
                 {
                     while (_shouldStart)
@@ -166,12 +173,15 @@ namespace AspNetCore.IgniteServer
                 }
                 finally
                 {
-                    sslKeyStoreFsw.Created -= OnSslFileCreatedOrChanged;
-                    sslKeyStoreFsw.Changed -= OnSslFileCreatedOrChanged;
-                    sslTrustStoreFsw.Created -= OnSslFileCreatedOrChanged;
-                    sslTrustStoreFsw.Changed -= OnSslFileCreatedOrChanged;
-                    sslClientCertificateFsw.Created -= OnSslFileCreatedOrChanged;
-                    sslClientCertificateFsw.Changed -= OnSslFileCreatedOrChanged;
+                    if (useSsl || useClientSsl)
+                    {
+                        sslKeyStoreFsw.Created -= OnSslFileCreatedOrChanged;
+                        sslKeyStoreFsw.Changed -= OnSslFileCreatedOrChanged;
+                        sslTrustStoreFsw.Created -= OnSslFileCreatedOrChanged;
+                        sslTrustStoreFsw.Changed -= OnSslFileCreatedOrChanged;
+                        sslClientCertificateFsw.Created -= OnSslFileCreatedOrChanged;
+                        sslClientCertificateFsw.Changed -= OnSslFileCreatedOrChanged;
+                    }
                 }
 
                 return 0;
