@@ -8,8 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Apache.Ignite" Version="2.8.1" />
-    <PackageReference Include="Apache.Ignite.Linq" Version="2.8.1" />
+    <PackageReference Include="Apache.Ignite" Version="2.9.0" />
+    <PackageReference Include="Apache.Ignite.Linq" Version="2.9.0" />
   </ItemGroup>
   <!--
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
