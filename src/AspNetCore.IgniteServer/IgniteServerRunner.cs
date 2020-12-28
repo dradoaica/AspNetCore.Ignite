@@ -15,6 +15,7 @@ using Serilog.Core;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -22,13 +23,23 @@ namespace AspNetCore.IgniteServer
 {
     public class IgniteServerRunner : IDisposable
     {
-        private readonly Logger _logger;
+        private static readonly Logger _logger;
         private readonly IgniteConfiguration _igniteConfiguration;
         private readonly string _igniteUserPassword;
         private readonly bool _useClientSsl = false;
         private readonly string _sslClientCertificatePath;
         private readonly string _sslClientCertificatePassword;
         private bool _disposed = false;
+
+        static IgniteServerRunner()
+        {
+            LoggerConfiguration loggerConfiguration = new LoggerConfiguration().ReadFrom.Configuration(Program.Configuration);
+            loggerConfiguration.Enrich.FromLogContext();
+            _logger = loggerConfiguration.CreateLogger();
+            Log.Logger = _logger;
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+            TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
+        }
 
         public IgniteServerRunner(bool authenticationEnabled, string igniteUserPassword = null, string configurationFile = null, bool useSsl = false,
             string sslKeyStoreFilePath = null, string sslKeyStorePassword = null, string sslTrustStoreFilePath = null, string sslTrustStorePassword = null,
@@ -67,10 +78,6 @@ namespace AspNetCore.IgniteServer
             }
 
             _igniteConfiguration.Logger = new IgniteNLogLogger();
-            LoggerConfiguration loggerConfiguration = new LoggerConfiguration().ReadFrom.Configuration(Program.Configuration);
-            loggerConfiguration.Enrich.FromLogContext();
-            _logger = loggerConfiguration.CreateLogger();
-            Log.Logger = _logger;
         }
 
         public IIgnite Ignite { get; private set; }
@@ -114,9 +121,11 @@ namespace AspNetCore.IgniteServer
             switch (_igniteConfiguration.DiscoverySpi)
             {
                 case TcpDiscoverySpi tcpDiscoverySpi:
-                    tcpDiscoverySpi.IpFinder = new TcpDiscoveryStaticIpFinder { Endpoints = values }; break;
+                    tcpDiscoverySpi.IpFinder = new TcpDiscoveryStaticIpFinder { Endpoints = values };
+                    break;
                 case null:
-                    _igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi { IpFinder = new TcpDiscoveryStaticIpFinder { Endpoints = values } }; break;
+                    _igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi { IpFinder = new TcpDiscoveryStaticIpFinder { Endpoints = values } };
+                    break;
             }
         }
 
@@ -130,9 +139,11 @@ namespace AspNetCore.IgniteServer
             switch (_igniteConfiguration.DiscoverySpi)
             {
                 case TcpDiscoverySpi tcpDiscoverySpi:
-                    tcpDiscoverySpi.LocalPort = value; break;
+                    tcpDiscoverySpi.LocalPort = value;
+                    break;
                 case null:
-                    _igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi { LocalPort = value }; break;
+                    _igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi { LocalPort = value };
+                    break;
             }
         }
 
@@ -247,6 +258,36 @@ namespace AspNetCore.IgniteServer
                 Ignition.Stop(Ignite.Name, false);
                 Ignite = null;
             }
+        }
+
+        private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            if (e.ExceptionObject is Exception ex)
+            {
+                _logger?.Error(ex, "UnhandledException");
+            }
+            else
+            {
+                string msg = "";
+                if (e.ExceptionObject != null)
+                {
+                    msg = e.ExceptionObject.ToString();
+                }
+
+                int exCode = Marshal.GetLastWin32Error();
+                if (exCode != 0)
+                {
+                    msg += " ErrorCode: " + exCode.ToString("X16");
+                }
+
+                _logger?.Error(string.Format("Unhandled External Exception: {0}", msg));
+            }
+        }
+
+        private static void TaskScheduler_UnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e)
+        {
+            _logger?.Error(e.Exception, "ERROR: UNOBSERVED TASK EXCEPTION");
+            e.SetObserved();
         }
 
         protected virtual void Dispose(bool disposing)

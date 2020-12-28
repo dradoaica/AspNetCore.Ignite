@@ -10,10 +10,7 @@ namespace AspNetCore.IgniteServer.Utils
     [Target("SerilogTarget")]
     public sealed class SerilogTarget : TargetWithLayout
     {
-        public SerilogTarget(string name)
-        {
-            Name = name;
-        }
+        public SerilogTarget(string name) => Name = name;
 
         protected override void Write(LogEventInfo logEvent)
         {

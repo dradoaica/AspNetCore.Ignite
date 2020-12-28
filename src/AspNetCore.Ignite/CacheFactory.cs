@@ -17,7 +17,8 @@ namespace AspNetCore.Ignite
             IgniteClientConfiguration igniteClientConfiguration = new IgniteClientConfiguration
             {
                 Endpoints = new[] { endpoint },
-                SocketTimeout = TimeSpan.FromSeconds(60)
+                SocketTimeout = TimeSpan.FromSeconds(60),
+                EnablePartitionAwareness = true
             };
             if (!string.IsNullOrWhiteSpace(userName))
             {
