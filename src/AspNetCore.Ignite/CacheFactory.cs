@@ -68,8 +68,13 @@ namespace AspNetCore.Ignite
                     new QueryEntity
                     {
                         KeyType = typeof(TKey),
-                        ValueType = typeof(TData),
-                    },
+                        ValueType = typeof(TData)
+                    }
+                },
+                PlatformCacheConfiguration = new PlatformCacheConfiguration
+                {
+                    KeyTypeName = typeof(TKey).FullNameWithoutAssemblyInfo(),
+                    ValueTypeName = typeof(TData).FullNameWithoutAssemblyInfo()
                 }
             };
             extendConfigurationAction?.Invoke(cacheCfg);
@@ -79,7 +84,14 @@ namespace AspNetCore.Ignite
 
         public static ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(IIgniteClient ignite, string cacheName, Action<CacheClientConfiguration> extendConfigurationAction = null)
         {
-            CacheClientConfiguration cacheCfg = new CacheClientConfiguration()
+            CacheClientConfiguration cacheCfg = new CacheClientConfiguration(new CacheConfiguration()
+            {
+                PlatformCacheConfiguration = new PlatformCacheConfiguration
+                {
+                    KeyTypeName = typeof(TKey).FullNameWithoutAssemblyInfo(),
+                    ValueTypeName = typeof(TData).FullNameWithoutAssemblyInfo()
+                }
+            }, true)
             {
                 Name = cacheName,
                 CacheMode = CacheMode.Partitioned,
@@ -89,7 +101,7 @@ namespace AspNetCore.Ignite
                     new QueryEntity
                     {
                         KeyType = typeof(TKey),
-                        ValueType = typeof(TData),
+                        ValueType = typeof(TData)
                     }
                 }
             };
