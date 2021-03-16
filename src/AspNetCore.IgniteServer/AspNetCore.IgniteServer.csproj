@@ -7,9 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Apache.Ignite" Version="2.9.1" />
-    <PackageReference Include="Apache.Ignite.Linq" Version="2.9.1" />
-    <PackageReference Include="Apache.Ignite.NLog" Version="2.9.1" />
+    <PackageReference Include="Apache.Ignite" Version="2.10.0" />
+    <PackageReference Include="Apache.Ignite.Linq" Version="2.10.0" />
+    <PackageReference Include="Apache.Ignite.NLog" Version="2.10.0" />
     <PackageReference Include="ConfigureAwait.Fody" Version="3.3.1" />
     <PackageReference Include="Fody" Version="6.3.0">
       <PrivateAssets>all</PrivateAssets>
@@ -65,10 +65,10 @@
     <None Update="libs\commons-lang-2.6.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="libs\ignite-kubernetes-2.9.1.jar">
+    <None Update="libs\ignite-kubernetes-2.10.0.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="libs\ignite-rest-http-2.9.1.jar">
+    <None Update="libs\ignite-rest-http-2.10.0.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="libs\jackson-annotations-2.9.10.jar">
