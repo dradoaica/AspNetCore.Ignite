@@ -1,7 +1,9 @@
 ﻿using Apache.Ignite.Core;
+using Apache.Ignite.Core.Binary;
 using Apache.Ignite.Core.Cache.Query;
 using Apache.Ignite.Core.Client;
 using Apache.Ignite.Core.Client.Cache;
+using Apache.Ignite.Core.Communication.Tcp;
 using Apache.Ignite.Core.Configuration;
 using Apache.Ignite.Core.Deployment;
 using Apache.Ignite.Core.Discovery.Tcp;
@@ -106,7 +108,19 @@ namespace AspNetCore.IgniteServer
                 },
                 PeerAssemblyLoadingMode = PeerAssemblyLoadingMode.CurrentAppDomain,
                 DataStorageConfiguration = new DataStorageConfiguration(),
-                WorkDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "work")
+                WorkDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "work"),
+                MetricsLogFrequency = TimeSpan.FromMinutes(5),
+                BinaryConfiguration = new BinaryConfiguration
+                {
+                    NameMapper = new BinaryBasicNameMapper { IsSimpleName = true }
+                },
+                CommunicationSpi = new TcpCommunicationSpi
+                {
+                    MessageQueueLimit = 2048,
+                    SlowClientQueueLimit = 2048
+                },
+                FailureDetectionTimeout = TimeSpan.FromSeconds(30),
+                ClientFailureDetectionTimeout = TimeSpan.FromSeconds(60)
             };
             return cfg;
         }
@@ -154,6 +168,7 @@ namespace AspNetCore.IgniteServer
                 throw new InvalidOperationException("Cannot configure running instances.");
             }
 
+            _igniteConfiguration.JvmInitialMemoryMb = value / 2;
             _igniteConfiguration.JvmMaxMemoryMb = value;
         }
 
@@ -232,13 +247,10 @@ namespace AspNetCore.IgniteServer
             }
 
             CancellationTokenSource cts = new CancellationTokenSource();
-            Ignite.Stopped += (s, e) =>
-            {
-                tcs.SetResult(e.ToString());
-            };
+            Ignite.Stopped += (s, e) => tcs.SetResult(e.ToString());
             int localSpidPort = (Ignite.GetConfiguration().DiscoverySpi as TcpDiscoverySpi).LocalPort;
             _logger.Information($"Ignite Server is running (Local SpiDiscovery Port={localSpidPort}), press CTRL+C to terminate.");
-            await tcs.Task;
+            await tcs.Task.ConfigureAwait(false);
             _logger.Information("Ignite Server stopped.");
         }
 
