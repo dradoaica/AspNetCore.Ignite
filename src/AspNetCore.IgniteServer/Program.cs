@@ -33,6 +33,7 @@ namespace AspNetCore.IgniteServer
         private static void Main(string[] args)
         {
             Environment.SetEnvironmentVariable("OPTION_LIBS", "ignite-kubernetes, ignite-rest-http");
+            Directory.SetCurrentDirectory(AppDomain.CurrentDomain.BaseDirectory);
             Configuration = CreateConfiguration();
             SetupIgniteLogging();
             CommandLineApplication commandLineApplication = new CommandLineApplication(true)
@@ -57,10 +58,11 @@ namespace AspNetCore.IgniteServer
 
                 if (!int.TryParse(Configuration["DEFAULT_OFF_HEAP_MEMORY"], out int defaultOffHeapMemory))
                 {
-                    defaultOffHeapMemory = 4096;
+                    defaultOffHeapMemory = 2048;
                 }
 
                 bool useTcpDiscoveryStaticIpFinder = "true".Equals(Configuration["USE_TCP_DISCOVERY_STATIC_IP_FINDER"], StringComparison.InvariantCultureIgnoreCase);
+                string defaultConsistentId = Configuration["WEBSITE_INSTANCE_ID"];
                 bool enableAuthentication = "true".Equals(Configuration["ENABLE_AUTHENTICATION"], StringComparison.InvariantCultureIgnoreCase);
                 string k8sNamespace = Configuration["K8S_NAMESPACE"];
                 string k8sServiceName = Configuration["K8S_SERVICE_NAME"];
@@ -123,6 +125,10 @@ namespace AspNetCore.IgniteServer
                 {
                     _server.SetConsistentId(consistentIdArgument.Value());
                 }
+                else if (!string.IsNullOrWhiteSpace(defaultConsistentId))
+                {
+                    _server.SetConsistentId(defaultConsistentId);
+                }
 
                 if (persistenceEnabled.HasValue())
                 {
@@ -168,7 +174,7 @@ namespace AspNetCore.IgniteServer
                     while (_shouldStart)
                     {
                         _shouldStart = false;
-                        await _server.Run();
+                        await _server.Run().ConfigureAwait(false);
                     }
                 }
                 finally

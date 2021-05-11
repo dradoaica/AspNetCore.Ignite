@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>netstandard2.1</TargetFramework>
     <LangVersion>7.2</LangVersion>
     <Authors>AspNetCore.Ignite</Authors>
     <Company>AspNetCore.Ignite</Company>
@@ -11,7 +11,7 @@
     <PackageReference Include="Apache.Ignite" Version="2.10.0" />
     <PackageReference Include="Apache.Ignite.Linq" Version="2.10.0" />
     <PackageReference Include="ConfigureAwait.Fody" Version="3.3.1" />
-    <PackageReference Include="Fody" Version="6.3.0">
+    <PackageReference Include="Fody" Version="6.5.1">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>

@@ -104,7 +104,8 @@ namespace AspNetCore.IgniteServer
                                      "-XX:+ScavengeBeforeFullGC",
                                      "-XX:+DisableExplicitGC",
                                      "-Djava.net.preferIPv4Stack=true",
-                                     "-DIGNITE_QUIET=false"
+                                     "-DIGNITE_QUIET=false",
+                                     "-DIGNITE_WAL_MMAP=false"
                 },
                 PeerAssemblyLoadingMode = PeerAssemblyLoadingMode.CurrentAppDomain,
                 DataStorageConfiguration = new DataStorageConfiguration(),
@@ -117,7 +118,8 @@ namespace AspNetCore.IgniteServer
                 CommunicationSpi = new TcpCommunicationSpi
                 {
                     MessageQueueLimit = 2048,
-                    SlowClientQueueLimit = 2048
+                    SlowClientQueueLimit = 2048,
+                    SocketWriteTimeout = 5000
                 },
                 FailureDetectionTimeout = TimeSpan.FromSeconds(30),
                 ClientFailureDetectionTimeout = TimeSpan.FromSeconds(60)

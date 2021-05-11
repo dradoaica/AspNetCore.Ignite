@@ -3,6 +3,7 @@ using Apache.Ignite.Core.Cache;
 using Apache.Ignite.Core.Cache.Configuration;
 using Apache.Ignite.Core.Client;
 using Apache.Ignite.Core.Client.Cache;
+using Apache.Ignite.Core.Log;
 using AspNetCore.Ignite.Utils;
 using System;
 using System.Security.Authentication;
@@ -18,7 +19,9 @@ namespace AspNetCore.Ignite
             {
                 Endpoints = new[] { endpoint },
                 SocketTimeout = TimeSpan.FromSeconds(60),
-                EnablePartitionAwareness = true
+                EnablePartitionAwareness = true,
+                // Enable trace logging to observe discovery process.
+                Logger = new ConsoleLogger { MinLevel = LogLevel.Trace }
             };
             if (!string.IsNullOrWhiteSpace(userName))
             {
