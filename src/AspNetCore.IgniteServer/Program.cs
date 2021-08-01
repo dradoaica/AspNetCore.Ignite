@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.CommandLineUtils;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Primitives;
 using NLog;
 using NLog.Config;
@@ -29,6 +30,17 @@ namespace AspNetCore.IgniteServer
         private static IgniteServerRunner _server;
 
         public static IConfiguration Configuration { get; private set; }
+
+        public static IDisposable WatchFile(string filter, string path, Action<object> action)
+        {
+            using PhysicalFileProvider physicalFileProvider = new PhysicalFileProvider(path)
+            {
+                UseActivePolling = true,
+                UsePollingFileWatcher = true
+            };
+            IChangeToken changeToken = physicalFileProvider.Watch(filter);
+            return changeToken.RegisterChangeCallback(action, default);
+        }
 
         private static void Main(string[] args)
         {
@@ -135,38 +147,14 @@ namespace AspNetCore.IgniteServer
                     _server.SetPersistence(true);
                 }
 
-                FileSystemWatcher sslKeyStoreFsw = null;
-                FileSystemWatcher sslTrustStoreFsw = null;
-                FileSystemWatcher sslClientCertificateFsw = null;
+                IDisposable sslKeyStoreFsw = null;
+                IDisposable sslTrustStoreFsw = null;
+                IDisposable sslClientCertificateFsw = null;
                 if (useSsl || useClientSsl)
                 {
-                    sslKeyStoreFsw = new FileSystemWatcher
-                    {
-                        Filter = Path.GetFileName(sslKeyStoreFilePath),
-                        Path = Path.GetDirectoryName(sslKeyStoreFilePath),
-                        IncludeSubdirectories = false,
-                        EnableRaisingEvents = true
-                    };
-                    sslKeyStoreFsw.Created += OnSslFileCreatedOrChanged;
-                    sslKeyStoreFsw.Changed += OnSslFileCreatedOrChanged;
-                    sslTrustStoreFsw = new FileSystemWatcher
-                    {
-                        Filter = Path.GetFileName(sslTrustStoreFilePath),
-                        Path = Path.GetDirectoryName(sslTrustStoreFilePath),
-                        IncludeSubdirectories = false,
-                        EnableRaisingEvents = true
-                    };
-                    sslTrustStoreFsw.Created += OnSslFileCreatedOrChanged;
-                    sslTrustStoreFsw.Changed += OnSslFileCreatedOrChanged;
-                    sslClientCertificateFsw = new FileSystemWatcher
-                    {
-                        Filter = Path.GetFileName(sslClientCertificatePath),
-                        Path = Path.GetDirectoryName(sslClientCertificatePath),
-                        IncludeSubdirectories = false,
-                        EnableRaisingEvents = true
-                    };
-                    sslClientCertificateFsw.Created += OnSslFileCreatedOrChanged;
-                    sslClientCertificateFsw.Changed += OnSslFileCreatedOrChanged;
+                    sslKeyStoreFsw = WatchFile(Path.GetFileName(sslKeyStoreFilePath), Path.GetDirectoryName(Path.GetFullPath(sslKeyStoreFilePath)), (state) => OnSslFileCreatedOrChanged());
+                    sslTrustStoreFsw = WatchFile(Path.GetFileName(sslTrustStoreFilePath), Path.GetDirectoryName(Path.GetFullPath(sslTrustStoreFilePath)), (state) => OnSslFileCreatedOrChanged());
+                    sslClientCertificateFsw = WatchFile(Path.GetFileName(sslClientCertificatePath), Path.GetDirectoryName(Path.GetFullPath(sslClientCertificatePath)), (state) => OnSslFileCreatedOrChanged());
                 }
 
                 try
@@ -181,12 +169,9 @@ namespace AspNetCore.IgniteServer
                 {
                     if (useSsl || useClientSsl)
                     {
-                        sslKeyStoreFsw.Created -= OnSslFileCreatedOrChanged;
-                        sslKeyStoreFsw.Changed -= OnSslFileCreatedOrChanged;
-                        sslTrustStoreFsw.Created -= OnSslFileCreatedOrChanged;
-                        sslTrustStoreFsw.Changed -= OnSslFileCreatedOrChanged;
-                        sslClientCertificateFsw.Created -= OnSslFileCreatedOrChanged;
-                        sslClientCertificateFsw.Changed -= OnSslFileCreatedOrChanged;
+                        sslKeyStoreFsw?.Dispose();
+                        sslTrustStoreFsw?.Dispose();
+                        sslClientCertificateFsw?.Dispose();
                     }
                 }
 
@@ -213,7 +198,7 @@ namespace AspNetCore.IgniteServer
             }
         }
 
-        private static void OnSslFileCreatedOrChanged(object sender, FileSystemEventArgs e)
+        private static void OnSslFileCreatedOrChanged()
         {
             TaskCompletionSource<bool> taskCompletionSource = new TaskCompletionSource<bool>();
             const int absoluteExpirationRelativeToNowInSeconds = 10;
