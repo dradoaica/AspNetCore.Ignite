@@ -220,7 +220,7 @@ namespace AspNetCore.IgniteServer
 
         public async Task Run()
         {
-            TaskCompletionSource<string> tcs = new TaskCompletionSource<string>();
+            TaskCompletionSource<string> tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             _logger.Information("Starting Ignite Server...");
             Ignite = Ignition.Start(_igniteConfiguration);
             bool? persistenceEnabled = _igniteConfiguration?.DataStorageConfiguration?.DefaultDataRegionConfiguration?.PersistenceEnabled;
