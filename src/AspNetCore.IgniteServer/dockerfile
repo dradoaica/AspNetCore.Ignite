@@ -1,5 +1,5 @@
 ﻿# Build with docker build -t AspNetCore.ignite-server .
-FROM mcr.microsoft.com/dotnet/core/sdk:3.1 AS build-env
+FROM mcr.microsoft.com/dotnet/sdk:5.0 AS build-env
 WORKDIR /app
 # Copy csproj and restore as distinct layers
 COPY *.csproj ./
@@ -22,7 +22,7 @@ RUN apt-get install -y apt-transport-https
 RUN apt-get install -y aspnetcore-runtime-3.1
 
 # Install IGNITE
-ENV IGNITE_VERSION 2.10.0
+ENV IGNITE_VERSION 2.11.0
 
 # Ignite home
 ENV IGNITE_HOME /opt/ignite/apache-ignite-${IGNITE_VERSION}-bin

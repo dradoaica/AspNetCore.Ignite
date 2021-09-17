@@ -7,9 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Apache.Ignite" Version="2.10.0" />
-    <PackageReference Include="Apache.Ignite.Linq" Version="2.10.0" />
-    <PackageReference Include="Apache.Ignite.NLog" Version="2.10.0" />
+    <PackageReference Include="Apache.Ignite" Version="2.11.0" />
+    <PackageReference Include="Apache.Ignite.Linq" Version="2.11.0" />
+    <PackageReference Include="Apache.Ignite.NLog" Version="2.11.0" />
     <PackageReference Include="ConfigureAwait.Fody" Version="3.3.1" />
     <PackageReference Include="Fody" Version="6.5.1">
       <PrivateAssets>all</PrivateAssets>
@@ -64,10 +64,10 @@
     <None Update="libs\commons-lang-2.6.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="libs\ignite-kubernetes-2.10.0.jar">
+    <None Update="libs\ignite-kubernetes-2.11.0.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="libs\ignite-rest-http-2.10.0.jar">
+    <None Update="libs\ignite-rest-http-2.11.0.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="libs\jackson-annotations-2.9.10.jar">
@@ -82,22 +82,22 @@
     <None Update="libs\javax.servlet-api-3.1.0.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="libs\jetty-continuation-9.4.25.v20191220.jar">
+    <None Update="libs\jetty-continuation-9.4.39.v20210325.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="libs\jetty-http-9.4.25.v20191220.jar">
+    <None Update="libs\jetty-http-9.4.39.v20210325.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="libs\jetty-io-9.4.25.v20191220.jar">
+    <None Update="libs\jetty-io-9.4.39.v20210325.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="libs\jetty-server-9.4.25.v20191220.jar">
+    <None Update="libs\jetty-server-9.4.39.v20210325.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="libs\jetty-util-9.4.25.v20191220.jar">
+    <None Update="libs\jetty-util-9.4.39.v20210325.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="libs\jetty-xml-9.4.25.v20191220.jar">
+    <None Update="libs\jetty-xml-9.4.39.v20210325.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="libs\log4j-1.2.17.jar">

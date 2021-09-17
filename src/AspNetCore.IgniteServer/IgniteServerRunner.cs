@@ -113,7 +113,7 @@ namespace AspNetCore.IgniteServer
                 MetricsLogFrequency = TimeSpan.FromMinutes(5),
                 BinaryConfiguration = new BinaryConfiguration
                 {
-                    NameMapper = new BinaryBasicNameMapper { IsSimpleName = true }
+                    NameMapper = new BinaryBasicNameMapper()
                 },
                 CommunicationSpi = new TcpCommunicationSpi
                 {
