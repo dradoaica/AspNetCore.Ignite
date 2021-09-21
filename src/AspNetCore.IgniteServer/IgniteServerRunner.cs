@@ -111,10 +111,6 @@ namespace AspNetCore.IgniteServer
                 DataStorageConfiguration = new DataStorageConfiguration(),
                 WorkDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "work"),
                 MetricsLogFrequency = TimeSpan.FromMinutes(5),
-                BinaryConfiguration = new BinaryConfiguration
-                {
-                    NameMapper = new BinaryBasicNameMapper()
-                },
                 CommunicationSpi = new TcpCommunicationSpi
                 {
                     MessageQueueLimit = 2048,
