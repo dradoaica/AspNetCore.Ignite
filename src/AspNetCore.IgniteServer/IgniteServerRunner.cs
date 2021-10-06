@@ -115,10 +115,12 @@ namespace AspNetCore.IgniteServer
                 {
                     MessageQueueLimit = 2048,
                     SlowClientQueueLimit = 2048,
-                    SocketWriteTimeout = 5000
+                    SocketWriteTimeout = 5000,
+                    ConnectTimeout = TimeSpan.FromSeconds(10)
                 },
                 FailureDetectionTimeout = TimeSpan.FromSeconds(30),
-                ClientFailureDetectionTimeout = TimeSpan.FromSeconds(60)
+                ClientFailureDetectionTimeout = TimeSpan.FromSeconds(60),
+                NetworkTimeout = TimeSpan.FromSeconds(10)
             };
             return cfg;
         }
