@@ -24,7 +24,7 @@ namespace AspNetCore.IgniteServer
             EVT_IGNITE_STATUS
         };
 
-        private static readonly List<string> _defaultClusterEnpoints = new List<string> { $"{DnsUtils.GetLocalIPAddress()}:47500" };
+        private static readonly List<string> _defaultClusterEndpoints = new List<string> { $"{DnsUtils.GetLocalIPAddress()}:47500" };
         private static readonly MemoryCache _memoryCache = new MemoryCache(new MemoryCacheOptions { ExpirationScanFrequency = TimeSpan.FromSeconds(5) });
         private static volatile bool _shouldStart = true;
         private static IgniteServerRunner _server;
@@ -130,7 +130,7 @@ namespace AspNetCore.IgniteServer
                 }
                 else if (useTcpDiscoveryStaticIpFinder)
                 {
-                    _server.SetClusterEnpoints(_defaultClusterEnpoints);
+                    _server.SetClusterEnpoints(_defaultClusterEndpoints);
                 }
 
                 if (consistentIdArgument.HasValue())
