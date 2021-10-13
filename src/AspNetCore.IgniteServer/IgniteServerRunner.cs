@@ -229,8 +229,8 @@ namespace AspNetCore.IgniteServer
                 {
                     try
                     {
-                        using IIgniteClient igniteClient = CacheFactory.ConnectAsClient(CacheFactory.GetIgniteClientConfiguration(DnsUtils.GetLocalIPAddress(), "ignite", "ignite", _useClientSsl,
-                            _sslClientCertificatePath, _sslClientCertificatePassword));
+                        using IIgniteClient igniteClient = CacheFactory.ConnectAsClient(CacheFactory.GetIgniteClientConfiguration(userName: "ignite", password: "ignite", useSsl: _useClientSsl,
+                            certificatePath: _sslClientCertificatePath, certificatePassword: _sslClientCertificatePassword));
                         ICacheClient<string, string> alterUserSqlDmlCommand = CacheFactory.GetOrCreateCacheClient<string, string>(igniteClient, "alterUserSqlDmlCommand");
                         alterUserSqlDmlCommand.Query(new SqlFieldsQuery($"ALTER USER \"ignite\" WITH PASSWORD '{_igniteUserPassword}';"));
                         igniteClient.DestroyCache("alterUserSqlDmlCommand");
