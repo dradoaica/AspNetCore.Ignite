@@ -35,7 +35,6 @@ namespace AspNetCore.IgniteServer
         static IgniteServerRunner()
         {
             LoggerConfiguration loggerConfiguration = new LoggerConfiguration().ReadFrom.Configuration(Program.Configuration);
-            loggerConfiguration.Enrich.FromLogContext();
             _logger = loggerConfiguration.CreateLogger();
             Log.Logger = _logger;
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
