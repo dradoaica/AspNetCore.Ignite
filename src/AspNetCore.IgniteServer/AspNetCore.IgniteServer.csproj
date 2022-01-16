@@ -7,11 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Apache.Ignite" Version="2.11.0" />
-    <PackageReference Include="Apache.Ignite.Linq" Version="2.11.0" />
-    <PackageReference Include="Apache.Ignite.NLog" Version="2.11.0" />
+    <PackageReference Include="Apache.Ignite" Version="2.12.0" />
+    <PackageReference Include="Apache.Ignite.Linq" Version="2.12.0" />
+    <PackageReference Include="Apache.Ignite.NLog" Version="2.12.0" />
     <PackageReference Include="ConfigureAwait.Fody" Version="3.3.1" />
-    <PackageReference Include="Fody" Version="6.5.1">
+    <PackageReference Include="Fody" Version="6.6.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
@@ -67,19 +67,19 @@
     <None Update="libs\commons-lang-2.6.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="libs\ignite-kubernetes-2.11.0.jar">
+    <None Update="libs\ignite-kubernetes-2.12.0.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="libs\ignite-rest-http-2.11.0.jar">
+    <None Update="libs\ignite-rest-http-2.12.0.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="libs\jackson-annotations-2.9.10.jar">
+    <None Update="libs\jackson-annotations-2.12.4.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="libs\jackson-core-2.9.10.jar">
+    <None Update="libs\jackson-core-2.12.4.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="libs\jackson-databind-2.9.10.jar">
+    <None Update="libs\jackson-databind-2.12.4.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="libs\javax.servlet-api-3.1.0.jar">
@@ -103,13 +103,7 @@
     <None Update="libs\jetty-xml-9.4.39.v20210325.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="libs\log4j-1.2.17.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
     <None Update="libs\slf4j-api-1.7.7.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\slf4j-log4j12-1.7.7.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

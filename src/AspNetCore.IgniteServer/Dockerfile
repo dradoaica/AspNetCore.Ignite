@@ -22,7 +22,7 @@ RUN apt-get install -y apt-transport-https
 RUN apt-get install -y aspnetcore-runtime-5.0
 
 # Install IGNITE
-ENV IGNITE_VERSION 2.11.0
+ENV IGNITE_VERSION 2.12.0
 
 # Ignite home
 ENV IGNITE_HOME /opt/ignite/apache-ignite-${IGNITE_VERSION}-bin
@@ -38,7 +38,7 @@ WORKDIR /opt/ignite
 RUN curl https://dist.apache.org/repos/dist/release/ignite/${IGNITE_VERSION}/apache-ignite-${IGNITE_VERSION}-bin.zip -o ignite.zip \
     && unzip ignite.zip \
     && rm ignite.
-    
+
 RUN mv apache-ignite-${IGNITE_VERSION}-bin/libs/optional/ignite-rest-http apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-rest-http
 
 RUN mv apache-ignite-${IGNITE_VERSION}-bin/libs/optional/ignite-kubernetes apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-kubernetes
