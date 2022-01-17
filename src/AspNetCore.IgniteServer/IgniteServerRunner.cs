@@ -20,302 +20,314 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace AspNetCore.IgniteServer
+namespace AspNetCore.IgniteServer;
+
+public class IgniteServerRunner : IDisposable
 {
-    public class IgniteServerRunner : IDisposable
+    private static readonly Logger _logger;
+    private readonly IgniteConfiguration _igniteConfiguration;
+    private readonly string _igniteUserPassword;
+    private readonly string _sslClientCertificatePassword;
+    private readonly string _sslClientCertificatePath;
+    private readonly bool _useClientSsl;
+    private bool _disposed;
+
+    static IgniteServerRunner()
     {
-        private static readonly Logger _logger;
-        private readonly IgniteConfiguration _igniteConfiguration;
-        private readonly string _igniteUserPassword;
-        private readonly bool _useClientSsl = false;
-        private readonly string _sslClientCertificatePath;
-        private readonly string _sslClientCertificatePassword;
-        private bool _disposed = false;
+        LoggerConfiguration loggerConfiguration =
+            new LoggerConfiguration().ReadFrom.Configuration(Program.Configuration);
+        _logger = loggerConfiguration.CreateLogger();
+        Log.Logger = _logger;
+        AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+        TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
+    }
 
-        static IgniteServerRunner()
+    public IgniteServerRunner(bool authenticationEnabled, string igniteUserPassword = null,
+        string configurationFile = null, bool useSsl = false,
+        string sslKeyStoreFilePath = null, string sslKeyStorePassword = null, string sslTrustStoreFilePath = null,
+        string sslTrustStorePassword = null,
+        bool useClientSsl = false, string sslClientCertificatePath = null, string sslClientCertificatePassword = null)
+    {
+        _useClientSsl = useClientSsl;
+        _sslClientCertificatePath = sslClientCertificatePath;
+        _sslClientCertificatePassword = sslClientCertificatePassword;
+        _igniteUserPassword = igniteUserPassword;
+        _igniteConfiguration = new IgniteConfiguration();
+        if (configurationFile != null)
         {
-            LoggerConfiguration loggerConfiguration = new LoggerConfiguration().ReadFrom.Configuration(Program.Configuration);
-            _logger = loggerConfiguration.CreateLogger();
-            Log.Logger = _logger;
-            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-            TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
+            _igniteConfiguration = LoadConfiguration(configurationFile);
+        }
+        else
+        {
+            _igniteConfiguration = GetDefaultConfiguration();
         }
 
-        public IgniteServerRunner(bool authenticationEnabled, string igniteUserPassword = null, string configurationFile = null, bool useSsl = false,
-            string sslKeyStoreFilePath = null, string sslKeyStorePassword = null, string sslTrustStoreFilePath = null, string sslTrustStorePassword = null,
-            bool useClientSsl = false, string sslClientCertificatePath = null, string sslClientCertificatePassword = null)
+        if (authenticationEnabled)
         {
-            _useClientSsl = useClientSsl;
-            _sslClientCertificatePath = sslClientCertificatePath;
-            _sslClientCertificatePassword = sslClientCertificatePassword;
-            _igniteUserPassword = igniteUserPassword;
-            _igniteConfiguration = new IgniteConfiguration();
-            if (configurationFile != null)
-            {
-                _igniteConfiguration = LoadConfiguration(configurationFile);
-            }
-            else
-            {
-                _igniteConfiguration = GetDefaultConfiguration();
-            }
+            _igniteConfiguration.AuthenticationEnabled = true;
+            SetPersistence(true);
+        }
 
-            if (authenticationEnabled)
+        if (useSsl)
+        {
+            _igniteConfiguration.SslContextFactory = new SslContextFactory
             {
-                _igniteConfiguration.AuthenticationEnabled = true;
-                SetPersistence(true);
-            }
+                KeyStoreFilePath = sslKeyStoreFilePath,
+                KeyStorePassword = sslKeyStorePassword,
+                TrustStoreFilePath = sslTrustStoreFilePath,
+                TrustStorePassword = sslTrustStorePassword,
+                Protocol = "TLSv1.2"
+            };
+        }
 
-            if (useSsl)
-            {
-                _igniteConfiguration.SslContextFactory = new SslContextFactory()
+        _igniteConfiguration.Logger = new IgniteNLogLogger();
+    }
+
+    public IIgnite Ignite { get; private set; }
+
+    public void Dispose()
+    {
+        Dispose(true);
+    }
+
+    private static IgniteConfiguration LoadConfiguration(string filename)
+    {
+        string configStr = File.ReadAllText(filename);
+        IgniteConfiguration igniteConfiguration = IgniteConfiguration.FromXml(configStr);
+        return igniteConfiguration;
+    }
+
+    private IgniteConfiguration GetDefaultConfiguration()
+    {
+        IgniteConfiguration cfg = new()
+        {
+            AutoGenerateIgniteInstanceName = true,
+            Localhost = DnsUtils.GetLocalIPAddress(),
+            SpringConfigUrl =
+                _useClientSsl ? "config/spring-config-client-with-ssl.xml" : "config/spring-config.xml",
+            JvmOptions =
+                new[]
                 {
-                    KeyStoreFilePath = sslKeyStoreFilePath,
-                    KeyStorePassword = sslKeyStorePassword,
-                    TrustStoreFilePath = sslTrustStoreFilePath,
-                    TrustStorePassword = sslTrustStorePassword,
-                    Protocol = "TLSv1.2"
-                };
-            }
-
-            _igniteConfiguration.Logger = new IgniteNLogLogger();
-        }
-
-        public IIgnite Ignite { get; private set; }
-
-        private static IgniteConfiguration LoadConfiguration(string filename)
-        {
-            string configStr = File.ReadAllText(filename);
-            IgniteConfiguration igniteConfiguration = IgniteConfiguration.FromXml(configStr);
-            return igniteConfiguration;
-        }
-
-        private IgniteConfiguration GetDefaultConfiguration()
-        {
-            IgniteConfiguration cfg = new IgniteConfiguration
-            {
-                AutoGenerateIgniteInstanceName = true,
-                Localhost = DnsUtils.GetLocalIPAddress(),
-                SpringConfigUrl = _useClientSsl ? "config/spring-config-client-with-ssl.xml" : "config/spring-config.xml",
-                JvmOptions = new[] {
-                                     "-XX:+AlwaysPreTouch",
-                                     "-XX:+UseG1GC",
-                                     "-XX:+ScavengeBeforeFullGC",
-                                     "-XX:+DisableExplicitGC",
-                                     "-Djava.net.preferIPv4Stack=true",
-                                     "-DIGNITE_QUIET=false",
-                                     "-DIGNITE_WAL_MMAP=false"
+                    "-XX:+AlwaysPreTouch", "-XX:+UseG1GC", "-XX:+ScavengeBeforeFullGC", "-XX:+DisableExplicitGC",
+                    "-Djava.net.preferIPv4Stack=true", "-DIGNITE_QUIET=false", "-DIGNITE_WAL_MMAP=false"
                 },
-                PeerAssemblyLoadingMode = PeerAssemblyLoadingMode.CurrentAppDomain,
-                DataStorageConfiguration = new DataStorageConfiguration(),
-                WorkDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "work"),
-                MetricsLogFrequency = TimeSpan.FromMinutes(5),
-                CommunicationSpi = new TcpCommunicationSpi
+            PeerAssemblyLoadingMode = PeerAssemblyLoadingMode.CurrentAppDomain,
+            DataStorageConfiguration = new DataStorageConfiguration(),
+            WorkDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "work"),
+            MetricsLogFrequency = TimeSpan.FromMinutes(5),
+            CommunicationSpi =
+                new TcpCommunicationSpi
                 {
                     MessageQueueLimit = 2048,
                     SlowClientQueueLimit = 2048,
                     SocketWriteTimeout = 5000,
                     ConnectTimeout = TimeSpan.FromSeconds(10)
                 },
-                FailureDetectionTimeout = TimeSpan.FromSeconds(30),
-                ClientFailureDetectionTimeout = TimeSpan.FromSeconds(60),
-                NetworkTimeout = TimeSpan.FromSeconds(10)
-            };
-            return cfg;
+            FailureDetectionTimeout = TimeSpan.FromSeconds(30),
+            ClientFailureDetectionTimeout = TimeSpan.FromSeconds(60),
+            NetworkTimeout = TimeSpan.FromSeconds(10)
+        };
+        return cfg;
+    }
+
+    public void SetClusterEnpoints(ICollection<string> values)
+    {
+        if (Ignite != null)
+        {
+            throw new InvalidOperationException("Cannot configure running instances.");
         }
 
-        public void SetClusterEnpoints(ICollection<string> values)
+        switch (_igniteConfiguration.DiscoverySpi)
         {
-            if (Ignite != null)
-            {
-                throw new InvalidOperationException("Cannot configure running instances.");
-            }
+            case TcpDiscoverySpi tcpDiscoverySpi:
+                tcpDiscoverySpi.IpFinder = new TcpDiscoveryStaticIpFinder {Endpoints = values};
+                break;
+            case null:
+                _igniteConfiguration.DiscoverySpi =
+                    new TcpDiscoverySpi {IpFinder = new TcpDiscoveryStaticIpFinder {Endpoints = values}};
+                break;
+        }
+    }
 
-            switch (_igniteConfiguration.DiscoverySpi)
-            {
-                case TcpDiscoverySpi tcpDiscoverySpi:
-                    tcpDiscoverySpi.IpFinder = new TcpDiscoveryStaticIpFinder { Endpoints = values };
-                    break;
-                case null:
-                    _igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi { IpFinder = new TcpDiscoveryStaticIpFinder { Endpoints = values } };
-                    break;
-            }
+    public void SetServerPort(int value)
+    {
+        if (Ignite != null)
+        {
+            throw new InvalidOperationException("Cannot configure running instances.");
         }
 
-        public void SetServerPort(int value)
+        switch (_igniteConfiguration.DiscoverySpi)
         {
-            if (Ignite != null)
-            {
-                throw new InvalidOperationException("Cannot configure running instances.");
-            }
+            case TcpDiscoverySpi tcpDiscoverySpi:
+                tcpDiscoverySpi.LocalPort = value;
+                break;
+            case null:
+                _igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi {LocalPort = value};
+                break;
+        }
+    }
 
-            switch (_igniteConfiguration.DiscoverySpi)
-            {
-                case TcpDiscoverySpi tcpDiscoverySpi:
-                    tcpDiscoverySpi.LocalPort = value;
-                    break;
-                case null:
-                    _igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi { LocalPort = value };
-                    break;
-            }
+    public void SetOnHeapMemoryLimit(int value)
+    {
+        if (Ignite != null)
+        {
+            throw new InvalidOperationException("Cannot configure running instances.");
         }
 
-        public void SetOnHeapMemoryLimit(int value)
-        {
-            if (Ignite != null)
-            {
-                throw new InvalidOperationException("Cannot configure running instances.");
-            }
+        _igniteConfiguration.JvmInitialMemoryMb = value / 2;
+        _igniteConfiguration.JvmMaxMemoryMb = value;
+    }
 
-            _igniteConfiguration.JvmInitialMemoryMb = value / 2;
-            _igniteConfiguration.JvmMaxMemoryMb = value;
+    public void SetOffHeapMemoryLimit(int value)
+    {
+        if (Ignite != null)
+        {
+            throw new InvalidOperationException("Cannot configure running instances.");
         }
 
-        public void SetOffHeapMemoryLimit(int value)
+        if (_igniteConfiguration?.DataStorageConfiguration?.DefaultDataRegionConfiguration != null)
         {
-            if (Ignite != null)
-            {
-                throw new InvalidOperationException("Cannot configure running instances.");
-            }
+            _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.MaxSize =
+                (long)value * 1024 * 1024;
+        }
+        else
+        {
+            _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration =
+                new DataRegionConfiguration {Name = "default", MaxSize = (long)value * 1024 * 1024};
+        }
+    }
 
-            if (_igniteConfiguration?.DataStorageConfiguration?.DefaultDataRegionConfiguration != null)
-            {
-                _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.MaxSize = (long)value * 1024 * 1024;
-            }
-            else
-            {
-                _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration = new DataRegionConfiguration { Name = "default", MaxSize = (long)value * 1024 * 1024 };
-            }
+    public void SetPersistence(bool value)
+    {
+        if (Ignite != null)
+        {
+            throw new InvalidOperationException("Cannot configure running instances.");
         }
 
-        public void SetPersistence(bool value)
+        if (_igniteConfiguration?.DataStorageConfiguration?.DefaultDataRegionConfiguration != null)
         {
-            if (Ignite != null)
-            {
-                throw new InvalidOperationException("Cannot configure running instances.");
-            }
+            _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.PersistenceEnabled = value;
+        }
+        else
+        {
+            _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration =
+                new DataRegionConfiguration {Name = "default", PersistenceEnabled = value};
+        }
+    }
 
-            if (_igniteConfiguration?.DataStorageConfiguration?.DefaultDataRegionConfiguration != null)
-            {
-                _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.PersistenceEnabled = value;
-            }
-            else
-            {
-                _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration = new DataRegionConfiguration { Name = "default", PersistenceEnabled = value };
-            }
+    public void SetConsistentId(string cid)
+    {
+        if (Ignite != null)
+        {
+            throw new InvalidOperationException("Cannot configure running instances.");
         }
 
-        public void SetConsistentId(string cid)
-        {
-            if (Ignite != null)
-            {
-                throw new InvalidOperationException("Cannot configure running instances.");
-            }
+        _igniteConfiguration.ConsistentId = cid;
+    }
 
-            _igniteConfiguration.ConsistentId = cid;
-        }
-
-        public async Task Run()
+    public async Task Run()
+    {
+        TaskCompletionSource<string> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        _logger.Information("Starting Ignite Server...");
+        Ignite = Ignition.Start(_igniteConfiguration);
+        bool? persistenceEnabled = _igniteConfiguration?.DataStorageConfiguration?.DefaultDataRegionConfiguration
+            ?.PersistenceEnabled;
+        if (persistenceEnabled.HasValue && persistenceEnabled.Value)
         {
-            TaskCompletionSource<string> tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _logger.Information("Starting Ignite Server...");
-            Ignite = Ignition.Start(_igniteConfiguration);
-            bool? persistenceEnabled = _igniteConfiguration?.DataStorageConfiguration?.DefaultDataRegionConfiguration?.PersistenceEnabled;
-            if (persistenceEnabled.HasValue && persistenceEnabled.Value)
+            Ignite.GetCluster().SetBaselineAutoAdjustEnabledFlag(true);
+            Ignite.GetCluster().SetActive(true);
+            if (!string.IsNullOrWhiteSpace(_igniteUserPassword))
             {
-                Ignite.GetCluster().SetBaselineAutoAdjustEnabledFlag(true);
-                Ignite.GetCluster().SetActive(true);
-                if (!string.IsNullOrWhiteSpace(_igniteUserPassword))
+                try
                 {
-                    try
+                    using IIgniteClient igniteClient = CacheFactory.ConnectAsClient(
+                        CacheFactory.GetIgniteClientConfiguration(userName: "ignite", password: "ignite",
+                            useSsl: _useClientSsl,
+                            certificatePath: _sslClientCertificatePath,
+                            certificatePassword: _sslClientCertificatePassword));
+                    ICacheClient<string, string> alterUserSqlDmlCommand =
+                        CacheFactory.GetOrCreateCacheClient<string, string>(igniteClient, "alterUserSqlDmlCommand");
+                    alterUserSqlDmlCommand.Query(
+                        new SqlFieldsQuery($"ALTER USER \"ignite\" WITH PASSWORD '{_igniteUserPassword}';"));
+                    igniteClient.DestroyCache("alterUserSqlDmlCommand");
+                }
+                catch (IgniteClientException icex)
+                {
+                    if (icex.Message != "The user name or password is incorrect [userName=ignite]")
                     {
-                        using IIgniteClient igniteClient = CacheFactory.ConnectAsClient(CacheFactory.GetIgniteClientConfiguration(userName: "ignite", password: "ignite", useSsl: _useClientSsl,
-                            certificatePath: _sslClientCertificatePath, certificatePassword: _sslClientCertificatePassword));
-                        ICacheClient<string, string> alterUserSqlDmlCommand = CacheFactory.GetOrCreateCacheClient<string, string>(igniteClient, "alterUserSqlDmlCommand");
-                        alterUserSqlDmlCommand.Query(new SqlFieldsQuery($"ALTER USER \"ignite\" WITH PASSWORD '{_igniteUserPassword}';"));
-                        igniteClient.DestroyCache("alterUserSqlDmlCommand");
-                    }
-                    catch (IgniteClientException icex)
-                    {
-                        if (icex.Message != "The user name or password is incorrect [userName=ignite]")
-                        {
-                            throw;
-                        }
+                        throw;
                     }
                 }
             }
-
-            CancellationTokenSource cts = new CancellationTokenSource();
-            Ignite.Stopped += (s, e) => tcs.SetResult(e.ToString());
-            int localSpidPort = (Ignite.GetConfiguration().DiscoverySpi as TcpDiscoverySpi).LocalPort;
-            _logger.Information($"Ignite Server is running (Local SpiDiscovery Port={localSpidPort}), press CTRL+C to terminate.");
-            await tcs.Task.ConfigureAwait(false);
-            _logger.Information("Ignite Server stopped.");
         }
 
-        public void Terminate()
+        CancellationTokenSource cts = new();
+        Ignite.Stopped += (s, e) => tcs.SetResult(e.ToString());
+        int localSpidPort = (Ignite.GetConfiguration().DiscoverySpi as TcpDiscoverySpi).LocalPort;
+        _logger.Information(
+            $"Ignite Server is running (Local SpiDiscovery Port={localSpidPort}), press CTRL+C to terminate.");
+        await tcs.Task.ConfigureAwait(false);
+        _logger.Information("Ignite Server stopped.");
+    }
+
+    public void Terminate()
+    {
+        if (Ignite != null)
         {
-            if (Ignite != null)
+            Ignition.Stop(Ignite.Name, true);
+            Ignite = null;
+        }
+    }
+
+    public void Stop()
+    {
+        if (Ignite != null)
+        {
+            Ignition.Stop(Ignite.Name, false);
+            Ignite = null;
+        }
+    }
+
+    private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        if (e.ExceptionObject is Exception ex)
+        {
+            _logger?.Error(ex, "UnhandledException");
+        }
+        else
+        {
+            string msg = "";
+            if (e.ExceptionObject != null)
             {
-                Ignition.Stop(Ignite.Name, true);
-                Ignite = null;
+                msg = e.ExceptionObject.ToString();
             }
-        }
 
-        public void Stop()
-        {
-            if (Ignite != null)
+            int exCode = Marshal.GetLastWin32Error();
+            if (exCode != 0)
             {
-                Ignition.Stop(Ignite.Name, false);
-                Ignite = null;
+                msg += " ErrorCode: " + exCode.ToString("X16");
             }
-        }
 
-        private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+            _logger?.Error(string.Format("Unhandled External Exception: {0}", msg));
+        }
+    }
+
+    private static void TaskScheduler_UnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e)
+    {
+        _logger?.Error(e.Exception, "ERROR: UNOBSERVED TASK EXCEPTION");
+        e.SetObserved();
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed)
         {
-            if (e.ExceptionObject is Exception ex)
+            if (disposing)
             {
-                _logger?.Error(ex, "UnhandledException");
+                Ignite?.Dispose();
             }
-            else
-            {
-                string msg = "";
-                if (e.ExceptionObject != null)
-                {
-                    msg = e.ExceptionObject.ToString();
-                }
 
-                int exCode = Marshal.GetLastWin32Error();
-                if (exCode != 0)
-                {
-                    msg += " ErrorCode: " + exCode.ToString("X16");
-                }
-
-                _logger?.Error(string.Format("Unhandled External Exception: {0}", msg));
-            }
-        }
-
-        private static void TaskScheduler_UnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e)
-        {
-            _logger?.Error(e.Exception, "ERROR: UNOBSERVED TASK EXCEPTION");
-            e.SetObserved();
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!_disposed)
-            {
-                if (disposing)
-                {
-                    Ignite?.Dispose();
-                }
-
-                _disposed = true;
-            }
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
+            _disposed = true;
         }
     }
 }
