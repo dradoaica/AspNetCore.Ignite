@@ -38,7 +38,7 @@ internal class Program
         return changeToken.RegisterChangeCallback(action, default);
     }
 
-    private static void Main(string[] args)
+    private static async Task Main(string[] args)
     {
         Environment.SetEnvironmentVariable("OPTION_LIBS", "ignite-kubernetes, ignite-rest-http");
         Directory.SetCurrentDirectory(AppDomain.CurrentDomain.BaseDirectory);
