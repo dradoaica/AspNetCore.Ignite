@@ -102,7 +102,6 @@ public class IgniteServerRunner : IDisposable
         IgniteConfiguration cfg = new()
         {
             AutoGenerateIgniteInstanceName = true,
-            Localhost = DnsUtils.GetLocalIPAddress(),
             SpringConfigUrl =
                 _useClientSsl ? "config/spring-config-client-with-ssl.xml" : "config/spring-config.xml",
             JvmOptions =
