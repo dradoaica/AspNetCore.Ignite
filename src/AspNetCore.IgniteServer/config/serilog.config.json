@@ -2,7 +2,9 @@
   "Serilog": {
     "MinimumLevel": "Debug",
     "WriteTo": [
-      { "Name": "Console" },
+      {
+        "Name": "Console"
+      },
       {
         "Name": "File",
         "Args": {
@@ -11,11 +13,14 @@
           "outputTemplate": "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level}] {Message} {Properties:j}{NewLine}{Exception}",
           "formatter": "Serilog.Formatting.Compact.CompactJsonFormatter, Serilog.Formatting.Compact",
           "fileSizeLimitBytes": 104857600
-
         }
       }
     ],
-    "Enrich": [ "FromLogContext", "WithMachineName", "WithThreadId" ],
+    "Enrich": [
+      "FromLogContext",
+      "WithMachineName",
+      "WithThreadId"
+    ],
     "Properties": {
       "Application": "AspNetCore.IgniteServer",
       "Audience": "System"

@@ -39,6 +39,10 @@ RUN curl https://dist.apache.org/repos/dist/release/ignite/${IGNITE_VERSION}/apa
     && unzip ignite.zip \
     && rm ignite.
 
+RUN curl https://www.gridgain.com/media/control-center-agent/control-center-agent-2.12.0.1.zip -o control-center-agent.zip \
+    && unzip control-center-agent.zip -d apache-ignite-${IGNITE_VERSION}-bin \
+    && rm control-center-agent.zip
+
 RUN mv apache-ignite-${IGNITE_VERSION}-bin/libs/optional/ignite-rest-http apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-rest-http
 
 RUN mv apache-ignite-${IGNITE_VERSION}-bin/libs/optional/ignite-kubernetes apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-kubernetes
@@ -47,7 +51,7 @@ WORKDIR /app
 COPY --from=build-env /app/out .
 ENTRYPOINT ["dotnet", "AspNetCore.IgniteServer.dll"]
 
-EXPOSE 10800 10900 11211 47100 47500 49112 8080
+EXPOSE 10800 10900 11211 47100 47500 49112 8080 3000
 
 LABEL image="aspnetcore.ignite-server" \
       version="1.0"

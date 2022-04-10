@@ -36,4 +36,19 @@ public class IgniteManager : IIgniteManager
                 CacheFactory.GetOrCreateCacheClient<TKey, TData>(_igniteClient, cacheName,
                     extendConfigurationAction));
     }
+
+    public void DestroyCache(string cacheName)
+    {
+        try
+        {
+            _igniteClient.DestroyCache(cacheName);
+        }
+        catch (IgniteClientException icex)
+        {
+            if (!icex.Message.Contains("Cache does not exist"))
+            {
+                throw;
+            }
+        }
+    }
 }
