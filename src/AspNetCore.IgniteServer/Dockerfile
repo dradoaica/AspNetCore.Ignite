@@ -22,7 +22,7 @@ RUN apt-get install -y apt-transport-https
 RUN apt-get install -y aspnetcore-runtime-5.0
 
 # Install IGNITE
-ENV IGNITE_VERSION 2.12.0
+ENV IGNITE_VERSION 2.13.0
 
 # Ignite home
 ENV IGNITE_HOME /opt/ignite/apache-ignite-${IGNITE_VERSION}-bin
@@ -39,9 +39,9 @@ RUN curl https://dist.apache.org/repos/dist/release/ignite/${IGNITE_VERSION}/apa
     && unzip ignite.zip \
     && rm ignite.
 
-RUN curl https://www.gridgain.com/media/control-center-agent/control-center-agent-2.12.0.1.zip -o control-center-agent.zip \
-    && unzip control-center-agent.zip -d apache-ignite-${IGNITE_VERSION}-bin \
-    && rm control-center-agent.zip
+#RUN curl https://www.gridgain.com/media/control-center-agent/control-center-agent-2.13.0.zip -o control-center-agent.zip \
+#    && unzip control-center-agent.zip -d apache-ignite-${IGNITE_VERSION}-bin \
+#    && rm control-center-agent.zip
 
 RUN mv apache-ignite-${IGNITE_VERSION}-bin/libs/optional/ignite-rest-http apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-rest-http
 

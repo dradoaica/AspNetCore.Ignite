@@ -7,31 +7,30 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Apache.Ignite" Version="2.12.0"/>
-    <PackageReference Include="Apache.Ignite.Linq" Version="2.12.0"/>
-    <PackageReference Include="Apache.Ignite.NLog" Version="2.12.0"/>
-    <PackageReference Include="ConfigureAwait.Fody" Version="3.3.1"/>
+    <PackageReference Include="Apache.Ignite" Version="2.13.0" />
+    <PackageReference Include="Apache.Ignite.Linq" Version="2.13.0" />
+    <PackageReference Include="Apache.Ignite.NLog" Version="2.13.0" />
+    <PackageReference Include="ConfigureAwait.Fody" Version="3.3.1" />
     <PackageReference Include="Fody" Version="6.6.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="6.0.1"/>
-    <PackageReference Include="Microsoft.Extensions.CommandLineUtils" Version="1.1.1"/>
-    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="6.0.1"/>
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="6.0.0"/>
-    <PackageReference Include="NLog" Version="4.7.15"/>
-    <PackageReference Include="PacketDotNet" Version="1.4.0"/>
-    <PackageReference Include="Serilog" Version="2.10.0"/>
-    <PackageReference Include="Serilog.Enrichers.Environment" Version="2.2.0"/>
-    <PackageReference Include="Serilog.Enrichers.Thread" Version="3.1.0"/>
-    <PackageReference Include="Serilog.Extensions.Logging" Version="3.1.0"/>
-    <PackageReference Include="Serilog.Settings.Configuration" Version="3.3.0"/>
-    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0"/>
-    <PackageReference Include="Serilog.Sinks.Elasticsearch" Version="8.4.1"/>
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="6.0.1" />
+    <PackageReference Include="Microsoft.Extensions.CommandLineUtils" Version="1.1.1" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="6.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="6.0.0" />
+    <PackageReference Include="PacketDotNet" Version="1.4.0" />
+    <PackageReference Include="Serilog" Version="2.11.0" />
+    <PackageReference Include="Serilog.Enrichers.Environment" Version="2.2.0" />
+    <PackageReference Include="Serilog.Enrichers.Thread" Version="3.1.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="3.1.0" />
+    <PackageReference Include="Serilog.Settings.Configuration" Version="3.3.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+    <PackageReference Include="Serilog.Sinks.Elasticsearch" Version="8.4.1" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\AspNetCore.Ignite\AspNetCore.Ignite.csproj"/>
+    <ProjectReference Include="..\AspNetCore.Ignite\AspNetCore.Ignite.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -71,7 +70,13 @@
     <None Update="libs\ignite-kubernetes-2.12.0.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="libs\ignite-kubernetes-2.13.0.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="libs\ignite-rest-http-2.12.0.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="libs\ignite-rest-http-2.13.0.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="libs\jackson-annotations-2.12.4.jar">
@@ -104,7 +109,106 @@
     <None Update="libs\jetty-xml-9.4.39.v20210325.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="libs\slf4j-api-1.7.33.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="libs\slf4j-api-1.7.7.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="C:\Users\DanutRadoaica\.nuget\packages\apache.ignite\2.13.0\build\output\libs\cache-api-1.0.0.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="C:\Users\DanutRadoaica\.nuget\packages\apache.ignite\2.13.0\build\output\libs\commons-codec-1.13.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="C:\Users\DanutRadoaica\.nuget\packages\apache.ignite\2.13.0\build\output\libs\commons-logging-1.1.1.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="C:\Users\DanutRadoaica\.nuget\packages\apache.ignite\2.13.0\build\output\libs\h2-1.4.197.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="C:\Users\DanutRadoaica\.nuget\packages\apache.ignite\2.13.0\build\output\libs\ignite-core-2.13.0.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="C:\Users\DanutRadoaica\.nuget\packages\apache.ignite\2.13.0\build\output\libs\ignite-indexing-2.13.0.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="C:\Users\DanutRadoaica\.nuget\packages\apache.ignite\2.13.0\build\output\libs\ignite-spring-2.13.0.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="C:\Users\DanutRadoaica\.nuget\packages\apache.ignite\2.13.0\build\output\libs\lucene-analyzers-common-7.4.0.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="C:\Users\DanutRadoaica\.nuget\packages\apache.ignite\2.13.0\build\output\libs\lucene-core-7.4.0.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="C:\Users\DanutRadoaica\.nuget\packages\apache.ignite\2.13.0\build\output\libs\lucene-queryparser-7.4.0.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="C:\Users\DanutRadoaica\.nuget\packages\apache.ignite\2.13.0\build\output\libs\spring-aop-5.2.21.RELEASE.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="C:\Users\DanutRadoaica\.nuget\packages\apache.ignite\2.13.0\build\output\libs\spring-beans-5.2.21.RELEASE.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="C:\Users\DanutRadoaica\.nuget\packages\apache.ignite\2.13.0\build\output\libs\spring-context-5.2.21.RELEASE.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="C:\Users\DanutRadoaica\.nuget\packages\apache.ignite\2.13.0\build\output\libs\spring-core-5.2.21.RELEASE.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="C:\Users\DanutRadoaica\.nuget\packages\apache.ignite\2.13.0\build\output\libs\spring-expression-5.2.21.RELEASE.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="C:\Users\DanutRadoaica\.nuget\packages\apache.ignite\2.13.0\build\output\libs\spring-jcl-5.2.21.RELEASE.jar">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
