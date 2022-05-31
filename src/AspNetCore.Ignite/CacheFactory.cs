@@ -19,8 +19,11 @@ public class CacheFactory
         IgniteClientConfiguration igniteClientConfiguration = new()
         {
             Endpoints = new[] {endpoint},
+            RetryPolicy = new ClientRetryReadPolicy(),
+            RetryLimit = 5,
             SocketTimeout = TimeSpan.FromSeconds(60),
             EnablePartitionAwareness = true,
+            EnableHeartbeats = true,
             // Enable trace logging to observe discovery process.
             Logger = new ConsoleLogger {MinLevel = LogLevel.Trace}
         };
