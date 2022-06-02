@@ -235,12 +235,13 @@ public class IgniteServerRunner : IDisposable
         TaskCompletionSource<string> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
         _logger.Information("Starting Ignite Server...");
         Ignite = Ignition.Start(_igniteConfiguration);
+        Ignite.GetCluster().SetActive(true);
+        Ignite.GetCluster().SetBaselineAutoAdjustEnabledFlag(true);
+        Ignite.GetCluster().SetBaselineAutoAdjustTimeout(0);
         bool? persistenceEnabled = _igniteConfiguration?.DataStorageConfiguration?.DefaultDataRegionConfiguration
             ?.PersistenceEnabled;
         if (persistenceEnabled.HasValue && persistenceEnabled.Value)
         {
-            Ignite.GetCluster().SetBaselineAutoAdjustEnabledFlag(true);
-            Ignite.GetCluster().SetActive(true);
             if (!string.IsNullOrWhiteSpace(_igniteUserPassword))
             {
                 try

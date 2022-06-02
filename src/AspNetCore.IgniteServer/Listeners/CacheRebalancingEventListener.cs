@@ -19,8 +19,7 @@ namespace AspNetCore.IgniteServer.Listeners
         {
             if (evt.Type == EventType.CacheRebalancePartDataLost)
             {
-                _logger.Warning($"Reset lost partitions for {evt.CacheName} due to => Name: {evt.Name}; DiscoveryEventName: {evt.DiscoveryEventName}; DiscoveryNodeAddresses: {string.Join(",", evt.DiscoveryNode.Addresses)}; DiscoveryHostNames: {string.Join(",", evt.DiscoveryNode.HostNames)}");
-                _ignite.ResetLostPartitions(evt.CacheName);
+                _logger.Warning($"Name: {evt.Name}; DiscoveryEventName: {evt.DiscoveryEventName}; DiscoveryNodeAddresses: {string.Join(",", evt.DiscoveryNode.Addresses)}; DiscoveryHostNames: {string.Join(",", evt.DiscoveryNode.HostNames)}");
             }
 
             return true;
