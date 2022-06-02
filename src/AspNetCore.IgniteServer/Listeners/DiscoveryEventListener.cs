@@ -19,8 +19,7 @@ namespace AspNetCore.IgniteServer.Listeners
         {
             if (evt.Type == EventType.NodeLeft)
             {
-                _logger.Warning($"Reset lost partitions for all caches due to => Name: {evt.Name}; EventNodeAddresses: {string.Join(",", evt.EventNode.Addresses)}; EventNodeHostNames: {string.Join(",", evt.EventNode.HostNames)}");
-                _ignite.ResetLostPartitions(_ignite.GetCacheNames());
+                _logger.Warning($"Name: {evt.Name}; EventNodeAddresses: {string.Join(",", evt.EventNode.Addresses)}; EventNodeHostNames: {string.Join(",", evt.EventNode.HostNames)}");
             }
 
             return true;
