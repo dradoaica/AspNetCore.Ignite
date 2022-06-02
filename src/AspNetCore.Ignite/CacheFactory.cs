@@ -18,14 +18,14 @@ public class CacheFactory
     {
         IgniteClientConfiguration igniteClientConfiguration = new()
         {
-            Endpoints = new[] {endpoint},
+            Endpoints = new[] { endpoint },
             RetryPolicy = new ClientRetryReadPolicy(),
             RetryLimit = 5,
             SocketTimeout = TimeSpan.FromSeconds(60),
             EnablePartitionAwareness = true,
             EnableHeartbeats = true,
             // Enable trace logging to observe discovery process.
-            Logger = new ConsoleLogger {MinLevel = LogLevel.Trace}
+            Logger = new ConsoleLogger { MinLevel = LogLevel.Trace }
         };
         if (!string.IsNullOrWhiteSpace(userName))
         {
@@ -71,7 +71,7 @@ public class CacheFactory
             Name = cacheName,
             CacheMode = CacheMode.Partitioned,
             GroupName = typeof(TData).FullNameWithoutAssemblyInfo(),
-            QueryEntities = new[] {new QueryEntity {KeyType = typeof(TKey), ValueType = typeof(TData)}},
+            QueryEntities = new[] { new QueryEntity { KeyType = typeof(TKey), ValueType = typeof(TData) } },
             PlatformCacheConfiguration = new PlatformCacheConfiguration
             {
                 KeyTypeName = typeof(TKey).FullNameWithoutAssemblyInfo(),
@@ -100,7 +100,7 @@ public class CacheFactory
                 Name = cacheName,
                 CacheMode = CacheMode.Partitioned,
                 GroupName = typeof(TData).FullNameWithoutAssemblyInfo(),
-                QueryEntities = new[] {new QueryEntity {KeyType = typeof(TKey), ValueType = typeof(TData)}}
+                QueryEntities = new[] { new QueryEntity { KeyType = typeof(TKey), ValueType = typeof(TData) } }
             };
         extendConfigurationAction?.Invoke(cacheCfg);
         return ignite.GetOrCreateCache<TKey, TData>(cacheCfg);

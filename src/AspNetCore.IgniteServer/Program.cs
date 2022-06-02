@@ -1,4 +1,4 @@
-﻿using AspNetCore.IgniteServer.Utils;
+using AspNetCore.IgniteServer.Utils;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.CommandLineUtils;
 using Microsoft.Extensions.Configuration;
@@ -18,10 +18,10 @@ namespace AspNetCore.IgniteServer;
 
 internal class Program
 {
-    private static readonly List<string> _defaultClusterEndpoints = new() {$"{DnsUtils.GetLocalIPAddress()}:47500"};
+    private static readonly List<string> _defaultClusterEndpoints = new() { $"{DnsUtils.GetLocalIPAddress()}:47500" };
 
     private static readonly MemoryCache _memoryCache =
-        new(new MemoryCacheOptions {ExpirationScanFrequency = TimeSpan.FromSeconds(5)});
+        new(new MemoryCacheOptions { ExpirationScanFrequency = TimeSpan.FromSeconds(5) });
 
     private static volatile bool _shouldStart = true;
     private static IgniteServerRunner _server;
@@ -32,7 +32,8 @@ internal class Program
     {
         using PhysicalFileProvider physicalFileProvider = new(path)
         {
-            UseActivePolling = true, UsePollingFileWatcher = true
+            UseActivePolling = true,
+            UsePollingFileWatcher = true
         };
         IChangeToken changeToken = physicalFileProvider.Watch(filter);
         return changeToken.RegisterChangeCallback(action, default);
@@ -44,7 +45,7 @@ internal class Program
         Directory.SetCurrentDirectory(AppDomain.CurrentDomain.BaseDirectory);
         Configuration = CreateConfiguration();
         SetupIgniteLogging();
-        CommandLineApplication commandLineApplication = new() {Name = "AspNetCore.IgniteServer"};
+        CommandLineApplication commandLineApplication = new() { Name = "AspNetCore.IgniteServer" };
         commandLineApplication.HelpOption("-?|-Help");
         CommandOption configFileArgument = commandLineApplication.Option("-ConfigFile",
             "XML configuration file. If not file is specified then default configuration is used.",
@@ -267,11 +268,5 @@ internal class Program
             .AddEnvironmentVariables();
         IConfigurationRoot configuration = configurationBuilder.Build();
         return configuration;
-    }
-
-    private enum EventIds
-    {
-        EVT_METRICS,
-        EVT_IGNITE_STATUS
     }
 }

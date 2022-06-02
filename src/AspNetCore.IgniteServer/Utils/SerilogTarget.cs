@@ -24,7 +24,7 @@ public sealed class SerilogTarget : TargetWithLayout
         {
             // NLog treats a single string as a verbatim string; Serilog treats it as a String.Format format and hence collapses doubled braces
             // This is the most direct way to emit this without it being re-processed by Serilog (via @nblumhardt)
-            MessageTemplate template = new(new[] {new TextToken(logEvent.FormattedMessage)});
+            MessageTemplate template = new(new[] { new TextToken(logEvent.FormattedMessage) });
             log.Write(new LogEvent(DateTimeOffset.Now, logEventLevel,
                 logEvent.Exception == null ? null : new Exception(DumpException(logEvent.Exception)), template,
                 Enumerable.Empty<LogEventProperty>()));

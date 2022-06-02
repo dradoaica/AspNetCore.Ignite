@@ -1,4 +1,4 @@
-﻿using Apache.Ignite.Core;
+using Apache.Ignite.Core;
 using Apache.Ignite.Core.Cache.Query;
 using Apache.Ignite.Core.Client;
 using Apache.Ignite.Core.Client.Cache;
@@ -7,10 +7,11 @@ using Apache.Ignite.Core.Configuration;
 using Apache.Ignite.Core.Deployment;
 using Apache.Ignite.Core.Discovery.Tcp;
 using Apache.Ignite.Core.Discovery.Tcp.Static;
+using Apache.Ignite.Core.Events;
 using Apache.Ignite.Core.Ssl;
 using Apache.Ignite.NLog;
 using AspNetCore.Ignite;
-using AspNetCore.IgniteServer.Utils;
+using AspNetCore.IgniteServer.Listeners;
 using Serilog;
 using Serilog.Core;
 using System;
@@ -124,7 +125,12 @@ public class IgniteServerRunner : IDisposable
                 },
             FailureDetectionTimeout = TimeSpan.FromSeconds(30),
             ClientFailureDetectionTimeout = TimeSpan.FromSeconds(60),
-            NetworkTimeout = TimeSpan.FromSeconds(10)
+            NetworkTimeout = TimeSpan.FromSeconds(10),
+            IncludedEventTypes = new[]
+            {
+                EventType.NodeLeft,
+                EventType.CacheRebalancePartDataLost
+            }
         };
         return cfg;
     }
@@ -139,11 +145,11 @@ public class IgniteServerRunner : IDisposable
         switch (_igniteConfiguration.DiscoverySpi)
         {
             case TcpDiscoverySpi tcpDiscoverySpi:
-                tcpDiscoverySpi.IpFinder = new TcpDiscoveryStaticIpFinder {Endpoints = values};
+                tcpDiscoverySpi.IpFinder = new TcpDiscoveryStaticIpFinder { Endpoints = values };
                 break;
             case null:
                 _igniteConfiguration.DiscoverySpi =
-                    new TcpDiscoverySpi {IpFinder = new TcpDiscoveryStaticIpFinder {Endpoints = values}};
+                    new TcpDiscoverySpi { IpFinder = new TcpDiscoveryStaticIpFinder { Endpoints = values } };
                 break;
         }
     }
@@ -161,7 +167,7 @@ public class IgniteServerRunner : IDisposable
                 tcpDiscoverySpi.LocalPort = value;
                 break;
             case null:
-                _igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi {LocalPort = value};
+                _igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi { LocalPort = value };
                 break;
         }
     }
@@ -192,7 +198,7 @@ public class IgniteServerRunner : IDisposable
         else
         {
             _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration =
-                new DataRegionConfiguration {Name = "default", MaxSize = (long)value * 1024 * 1024};
+                new DataRegionConfiguration { Name = "default", MaxSize = (long)value * 1024 * 1024 };
         }
     }
 
@@ -210,7 +216,7 @@ public class IgniteServerRunner : IDisposable
         else
         {
             _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration =
-                new DataRegionConfiguration {Name = "default", PersistenceEnabled = value};
+                new DataRegionConfiguration { Name = "default", PersistenceEnabled = value };
         }
     }
 
@@ -259,6 +265,22 @@ public class IgniteServerRunner : IDisposable
                 }
             }
         }
+
+        // try reset caches who have lost partitions
+        await Task.Delay(5000).ConfigureAwait(false);
+        try
+        {
+            Ignite.ResetLostPartitions(Ignite.GetCacheNames());
+        }
+        catch
+        {
+            // best effort
+        }
+
+        CacheRebalancingEventListener cacheRebalancingEventListener = new(Ignite, _logger);
+        Ignite.GetEvents().LocalListen(cacheRebalancingEventListener, EventType.CacheRebalancePartDataLost);
+        DiscoveryEventListener discoveryEventListener = new(Ignite, _logger);
+        Ignite.GetEvents().LocalListen(discoveryEventListener, EventType.NodeLeft);
 
         CancellationTokenSource cts = new();
         Ignite.Stopped += (s, e) => tcs.SetResult(e.ToString());
