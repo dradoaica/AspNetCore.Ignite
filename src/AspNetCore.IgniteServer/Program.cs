@@ -6,7 +6,6 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Primitives;
 using NLog;
 using NLog.Config;
-using NLog.Targets;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -246,15 +245,9 @@ internal class Program
         // Step 1. Create configuration object 
         LoggingConfiguration config = new();
         // Step 2. Create targets
-        ColoredConsoleTarget consoleTarget = new("console")
-        {
-            Layout = @"[${date:format=HH\:mm\:ss}] ${level}: ${message} ${exception}"
-        };
-        config.AddTarget(consoleTarget);
         SerilogTarget serilogTarget = new("serilog");
         config.AddTarget(serilogTarget);
         // Step 3. Define rules            
-        config.AddRule(LogLevel.Info, LogLevel.Fatal, consoleTarget); // all to console
         config.AddRule(LogLevel.Info, LogLevel.Fatal, serilogTarget); // all to serilog
         // Step 4. Activate the configuration
         LogManager.Configuration = config;

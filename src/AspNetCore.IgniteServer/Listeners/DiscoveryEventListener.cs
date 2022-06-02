@@ -17,9 +17,17 @@ namespace AspNetCore.IgniteServer.Listeners
 
         public bool Invoke(DiscoveryEvent evt)
         {
-            if (evt.Type == EventType.NodeLeft)
+            if (evt.Type == EventType.NodeJoined)
+            {
+                _logger.Information($"Name: {evt.Name}; EventNodeAddresses: {string.Join(",", evt.EventNode.Addresses)}; EventNodeHostNames: {string.Join(",", evt.EventNode.HostNames)}");
+            }
+            else if (evt.Type == EventType.NodeLeft)
             {
                 _logger.Warning($"Name: {evt.Name}; EventNodeAddresses: {string.Join(",", evt.EventNode.Addresses)}; EventNodeHostNames: {string.Join(",", evt.EventNode.HostNames)}");
+            }
+            else if (evt.Type == EventType.NodeFailed)
+            {
+                _logger.Error($"Name: {evt.Name}; EventNodeAddresses: {string.Join(",", evt.EventNode.Addresses)}; EventNodeHostNames: {string.Join(",", evt.EventNode.HostNames)}");
             }
 
             return true;

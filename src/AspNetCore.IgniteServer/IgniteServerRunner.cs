@@ -108,8 +108,10 @@ public class IgniteServerRunner : IDisposable
             JvmOptions =
                 new[]
                 {
-                    "-XX:+AlwaysPreTouch", "-XX:+UseG1GC", "-XX:+ScavengeBeforeFullGC", "-XX:+DisableExplicitGC",
-                    "-Djava.net.preferIPv4Stack=true", "-DIGNITE_QUIET=false", "-DIGNITE_WAL_MMAP=false"
+                    "-XX:+AlwaysPreTouch", "-XX:+UseG1GC", "-XX:+ScavengeBeforeFullGC",
+                    "-XX:+DisableExplicitGC", "-Djava.net.preferIPv4Stack=true", "-DIGNITE_QUIET=false",
+                    "-DIGNITE_WAL_MMAP=false", "-Dcom.sun.management.jmxremote", "-Dcom.sun.management.jmxremote.port=49112",
+                    "-Dcom.sun.management.jmxremote.authenticate=false", "-Dcom.sun.management.jmxremote.ssl=false"
                 },
             PeerAssemblyLoadingMode = PeerAssemblyLoadingMode.CurrentAppDomain,
             DataStorageConfiguration = new DataStorageConfiguration(),
@@ -128,7 +130,9 @@ public class IgniteServerRunner : IDisposable
             NetworkTimeout = TimeSpan.FromSeconds(10),
             IncludedEventTypes = new[]
             {
+                EventType.NodeJoined,
                 EventType.NodeLeft,
+                EventType.NodeFailed,
                 EventType.CacheRebalancePartDataLost
             }
         };
