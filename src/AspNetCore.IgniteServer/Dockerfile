@@ -1,4 +1,4 @@
-﻿# Build with docker build -t AspNetCore.ignite-server .
+# Build with docker build -t AspNetCore.ignite-server .
 FROM mcr.microsoft.com/dotnet/sdk:5.0 AS build-env
 WORKDIR /app
 # Copy csproj and restore as distinct layers
@@ -9,7 +9,7 @@ COPY . ./
 RUN dotnet publish -c Release -o out
 
 # Build runtime image
-FROM openjdk:8
+FROM openjdk:11
 RUN apt-get update
 RUN apt-get install apt-transport-https
 

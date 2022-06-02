@@ -241,7 +241,7 @@ public class IgniteServerRunner : IDisposable
         Ignite = Ignition.Start(_igniteConfiguration);
         Ignite.GetCluster().SetActive(true);
         Ignite.GetCluster().SetBaselineAutoAdjustEnabledFlag(true);
-        Ignite.GetCluster().SetBaselineAutoAdjustTimeout(0);
+        Ignite.GetCluster().SetBaselineAutoAdjustTimeout(30000);
         bool? persistenceEnabled = _igniteConfiguration?.DataStorageConfiguration?.DefaultDataRegionConfiguration
             ?.PersistenceEnabled;
         if (persistenceEnabled.HasValue && persistenceEnabled.Value)
