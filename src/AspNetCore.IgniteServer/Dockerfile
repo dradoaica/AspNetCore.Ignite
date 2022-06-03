@@ -19,7 +19,7 @@ RUN dpkg -i packages-microsoft-prod.deb
 
 RUN apt-get update
 RUN apt-get install -y apt-transport-https
-RUN apt-get install -y aspnetcore-runtime-5.0
+RUN apt-get install -y aspnetcore-runtime-6.0
 
 # Install IGNITE
 ENV IGNITE_VERSION 2.13.0
