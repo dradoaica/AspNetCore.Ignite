@@ -1,5 +1,5 @@
 # Build with docker build -t AspNetCore.ignite-server .
-FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build-env
+FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
 WORKDIR /src
 COPY ["NuGet.Config", "."]
 COPY ["src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj", "src/AspNetCore.IgniteServer/"]
@@ -10,7 +10,7 @@ WORKDIR "/src/src/AspNetCore.IgniteServer"
 RUN dotnet build "AspNetCore.IgniteServer.csproj" -c Debug -o /app/build
 
 FROM build AS publish
-RUN dotnet publish "AspNetCore.IgniteServer.csproj" -c Debug -o /app/publish -r linux-x64 --no-restore
+RUN dotnet publish "AspNetCore.IgniteServer.csproj" -c Debug -o /app/publish --no-restore
 
 # Build runtime image
 FROM openjdk:11
