@@ -1,4 +1,4 @@
-﻿# Build with docker build -t AspNetCore.ignite-server .
+# Build with docker build -t AspNetCore.ignite-server .
 FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build-env
 WORKDIR /app
 # Copy csproj and restore as distinct layers
@@ -47,11 +47,18 @@ RUN mv apache-ignite-${IGNITE_VERSION}-bin/libs/optional/ignite-rest-http apache
 
 RUN mv apache-ignite-${IGNITE_VERSION}-bin/libs/optional/ignite-kubernetes apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-kubernetes
 
+RUN mv apache-ignite-${IGNITE_VERSION}-bin/libs/optional/ignite-opencensus apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-opencensus
+RUN curl https://repo1.maven.org/maven2/io/prometheus/simpleclient_common/0.6.0/simpleclient_common-0.6.0.jar -o apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-opencensus/simpleclient_common-0.6.0.jar
+RUN curl https://repo1.maven.org/maven2/io/prometheus/simpleclient/0.6.0/simpleclient-0.6.0.jar -o apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-opencensus/simpleclient-0.6.0.jar
+RUN curl https://repo1.maven.org/maven2/io/opencensus/opencensus-exporter-metrics-util/0.20.0/opencensus-exporter-metrics-util-0.20.0.jar -o apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-opencensus/opencensus-exporter-metrics-util-0.20.0.jar
+RUN curl https://repo1.maven.org/maven2/io/opencensus/opencensus-exporter-stats-prometheus/0.22.0/opencensus-exporter-stats-prometheus-0.22.0.jar -o apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-opencensus/opencensus-exporter-stats-prometheus-0.22.0.jar
+RUN curl https://repo1.maven.org/maven2/io/prometheus/simpleclient_httpserver/0.6.0/simpleclient_httpserver-0.6.0.jar -o apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-opencensus/simpleclient_httpserver-0.6.0.jar
+
 WORKDIR /app
 COPY --from=build-env /app/out .
 ENTRYPOINT ["dotnet", "AspNetCore.IgniteServer.dll"]
 
-EXPOSE 10800 10900 11211 47100 47500 49112 8080 3000
+EXPOSE 10800 47100 47500 49112 8080 3000 9000
 
 LABEL image="aspnetcore.ignite-server" \
       version="1.0"

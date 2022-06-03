@@ -1,4 +1,4 @@
-﻿using AspNetCore.IgniteServer.Utils;
+using AspNetCore.IgniteServer.Utils;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.CommandLineUtils;
 using Microsoft.Extensions.Configuration;
@@ -39,7 +39,7 @@ namespace AspNetCore.IgniteServer
 
         private static async Task Main(string[] args)
         {
-            Environment.SetEnvironmentVariable("OPTION_LIBS", "ignite-kubernetes, ignite-rest-http");
+            Environment.SetEnvironmentVariable("OPTION_LIBS", "ignite-kubernetes, ignite-rest-http, ignite-opencensus");
             Directory.SetCurrentDirectory(AppDomain.CurrentDomain.BaseDirectory);
             Configuration = CreateConfiguration();
             SetupIgniteLogging();
