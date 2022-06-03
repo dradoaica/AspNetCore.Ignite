@@ -1,12 +1,16 @@
 # Build with docker build -t AspNetCore.ignite-server .
 FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build-env
-WORKDIR /app
-# Copy csproj and restore as distinct layers
-COPY *.csproj ./
-RUN dotnet restore
-# Copy everything else and build
-COPY . ./
-RUN dotnet publish -c Release -o out
+WORKDIR /src
+COPY ["NuGet.Config", "."]
+COPY ["src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj", "src/AspNetCore.IgniteServer/"]
+COPY ["src/AspNetCore.Ignite/AspNetCore.Ignite.csproj", "src/AspNetCore.Ignite/"]
+RUN dotnet restore "src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj"
+COPY . .
+WORKDIR "/src/src/AspNetCore.IgniteServer"
+RUN dotnet build "AspNetCore.IgniteServer.csproj" -c Debug -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "AspNetCore.IgniteServer.csproj" -c Debug -o /app/publish -r linux-x64 --no-restore
 
 # Build runtime image
 FROM openjdk:11
@@ -37,7 +41,7 @@ WORKDIR /opt/ignite
 
 RUN curl https://dist.apache.org/repos/dist/release/ignite/${IGNITE_VERSION}/apache-ignite-${IGNITE_VERSION}-bin.zip -o ignite.zip \
     && unzip ignite.zip \
-    && rm ignite.
+    && rm ignite.zip
 
 #RUN curl https://www.gridgain.com/media/control-center-agent/control-center-agent-2.13.0.zip -o control-center-agent.zip \
 #    && unzip control-center-agent.zip -d apache-ignite-${IGNITE_VERSION}-bin \
@@ -55,10 +59,7 @@ RUN curl https://repo1.maven.org/maven2/io/opencensus/opencensus-exporter-stats-
 RUN curl https://repo1.maven.org/maven2/io/prometheus/simpleclient_httpserver/0.6.0/simpleclient_httpserver-0.6.0.jar -o apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-opencensus/simpleclient_httpserver-0.6.0.jar
 
 WORKDIR /app
-COPY --from=build-env /app/out .
+COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "AspNetCore.IgniteServer.dll"]
 
 EXPOSE 10800 47100 47500 49112 8080 3000 9000
-
-LABEL image="aspnetcore.ignite-server" \
-      version="1.0"
