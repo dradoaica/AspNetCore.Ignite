@@ -26,6 +26,7 @@ namespace AspNetCore.IgniteServer
     public class IgniteServerRunner : IDisposable
     {
         private static readonly Logger _logger;
+        private readonly bool _enableOffHeapMetrics;
         private readonly IgniteConfiguration _igniteConfiguration;
         private readonly string _igniteUserPassword;
         private readonly string _sslClientCertificatePassword;
@@ -43,19 +44,21 @@ namespace AspNetCore.IgniteServer
             TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
         }
 
-        public IgniteServerRunner(bool authenticationEnabled, string igniteUserPassword = null,
+        public IgniteServerRunner(TimeSpan metricsExpireTime, TimeSpan metricsLogFrequency,
+            TimeSpan metricsUpdateFrequency,
+            bool enableOffHeapMetrics, bool authenticationEnabled, string igniteUserPassword = null,
             string configurationFile = null, bool useSsl = false,
             string sslKeyStoreFilePath = null, string sslKeyStorePassword = null, string sslTrustStoreFilePath = null,
             string sslTrustStorePassword = null,
             bool useClientSsl = false, string sslClientCertificatePath = null,
             string sslClientCertificatePassword = null)
         {
+            _enableOffHeapMetrics = enableOffHeapMetrics;
             _useClientSsl = useClientSsl;
             _sslClientCertificatePath = sslClientCertificatePath;
             _sslClientCertificatePassword = sslClientCertificatePassword;
             _igniteUserPassword = igniteUserPassword;
-            _igniteConfiguration = new IgniteConfiguration();
-            if (configurationFile != null)
+            if (!string.IsNullOrWhiteSpace(configurationFile))
             {
                 _igniteConfiguration = LoadConfiguration(configurationFile);
             }
@@ -64,6 +67,11 @@ namespace AspNetCore.IgniteServer
                 _igniteConfiguration = GetDefaultConfiguration();
             }
 
+            _igniteConfiguration.SpringConfigUrl =
+                _useClientSsl ? "config/spring-config-client-with-ssl.xml" : "config/spring-config.xml";
+            _igniteConfiguration.MetricsExpireTime = metricsExpireTime;
+            _igniteConfiguration.MetricsLogFrequency = metricsLogFrequency;
+            _igniteConfiguration.MetricsUpdateFrequency = metricsUpdateFrequency;
             if (authenticationEnabled)
             {
                 _igniteConfiguration.AuthenticationEnabled = true;
@@ -104,8 +112,6 @@ namespace AspNetCore.IgniteServer
             IgniteConfiguration cfg = new()
             {
                 AutoGenerateIgniteInstanceName = true,
-                SpringConfigUrl =
-                    _useClientSsl ? "config/spring-config-client-with-ssl.xml" : "config/spring-config.xml",
                 JvmOptions =
                     new[]
                     {
@@ -116,7 +122,6 @@ namespace AspNetCore.IgniteServer
                 PeerAssemblyLoadingMode = PeerAssemblyLoadingMode.CurrentAppDomain,
                 DataStorageConfiguration = new DataStorageConfiguration(),
                 WorkDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "work"),
-                MetricsLogFrequency = TimeSpan.FromMinutes(5),
                 CommunicationSpi =
                     new TcpCommunicationSpi
                     {
@@ -150,8 +155,10 @@ namespace AspNetCore.IgniteServer
                     tcpDiscoverySpi.IpFinder = new TcpDiscoveryStaticIpFinder {Endpoints = values};
                     break;
                 case null:
-                    _igniteConfiguration.DiscoverySpi =
-                        new TcpDiscoverySpi {IpFinder = new TcpDiscoveryStaticIpFinder {Endpoints = values}};
+                    _igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi
+                    {
+                        IpFinder = new TcpDiscoveryStaticIpFinder {Endpoints = values}
+                    };
                     break;
             }
         }
@@ -192,7 +199,12 @@ namespace AspNetCore.IgniteServer
                 throw new InvalidOperationException("Cannot configure running instances.");
             }
 
-            if (_igniteConfiguration?.DataStorageConfiguration?.DefaultDataRegionConfiguration != null)
+            if (_igniteConfiguration.DataStorageConfiguration == null)
+            {
+                _igniteConfiguration.DataStorageConfiguration = new DataStorageConfiguration();
+            }
+
+            if (_igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration != null)
             {
                 _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.MaxSize =
                     (long)value * 1024 * 1024;
@@ -202,6 +214,10 @@ namespace AspNetCore.IgniteServer
                 _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration =
                     new DataRegionConfiguration {Name = "default", MaxSize = (long)value * 1024 * 1024};
             }
+
+            _igniteConfiguration.DataStorageConfiguration.MetricsEnabled = _enableOffHeapMetrics;
+            _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.MetricsEnabled =
+                _enableOffHeapMetrics;
         }
 
         public void SetPersistence(bool value)
@@ -211,7 +227,12 @@ namespace AspNetCore.IgniteServer
                 throw new InvalidOperationException("Cannot configure running instances.");
             }
 
-            if (_igniteConfiguration?.DataStorageConfiguration?.DefaultDataRegionConfiguration != null)
+            if (_igniteConfiguration.DataStorageConfiguration == null)
+            {
+                _igniteConfiguration.DataStorageConfiguration = new DataStorageConfiguration();
+            }
+
+            if (_igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration != null)
             {
                 _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.PersistenceEnabled = value;
             }
@@ -240,7 +261,7 @@ namespace AspNetCore.IgniteServer
             Ignite.GetCluster().SetActive(true);
             Ignite.GetCluster().SetBaselineAutoAdjustEnabledFlag(true);
             Ignite.GetCluster().SetBaselineAutoAdjustTimeout(30000);
-            bool? persistenceEnabled = _igniteConfiguration?.DataStorageConfiguration?.DefaultDataRegionConfiguration
+            bool? persistenceEnabled = _igniteConfiguration.DataStorageConfiguration?.DefaultDataRegionConfiguration
                 ?.PersistenceEnabled;
             if (persistenceEnabled.HasValue && persistenceEnabled.Value)
             {
@@ -269,21 +290,11 @@ namespace AspNetCore.IgniteServer
                 }
             }
 
-            // try reset caches who have lost partitions
-            await Task.Delay(5000).ConfigureAwait(false);
-            try
-            {
-                Ignite.ResetLostPartitions(Ignite.GetCacheNames());
-            }
-            catch
-            {
-                // best effort
-            }
-
             CacheRebalancingEventListener cacheRebalancingEventListener = new(Ignite, _logger);
             Ignite.GetEvents().LocalListen(cacheRebalancingEventListener, EventType.CacheRebalancePartDataLost);
             DiscoveryEventListener discoveryEventListener = new(Ignite, _logger);
-            Ignite.GetEvents().LocalListen(discoveryEventListener, EventType.NodeLeft);
+            Ignite.GetEvents().LocalListen(discoveryEventListener, EventType.NodeJoined, EventType.NodeLeft,
+                EventType.NodeFailed);
 
             CancellationTokenSource cts = new();
             Ignite.Stopped += (s, e) => tcs.SetResult(e.ToString());

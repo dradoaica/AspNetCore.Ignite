@@ -89,12 +89,34 @@ namespace AspNetCore.IgniteServer
                 string sslKeyStorePassword = Configuration["SSL_KEY_STORE_PASSWORD"];
                 string sslTrustStoreFilePath = Configuration["SSL_TRUST_STORE_FILE_PATH"];
                 string sslTrustStorePassword = Configuration["SSL_TRUST_STORE_PASSWORD"];
-                bool useClientSsl =
-                    "true".Equals(Configuration["USE_CLIENT_SSL"], StringComparison.InvariantCultureIgnoreCase);
+                bool useClientSsl = "true".Equals(Configuration["USE_CLIENT_SSL"],
+                    StringComparison.InvariantCultureIgnoreCase);
                 string sslClientCertificatePath = Configuration["SSL_CLIENT_CERTIFICATE_PATH"];
                 string sslClientCertificatePassword = Configuration["SSL_CLIENT_CERTIFICATE_PASSWORD"];
                 string springConfigPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config",
                     useClientSsl ? "spring-config-client-with-ssl.xml" : "spring-config.xml");
+                TimeSpan metricsExpireTime = TimeSpan.FromHours(24);
+                if (int.TryParse(Configuration["METRICS_EXPIRE_TIME_IN_HOURS"], out int metricsExpireTimeInHours))
+                {
+                    metricsExpireTime = TimeSpan.FromHours(metricsExpireTimeInHours);
+                }
+
+                TimeSpan metricsLogFrequency = TimeSpan.FromMinutes(5);
+                if (int.TryParse(Configuration["METRICS_LOG_FREQUENCY_IN_MINUTES"],
+                        out int metricsLogFrequencyInMinutes))
+                {
+                    metricsLogFrequency = TimeSpan.FromMinutes(metricsLogFrequencyInMinutes);
+                }
+
+                TimeSpan metricsUpdateFrequency = TimeSpan.FromSeconds(60);
+                if (int.TryParse(Configuration["METRICS_UPDATE_FREQUENCY_IN_SECONDS"],
+                        out int metricsUpdateFrequencyInSeconds))
+                {
+                    metricsUpdateFrequency = TimeSpan.FromSeconds(metricsUpdateFrequencyInSeconds);
+                }
+
+                bool enableOffHeapMetrics = "true".Equals(Configuration["ENABLE_OFF_HEAP_METRICS"],
+                    StringComparison.InvariantCultureIgnoreCase);
                 string springConfigText = File.ReadAllText(springConfigPath, Encoding.UTF8);
                 springConfigText = springConfigText?.Replace("K8S_NAMESPACE", k8sNamespace)
                     ?.Replace("K8S_SERVICE_NAME", k8sServiceName);
@@ -106,9 +128,12 @@ namespace AspNetCore.IgniteServer
                         ?.Replace("SSL_TRUST_STORE_PASSWORD", sslTrustStorePassword);
                 }
 
+                springConfigText = springConfigText?.Replace("OPEN_CENSUS_METRIC_EXPORTER_SPI_PERIOD",
+                    metricsUpdateFrequency.TotalMilliseconds.ToString());
                 File.WriteAllText(springConfigPath, springConfigText, Encoding.UTF8);
                 string configFile = configFileArgument.HasValue() ? configFileArgument.Value() : null;
-                _server = new IgniteServerRunner(enableAuthentication, igniteUserPassword, configFile, useSsl,
+                _server = new IgniteServerRunner(metricsExpireTime, metricsLogFrequency, metricsUpdateFrequency,
+                    enableOffHeapMetrics, enableAuthentication, igniteUserPassword, configFile, useSsl,
                     sslKeyStoreFilePath, sslKeyStorePassword, sslTrustStoreFilePath, sslTrustStorePassword,
                     useClientSsl, sslClientCertificatePath, sslClientCertificatePassword);
                 if (offheapArgument.HasValue())
@@ -243,12 +268,12 @@ namespace AspNetCore.IgniteServer
 
         private static void SetupIgniteLogging()
         {
-            // Step 1. Create configuration object 
+            // Step 1. Create configuration object
             LoggingConfiguration config = new();
             // Step 2. Create targets
             SerilogTarget serilogTarget = new("serilog");
             config.AddTarget(serilogTarget);
-            // Step 3. Define rules            
+            // Step 3. Define rules
             config.AddRule(LogLevel.Info, LogLevel.Fatal, serilogTarget); // all to serilog
             // Step 4. Activate the configuration
             LogManager.Configuration = config;
