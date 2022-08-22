@@ -39,6 +39,7 @@ namespace AspNetCore.IgniteServer
 
         private static async Task Main(string[] args)
         {
+            Environment.SetEnvironmentVariable("COMPlus_EnableAlternateStackCheck", "1");
             Environment.SetEnvironmentVariable("OPTION_LIBS", "ignite-kubernetes, ignite-rest-http, ignite-opencensus");
             Directory.SetCurrentDirectory(AppDomain.CurrentDomain.BaseDirectory);
             Configuration = CreateConfiguration();
