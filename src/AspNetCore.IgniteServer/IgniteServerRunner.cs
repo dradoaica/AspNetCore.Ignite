@@ -218,6 +218,8 @@ namespace AspNetCore.IgniteServer
             _igniteConfiguration.DataStorageConfiguration.MetricsEnabled = _enableOffHeapMetrics;
             _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.MetricsEnabled =
                 _enableOffHeapMetrics;
+            _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.PageEvictionMode =
+                DataPageEvictionMode.Random2Lru;
         }
 
         public void SetPersistence(bool value)
