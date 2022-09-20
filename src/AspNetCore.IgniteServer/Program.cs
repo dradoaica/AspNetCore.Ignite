@@ -57,7 +57,7 @@ namespace AspNetCore.IgniteServer
                 "Set this node as the leader of the cluster.", CommandOptionType.NoValue);
             CommandOption serverPortArgument = commandLineApplication.Option("-SpiPort",
                 "Specifies port for Discovery Spi.", CommandOptionType.SingleValue);
-            CommandOption clusterEnpointArgument = commandLineApplication.Option("-Cluster",
+            CommandOption clusterEndpointArgument = commandLineApplication.Option("-Cluster",
                 "Specifies IP address and port of a cluster node. Multiple nodes can be specified.",
                 CommandOptionType.MultipleValue);
             CommandOption consistentIdArgument = commandLineApplication.Option("-ConsistentId",
@@ -160,9 +160,9 @@ namespace AspNetCore.IgniteServer
                     _server.SetServerPort(int.Parse(serverPortArgument.Value()));
                 }
 
-                if (clusterEnpointArgument.HasValue())
+                if (clusterEndpointArgument.HasValue())
                 {
-                    _server.SetClusterEnpoints(clusterEnpointArgument.Values);
+                    _server.SetClusterEnpoints(clusterEndpointArgument.Values);
                 }
                 else if (useTcpDiscoveryStaticIpFinder)
                 {
