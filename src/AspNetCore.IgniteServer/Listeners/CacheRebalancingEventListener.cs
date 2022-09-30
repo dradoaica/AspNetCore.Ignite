@@ -4,7 +4,7 @@ using Serilog.Core;
 
 namespace AspNetCore.IgniteServer.Listeners
 {
-    public class CacheRebalancingEventListener : IEventListener<CacheRebalancingEvent>
+    internal sealed class CacheRebalancingEventListener : IEventListener<CacheRebalancingEvent>
     {
         private readonly IIgnite _ignite;
         private readonly Logger _logger;

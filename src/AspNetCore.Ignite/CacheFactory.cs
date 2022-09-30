@@ -21,7 +21,7 @@ namespace AspNetCore.Ignite
                 Endpoints = new[] {endpoint},
                 RetryPolicy = new ClientRetryReadPolicy(),
                 RetryLimit = 5,
-                SocketTimeout = TimeSpan.FromSeconds(5),
+                SocketTimeout = TimeSpan.FromSeconds(30),
                 EnablePartitionAwareness = true,
                 EnableHeartbeats = true,
                 // Enable trace logging to observe discovery process.

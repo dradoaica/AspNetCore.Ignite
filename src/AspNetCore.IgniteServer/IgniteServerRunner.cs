@@ -23,7 +23,7 @@ using System.Threading.Tasks;
 
 namespace AspNetCore.IgniteServer
 {
-    public class IgniteServerRunner : IDisposable
+    internal sealed class IgniteServerRunner : IDisposable
     {
         private static readonly Logger _logger;
         private readonly bool _enableOffHeapMetrics;
@@ -58,15 +58,9 @@ namespace AspNetCore.IgniteServer
             _sslClientCertificatePath = sslClientCertificatePath;
             _sslClientCertificatePassword = sslClientCertificatePassword;
             _igniteUserPassword = igniteUserPassword;
-            if (!string.IsNullOrWhiteSpace(configurationFile))
-            {
-                _igniteConfiguration = LoadConfiguration(configurationFile);
-            }
-            else
-            {
-                _igniteConfiguration = GetDefaultConfiguration();
-            }
-
+            _igniteConfiguration = string.IsNullOrWhiteSpace(configurationFile)
+                ? GetDefaultConfiguration()
+                : LoadConfiguration(configurationFile);
             _igniteConfiguration.SpringConfigUrl =
                 _useClientSsl ? "config/spring-config-client-with-ssl.xml" : "config/spring-config.xml";
             _igniteConfiguration.MetricsExpireTime = metricsExpireTime;
@@ -94,11 +88,6 @@ namespace AspNetCore.IgniteServer
         }
 
         public IIgnite Ignite { get; private set; }
-
-        public void Dispose()
-        {
-            Dispose(true);
-        }
 
         private static IgniteConfiguration LoadConfiguration(string filename)
         {
@@ -140,6 +129,54 @@ namespace AspNetCore.IgniteServer
                 }
             };
             return cfg;
+        }
+
+        private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            if (e.ExceptionObject is Exception ex)
+            {
+                _logger?.Error(ex, "UnhandledException");
+            }
+            else
+            {
+                string msg = "";
+                if (e.ExceptionObject != null)
+                {
+                    msg = e.ExceptionObject.ToString();
+                }
+
+                int exCode = Marshal.GetLastWin32Error();
+                if (exCode != 0)
+                {
+                    msg += " ErrorCode: " + exCode.ToString("X16");
+                }
+
+                _logger?.Error(string.Format("Unhandled External Exception: {0}", msg));
+            }
+        }
+
+        private static void TaskScheduler_UnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e)
+        {
+            _logger?.Error(e.Exception, "ERROR: UNOBSERVED TASK EXCEPTION");
+            e.SetObserved();
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    Ignite?.Dispose();
+                }
+
+                _disposed = true;
+            }
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
         }
 
         public void SetClusterEnpoints(ICollection<string> values)
@@ -322,49 +359,6 @@ namespace AspNetCore.IgniteServer
             {
                 Ignition.Stop(Ignite.Name, false);
                 Ignite = null;
-            }
-        }
-
-        private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
-        {
-            if (e.ExceptionObject is Exception ex)
-            {
-                _logger?.Error(ex, "UnhandledException");
-            }
-            else
-            {
-                string msg = "";
-                if (e.ExceptionObject != null)
-                {
-                    msg = e.ExceptionObject.ToString();
-                }
-
-                int exCode = Marshal.GetLastWin32Error();
-                if (exCode != 0)
-                {
-                    msg += " ErrorCode: " + exCode.ToString("X16");
-                }
-
-                _logger?.Error(string.Format("Unhandled External Exception: {0}", msg));
-            }
-        }
-
-        private static void TaskScheduler_UnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e)
-        {
-            _logger?.Error(e.Exception, "ERROR: UNOBSERVED TASK EXCEPTION");
-            e.SetObserved();
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!_disposed)
-            {
-                if (disposing)
-                {
-                    Ignite?.Dispose();
-                }
-
-                _disposed = true;
             }
         }
     }

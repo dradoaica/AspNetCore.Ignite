@@ -5,7 +5,7 @@ using System.Net.Sockets;
 
 namespace AspNetCore.IgniteServer.Utils
 {
-    public class DnsUtils
+    internal sealed class DnsUtils
     {
         public static string GetLocalIPAddress()
         {

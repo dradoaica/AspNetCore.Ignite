@@ -12,7 +12,7 @@ using ILogger = Serilog.ILogger;
 namespace AspNetCore.IgniteServer.Utils
 {
     [Target("SerilogTarget")]
-    public sealed class SerilogTarget : TargetWithLayout
+    internal sealed class SerilogTarget : TargetWithLayout
     {
         public SerilogTarget(string name) => Name = name;
 

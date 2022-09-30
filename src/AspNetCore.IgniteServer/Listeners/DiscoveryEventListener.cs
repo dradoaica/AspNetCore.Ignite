@@ -4,7 +4,7 @@ using Serilog.Core;
 
 namespace AspNetCore.IgniteServer.Listeners
 {
-    public class DiscoveryEventListener : IEventListener<DiscoveryEvent>
+    internal sealed class DiscoveryEventListener : IEventListener<DiscoveryEvent>
     {
         private readonly IIgnite _ignite;
         private readonly Logger _logger;

@@ -25,9 +25,9 @@ namespace AspNetCore.IgniteServer
         private static volatile bool _shouldStart = true;
         private static IgniteServerRunner _server;
 
-        public static IConfiguration Configuration { get; private set; }
+        internal static IConfiguration Configuration { get; private set; }
 
-        public static IDisposable WatchFile(string filter, string path, Action<object> action)
+        private static IDisposable WatchFile(string filter, string path, Action<object> action)
         {
             using PhysicalFileProvider physicalFileProvider = new(path)
             {
@@ -37,7 +37,7 @@ namespace AspNetCore.IgniteServer
             return changeToken.RegisterChangeCallback(action, default);
         }
 
-        private static async Task Main(string[] args)
+        private static void Main(string[] args)
         {
             Environment.SetEnvironmentVariable("COMPlus_EnableAlternateStackCheck", "1");
             Environment.SetEnvironmentVariable("OPTION_LIBS", "ignite-kubernetes, ignite-rest-http, ignite-opencensus");
@@ -49,9 +49,9 @@ namespace AspNetCore.IgniteServer
             CommandOption configFileArgument = commandLineApplication.Option("-ConfigFile",
                 "XML configuration file. If not file is specified then default configuration is used.",
                 CommandOptionType.SingleValue);
-            CommandOption offheapArgument = commandLineApplication.Option("-Offheap",
+            CommandOption offHeapArgument = commandLineApplication.Option("-OffHeap",
                 "Size of off-heap memory given in megabytes.", CommandOptionType.SingleValue);
-            CommandOption onheapArgument = commandLineApplication.Option("-Onheap",
+            CommandOption onHeapArgument = commandLineApplication.Option("-OnHeap",
                 "Size of on-heap memory given in megabytes.", CommandOptionType.SingleValue);
             CommandOption leaderNodeArgument = commandLineApplication.Option("-SetLeader",
                 "Set this node as the leader of the cluster.", CommandOptionType.NoValue);
@@ -137,18 +137,18 @@ namespace AspNetCore.IgniteServer
                     enableOffHeapMetrics, enableAuthentication, igniteUserPassword, configFile, useSsl,
                     sslKeyStoreFilePath, sslKeyStorePassword, sslTrustStoreFilePath, sslTrustStorePassword,
                     useClientSsl, sslClientCertificatePath, sslClientCertificatePassword);
-                if (offheapArgument.HasValue())
+                if (offHeapArgument.HasValue())
                 {
-                    _server.SetOffHeapMemoryLimit(int.Parse(offheapArgument.Value()));
+                    _server.SetOffHeapMemoryLimit(int.Parse(offHeapArgument.Value()));
                 }
                 else
                 {
                     _server.SetOffHeapMemoryLimit(defaultOffHeapMemory);
                 }
 
-                if (onheapArgument.HasValue())
+                if (onHeapArgument.HasValue())
                 {
-                    _server.SetOnHeapMemoryLimit(int.Parse(onheapArgument.Value()));
+                    _server.SetOnHeapMemoryLimit(int.Parse(onHeapArgument.Value()));
                 }
                 else
                 {
