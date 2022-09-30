@@ -13,8 +13,8 @@ dotnet AspNetCore.IgniteServer.dll [options]
 Options:
   -?|-Help       Show help information
   -ConfigFile    XML configuration file. If not specified then default configuration is used.
-  -Offheap       Size of off-heap memory given in megabytes.
-  -Onheap        Size of on-heap memory given in megabytes.
+  -OffHeap       Size of off-heap memory given in megabytes.
+  -OnHeap        Size of on-heap memory given in megabytes.
   -SetLeader     Set this node as the leader of the cluster.
   -SpiPort       Specifies port for Discovery Spi.
   -Cluster       Specifies IP address and port of a cluster node. Multiple nodes can be specified.
