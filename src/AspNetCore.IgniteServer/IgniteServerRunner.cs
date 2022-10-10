@@ -106,7 +106,14 @@ namespace AspNetCore.IgniteServer
                     {
                         "-XX:+AlwaysPreTouch", "-XX:+UseG1GC", "-XX:+ScavengeBeforeFullGC",
                         "-XX:+DisableExplicitGC", "-Djava.net.preferIPv4Stack=true", "-DIGNITE_QUIET=false",
-                        "-DIGNITE_WAL_MMAP=false", "-DIGNITE_WAIT_FOR_BACKUPS_ON_SHUTDOWN=true"
+                        "-DIGNITE_WAL_MMAP=false", "-DIGNITE_WAIT_FOR_BACKUPS_ON_SHUTDOWN=true",
+                        "--add-exports=java.base/jdk.internal.misc=ALL-UNNAMED",
+                        "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED",
+                        "--add-exports=java.management/com.sun.jmx.mbeanserver=ALL-UNNAMED",
+                        "--add-exports=jdk.internal.jvmstat/sun.jvmstat.monitor=ALL-UNNAMED",
+                        "--add-exports=java.base/sun.reflect.generics.reflectiveObjects=ALL-UNNAMED",
+                        "--add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED",
+                        "--illegal-access=permit"
                     },
                 PeerAssemblyLoadingMode = PeerAssemblyLoadingMode.CurrentAppDomain,
                 DataStorageConfiguration = new DataStorageConfiguration(),
