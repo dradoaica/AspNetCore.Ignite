@@ -26,7 +26,7 @@ RUN apt-get install -y apt-transport-https
 RUN apt-get install -y aspnetcore-runtime-6.0
 
 # Install IGNITE
-ENV IGNITE_VERSION 2.13.0
+ENV IGNITE_VERSION 2.14.0
 
 # Ignite home
 ENV IGNITE_HOME /opt/ignite/apache-ignite-${IGNITE_VERSION}-bin

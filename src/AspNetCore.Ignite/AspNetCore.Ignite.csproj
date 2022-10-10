@@ -8,10 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Apache.Ignite" Version="2.13.0" />
-    <PackageReference Include="Apache.Ignite.Linq" Version="2.13.0" />
+    <PackageReference Include="Apache.Ignite" Version="2.14.0" />
+    <PackageReference Include="Apache.Ignite.Linq" Version="2.14.0" />
     <PackageReference Include="ConfigureAwait.Fody" Version="3.3.1" />
-    <PackageReference Include="Fody" Version="6.6.3">
+    <PackageReference Include="Fody" Version="6.6.4">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
