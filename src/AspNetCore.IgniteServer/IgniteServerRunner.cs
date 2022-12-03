@@ -1,4 +1,4 @@
-﻿using Apache.Ignite.Core;
+using Apache.Ignite.Core;
 using Apache.Ignite.Core.Cache.Query;
 using Apache.Ignite.Core.Client;
 using Apache.Ignite.Core.Client.Cache;
@@ -116,7 +116,10 @@ namespace AspNetCore.IgniteServer
                         "--illegal-access=permit"
                     },
                 PeerAssemblyLoadingMode = PeerAssemblyLoadingMode.CurrentAppDomain,
-                DataStorageConfiguration = new DataStorageConfiguration(),
+                DataStorageConfiguration = new DataStorageConfiguration
+                {
+                    WalSegmentSize = 256 * 1024 * 1024
+                },
                 WorkDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "work"),
                 CommunicationSpi =
                     new TcpCommunicationSpi
@@ -196,12 +199,12 @@ namespace AspNetCore.IgniteServer
             switch (_igniteConfiguration.DiscoverySpi)
             {
                 case TcpDiscoverySpi tcpDiscoverySpi:
-                    tcpDiscoverySpi.IpFinder = new TcpDiscoveryStaticIpFinder {Endpoints = values};
+                    tcpDiscoverySpi.IpFinder = new TcpDiscoveryStaticIpFinder { Endpoints = values };
                     break;
                 case null:
                     _igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi
                     {
-                        IpFinder = new TcpDiscoveryStaticIpFinder {Endpoints = values}
+                        IpFinder = new TcpDiscoveryStaticIpFinder { Endpoints = values }
                     };
                     break;
             }
@@ -220,7 +223,7 @@ namespace AspNetCore.IgniteServer
                     tcpDiscoverySpi.LocalPort = value;
                     break;
                 case null:
-                    _igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi {LocalPort = value};
+                    _igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi { LocalPort = value };
                     break;
             }
         }
@@ -245,7 +248,10 @@ namespace AspNetCore.IgniteServer
 
             if (_igniteConfiguration.DataStorageConfiguration == null)
             {
-                _igniteConfiguration.DataStorageConfiguration = new DataStorageConfiguration();
+                _igniteConfiguration.DataStorageConfiguration = new DataStorageConfiguration
+                {
+                    WalSegmentSize = 256 * 1024 * 1024
+                };
             }
 
             if (_igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration != null)
@@ -256,7 +262,7 @@ namespace AspNetCore.IgniteServer
             else
             {
                 _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration =
-                    new DataRegionConfiguration {Name = "default", MaxSize = (long)value * 1024 * 1024};
+                    new DataRegionConfiguration { Name = "default", MaxSize = (long)value * 1024 * 1024 };
             }
 
             _igniteConfiguration.DataStorageConfiguration.MetricsEnabled = _enableOffHeapMetrics;
@@ -275,7 +281,10 @@ namespace AspNetCore.IgniteServer
 
             if (_igniteConfiguration.DataStorageConfiguration == null)
             {
-                _igniteConfiguration.DataStorageConfiguration = new DataStorageConfiguration();
+                _igniteConfiguration.DataStorageConfiguration = new DataStorageConfiguration
+                {
+                    WalSegmentSize = 256 * 1024 * 1024
+                };
             }
 
             if (_igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration != null)
@@ -285,7 +294,7 @@ namespace AspNetCore.IgniteServer
             else
             {
                 _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration =
-                    new DataRegionConfiguration {Name = "default", PersistenceEnabled = value};
+                    new DataRegionConfiguration { Name = "default", PersistenceEnabled = value };
             }
         }
 
