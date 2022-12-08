@@ -61,8 +61,8 @@ namespace AspNetCore.IgniteServer
             _igniteConfiguration = string.IsNullOrWhiteSpace(configurationFile)
                 ? GetDefaultConfiguration()
                 : LoadConfiguration(configurationFile);
-            _igniteConfiguration.SpringConfigUrl =
-                _useClientSsl ? "config/spring-config-client-with-ssl.xml" : "config/spring-config.xml";
+            _igniteConfiguration.SpringConfigUrl = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                _useClientSsl ? "config/spring-config-client-with-ssl.xml" : "config/spring-config.xml");;
             _igniteConfiguration.MetricsExpireTime = metricsExpireTime;
             _igniteConfiguration.MetricsLogFrequency = metricsLogFrequency;
             _igniteConfiguration.MetricsUpdateFrequency = metricsUpdateFrequency;
