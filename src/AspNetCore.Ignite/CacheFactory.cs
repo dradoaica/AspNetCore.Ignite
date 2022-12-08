@@ -10,7 +10,7 @@ using System.Security.Authentication;
 
 namespace AspNetCore.Ignite
 {
-    public class CacheFactory
+    public static class CacheFactory
     {
         public static IgniteClientConfiguration GetIgniteClientConfiguration(string endpoint = "127.0.0.1",
             string userName = null, string password = null, bool useSsl = false,

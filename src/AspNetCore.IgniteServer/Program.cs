@@ -8,6 +8,7 @@ using NLog;
 using NLog.Config;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -15,16 +16,16 @@ using System.Threading.Tasks;
 
 namespace AspNetCore.IgniteServer
 {
-    internal class Program
+    internal static class Program
     {
-        private static readonly List<string> _defaultClusterEndpoints = new() {$"{DnsUtils.GetLocalIPAddress()}:47500"};
+        private static readonly List<string> _defaultClusterEndpoints = new() {$"{DnsUtils.GetLocalIpAddress()}:47500"};
 
         private static readonly MemoryCache _memoryCache =
             new(new MemoryCacheOptions {ExpirationScanFrequency = TimeSpan.FromSeconds(5)});
 
         private static volatile bool _shouldStart = true;
-        private static IgniteServerRunner _server;
 
+        private static IgniteServerRunner _igniteServerRunner;
         internal static IConfiguration Configuration { get; private set; }
 
         private static IDisposable WatchFile(string filter, string path, Action<object> action)
@@ -35,6 +36,56 @@ namespace AspNetCore.IgniteServer
             };
             IChangeToken changeToken = physicalFileProvider.Watch(filter);
             return changeToken.RegisterChangeCallback(action, default);
+        }
+
+        private static void OnSslFileCreatedOrChanged()
+        {
+            TaskCompletionSource<bool> taskCompletionSource = new();
+            const int absoluteExpirationRelativeToNowInSeconds = 10;
+            CancellationChangeToken expirationToken =
+                new(new CancellationTokenSource(TimeSpan.FromSeconds(absoluteExpirationRelativeToNowInSeconds + .01))
+                    .Token);
+            MemoryCacheEntryOptions memoryCacheEntryOptions = new()
+            {
+                AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(absoluteExpirationRelativeToNowInSeconds)
+            };
+            memoryCacheEntryOptions.AddExpirationToken(expirationToken);
+            memoryCacheEntryOptions.PostEvictionCallbacks.Add(new PostEvictionCallbackRegistration
+            {
+                EvictionCallback = (k, _, r, __) =>
+                {
+                    if (k is nameof(OnSslFileCreatedOrChanged) &&
+                        r is EvictionReason.Expired or EvictionReason.TokenExpired && !_shouldStart)
+                    {
+                        _shouldStart = true;
+                        _igniteServerRunner.Terminate();
+                    }
+                }
+            });
+            _memoryCache.Set(nameof(OnSslFileCreatedOrChanged), taskCompletionSource, memoryCacheEntryOptions);
+        }
+
+        private static void SetupIgniteLogging()
+        {
+            // Step 1. Create configuration object
+            LoggingConfiguration config = new();
+            // Step 2. Create targets
+            SerilogTarget serilogTarget = new("serilog");
+            config.AddTarget(serilogTarget);
+            // Step 3. Define rules
+            config.AddRule(LogLevel.Info, LogLevel.Fatal, serilogTarget); // all to serilog
+            // Step 4. Activate the configuration
+            LogManager.Configuration = config;
+        }
+
+        private static IConfiguration CreateConfiguration()
+        {
+            IConfigurationBuilder configurationBuilder = new ConfigurationBuilder()
+                .AddJsonFile("appsettings.json", false, true)
+                .AddJsonFile(Path.Combine("config", "serilog.config.json"), false, true)
+                .AddEnvironmentVariables();
+            IConfigurationRoot configuration = configurationBuilder.Build();
+            return configuration;
         }
 
         private static void Main(string[] args)
@@ -118,7 +169,8 @@ namespace AspNetCore.IgniteServer
 
                 bool enableOffHeapMetrics = "true".Equals(Configuration["ENABLE_OFF_HEAP_METRICS"],
                     StringComparison.InvariantCultureIgnoreCase);
-                string springConfigText = File.ReadAllText(springConfigPath, Encoding.UTF8);
+                string springConfigText =
+                    await File.ReadAllTextAsync(springConfigPath, Encoding.UTF8).ConfigureAwait(false);
                 springConfigText = springConfigText?.Replace("K8S_NAMESPACE", k8sNamespace)
                     ?.Replace("K8S_SERVICE_NAME", k8sServiceName);
                 if (useClientSsl)
@@ -130,57 +182,58 @@ namespace AspNetCore.IgniteServer
                 }
 
                 springConfigText = springConfigText?.Replace("OPEN_CENSUS_METRIC_EXPORTER_SPI_PERIOD",
-                    metricsUpdateFrequency.TotalMilliseconds.ToString());
-                File.WriteAllText(springConfigPath, springConfigText, Encoding.UTF8);
+                    metricsUpdateFrequency.TotalMilliseconds.ToString(CultureInfo.InvariantCulture));
+                await File.WriteAllTextAsync(springConfigPath, springConfigText, Encoding.UTF8).ConfigureAwait(false);
                 string configFile = configFileArgument.HasValue() ? configFileArgument.Value() : null;
-                _server = new IgniteServerRunner(metricsExpireTime, metricsLogFrequency, metricsUpdateFrequency,
+                _igniteServerRunner = new IgniteServerRunner(metricsExpireTime, metricsLogFrequency,
+                    metricsUpdateFrequency,
                     enableOffHeapMetrics, enableAuthentication, igniteUserPassword, configFile, useSsl,
                     sslKeyStoreFilePath, sslKeyStorePassword, sslTrustStoreFilePath, sslTrustStorePassword,
                     useClientSsl, sslClientCertificatePath, sslClientCertificatePassword);
                 if (offHeapArgument.HasValue())
                 {
-                    _server.SetOffHeapMemoryLimit(int.Parse(offHeapArgument.Value()));
+                    _igniteServerRunner.SetOffHeapMemoryLimit(int.Parse(offHeapArgument.Value()));
                 }
                 else
                 {
-                    _server.SetOffHeapMemoryLimit(defaultOffHeapMemory);
+                    _igniteServerRunner.SetOffHeapMemoryLimit(defaultOffHeapMemory);
                 }
 
                 if (onHeapArgument.HasValue())
                 {
-                    _server.SetOnHeapMemoryLimit(int.Parse(onHeapArgument.Value()));
+                    _igniteServerRunner.SetOnHeapMemoryLimit(int.Parse(onHeapArgument.Value()));
                 }
                 else
                 {
-                    _server.SetOnHeapMemoryLimit(defaultOnHeapMemory);
+                    _igniteServerRunner.SetOnHeapMemoryLimit(defaultOnHeapMemory);
                 }
 
                 if (serverPortArgument.HasValue())
                 {
-                    _server.SetServerPort(int.Parse(serverPortArgument.Value()));
+                    _igniteServerRunner.SetServerPort(int.Parse(serverPortArgument.Value()));
                 }
 
                 if (clusterEndpointArgument.HasValue())
                 {
-                    _server.SetClusterEnpoints(clusterEndpointArgument.Values);
+                    _igniteServerRunner.SetClusterEnpoints(clusterEndpointArgument.Values);
                 }
                 else if (useTcpDiscoveryStaticIpFinder)
                 {
-                    _server.SetClusterEnpoints(_defaultClusterEndpoints);
+                    _igniteServerRunner.SetClusterEnpoints(_defaultClusterEndpoints);
                 }
 
                 if (consistentIdArgument.HasValue())
                 {
-                    _server.SetConsistentId(consistentIdArgument.Value());
+                    _igniteServerRunner.SetConsistentId(consistentIdArgument.Value());
                 }
                 else if (!string.IsNullOrWhiteSpace(defaultConsistentId))
                 {
-                    _server.SetConsistentId(defaultConsistentId);
+                    _igniteServerRunner.SetConsistentId(defaultConsistentId);
                 }
 
                 if (persistenceEnabled.HasValue())
                 {
-                    _server.SetPersistence(true);
+                    _igniteServerRunner.SetPersistence(true);
                 }
 
                 IDisposable sslKeyStoreFsw = null;
@@ -204,7 +257,7 @@ namespace AspNetCore.IgniteServer
                     while (_shouldStart)
                     {
                         _shouldStart = false;
-                        await _server.Run().ConfigureAwait(false);
+                        await _igniteServerRunner.Run().ConfigureAwait(false);
                     }
                 }
                 finally
@@ -236,58 +289,8 @@ namespace AspNetCore.IgniteServer
             }
             finally
             {
-                _server?.Dispose();
+                _igniteServerRunner?.Dispose();
             }
-        }
-
-        private static void OnSslFileCreatedOrChanged()
-        {
-            TaskCompletionSource<bool> taskCompletionSource = new();
-            const int absoluteExpirationRelativeToNowInSeconds = 10;
-            CancellationChangeToken expirationToken =
-                new(new CancellationTokenSource(TimeSpan.FromSeconds(absoluteExpirationRelativeToNowInSeconds + .01))
-                    .Token);
-            MemoryCacheEntryOptions memoryCacheEntryOptions = new()
-            {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(absoluteExpirationRelativeToNowInSeconds)
-            };
-            memoryCacheEntryOptions.AddExpirationToken(expirationToken);
-            memoryCacheEntryOptions.PostEvictionCallbacks.Add(new PostEvictionCallbackRegistration
-            {
-                EvictionCallback = (k, _, r, __) =>
-                {
-                    if (k is string kStr && kStr == nameof(OnSslFileCreatedOrChanged) &&
-                        (r == EvictionReason.Expired || r == EvictionReason.TokenExpired) && !_shouldStart)
-                    {
-                        _shouldStart = true;
-                        _server.Terminate();
-                    }
-                }
-            });
-            _memoryCache.Set(nameof(OnSslFileCreatedOrChanged), taskCompletionSource, memoryCacheEntryOptions);
-        }
-
-        private static void SetupIgniteLogging()
-        {
-            // Step 1. Create configuration object
-            LoggingConfiguration config = new();
-            // Step 2. Create targets
-            SerilogTarget serilogTarget = new("serilog");
-            config.AddTarget(serilogTarget);
-            // Step 3. Define rules
-            config.AddRule(LogLevel.Info, LogLevel.Fatal, serilogTarget); // all to serilog
-            // Step 4. Activate the configuration
-            LogManager.Configuration = config;
-        }
-
-        private static IConfiguration CreateConfiguration()
-        {
-            IConfigurationBuilder configurationBuilder = new ConfigurationBuilder()
-                .AddJsonFile("appsettings.json", false, true)
-                .AddJsonFile(Path.Combine("config", "serilog.config.json"), false, true)
-                .AddEnvironmentVariables();
-            IConfigurationRoot configuration = configurationBuilder.Build();
-            return configuration;
         }
     }
 }

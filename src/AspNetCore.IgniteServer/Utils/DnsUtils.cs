@@ -5,19 +5,19 @@ using System.Net.Sockets;
 
 namespace AspNetCore.IgniteServer.Utils
 {
-    internal sealed class DnsUtils
+    internal static class DnsUtils
     {
-        public static string GetLocalIPAddress()
+        internal static string GetLocalIpAddress()
         {
-            return GetLocalIPAddress(Dns.GetHostName());
+            return GetLocalIpAddress(Dns.GetHostName());
         }
 
-        public static string GetLocalIPAddress(Uri uri)
+        internal static string GetLocalIpAddress(Uri uri)
         {
-            return GetLocalIPAddress(uri.Host);
+            return GetLocalIpAddress(uri.Host);
         }
 
-        public static string GetLocalIPAddress(string hostName)
+        private static string GetLocalIpAddress(string hostName)
         {
             IPHostEntry host = Dns.GetHostEntryAsync(hostName).GetAwaiter().GetResult();
             foreach (IPAddress? ip in host.AddressList.OrderBy(ip => ip.ToString()))

@@ -28,9 +28,9 @@ namespace AspNetCore.IgniteServer
         private static readonly Logger _logger;
         private readonly bool _enableOffHeapMetrics;
         private readonly IgniteConfiguration _igniteConfiguration;
-        private readonly string _igniteUserPassword;
-        private readonly string _sslClientCertificatePassword;
-        private readonly string _sslClientCertificatePath;
+        private readonly string? _igniteUserPassword;
+        private readonly string? _sslClientCertificatePassword;
+        private readonly string? _sslClientCertificatePath;
         private readonly bool _useClientSsl;
         private bool _disposed;
 
@@ -46,12 +46,13 @@ namespace AspNetCore.IgniteServer
 
         public IgniteServerRunner(TimeSpan metricsExpireTime, TimeSpan metricsLogFrequency,
             TimeSpan metricsUpdateFrequency,
-            bool enableOffHeapMetrics, bool authenticationEnabled, string igniteUserPassword = null,
-            string configurationFile = null, bool useSsl = false,
-            string sslKeyStoreFilePath = null, string sslKeyStorePassword = null, string sslTrustStoreFilePath = null,
-            string sslTrustStorePassword = null,
-            bool useClientSsl = false, string sslClientCertificatePath = null,
-            string sslClientCertificatePassword = null)
+            bool enableOffHeapMetrics, bool authenticationEnabled, string? igniteUserPassword = null,
+            string? configurationFile = null, bool useSsl = false,
+            string? sslKeyStoreFilePath = null, string? sslKeyStorePassword = null,
+            string? sslTrustStoreFilePath = null,
+            string? sslTrustStorePassword = null,
+            bool useClientSsl = false, string? sslClientCertificatePath = null,
+            string? sslClientCertificatePassword = null)
         {
             _enableOffHeapMetrics = enableOffHeapMetrics;
             _useClientSsl = useClientSsl;
@@ -61,8 +62,8 @@ namespace AspNetCore.IgniteServer
             _igniteConfiguration = string.IsNullOrWhiteSpace(configurationFile)
                 ? GetDefaultConfiguration()
                 : LoadConfiguration(configurationFile);
-            _igniteConfiguration.SpringConfigUrl = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
-                _useClientSsl ? "config/spring-config-client-with-ssl.xml" : "config/spring-config.xml");;
+            _igniteConfiguration.SpringConfigUrl = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config",
+                _useClientSsl ? "spring-config-client-with-ssl.xml" : "spring-config.xml");
             _igniteConfiguration.MetricsExpireTime = metricsExpireTime;
             _igniteConfiguration.MetricsLogFrequency = metricsLogFrequency;
             _igniteConfiguration.MetricsUpdateFrequency = metricsUpdateFrequency;
@@ -87,7 +88,12 @@ namespace AspNetCore.IgniteServer
             _igniteConfiguration.Logger = new IgniteNLogLogger();
         }
 
-        public IIgnite Ignite { get; private set; }
+        public IIgnite? Ignite { get; private set; }
+
+        public void Dispose()
+        {
+            Dispose(true);
+        }
 
         private static IgniteConfiguration LoadConfiguration(string filename)
         {
@@ -116,10 +122,7 @@ namespace AspNetCore.IgniteServer
                         "--illegal-access=permit"
                     },
                 PeerAssemblyLoadingMode = PeerAssemblyLoadingMode.CurrentAppDomain,
-                DataStorageConfiguration = new DataStorageConfiguration
-                {
-                    WalSegmentSize = 256 * 1024 * 1024
-                },
+                DataStorageConfiguration = new DataStorageConfiguration {WalSegmentSize = 256 * 1024 * 1024},
                 WorkDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "work"),
                 CommunicationSpi =
                     new TcpCommunicationSpi
@@ -145,7 +148,7 @@ namespace AspNetCore.IgniteServer
         {
             if (e.ExceptionObject is Exception ex)
             {
-                _logger?.Error(ex, "UnhandledException");
+                _logger.Error(ex, "UnhandledException");
             }
             else
             {
@@ -161,13 +164,13 @@ namespace AspNetCore.IgniteServer
                     msg += " ErrorCode: " + exCode.ToString("X16");
                 }
 
-                _logger?.Error(string.Format("Unhandled External Exception: {0}", msg));
+                _logger.Error($"Unhandled External Exception: {msg}");
             }
         }
 
         private static void TaskScheduler_UnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e)
         {
-            _logger?.Error(e.Exception, "ERROR: UNOBSERVED TASK EXCEPTION");
+            _logger.Error(e.Exception, "ERROR: UNOBSERVED TASK EXCEPTION");
             e.SetObserved();
         }
 
@@ -184,11 +187,6 @@ namespace AspNetCore.IgniteServer
             }
         }
 
-        public void Dispose()
-        {
-            Dispose(true);
-        }
-
         public void SetClusterEnpoints(ICollection<string> values)
         {
             if (Ignite != null)
@@ -199,12 +197,12 @@ namespace AspNetCore.IgniteServer
             switch (_igniteConfiguration.DiscoverySpi)
             {
                 case TcpDiscoverySpi tcpDiscoverySpi:
-                    tcpDiscoverySpi.IpFinder = new TcpDiscoveryStaticIpFinder { Endpoints = values };
+                    tcpDiscoverySpi.IpFinder = new TcpDiscoveryStaticIpFinder {Endpoints = values};
                     break;
                 case null:
                     _igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi
                     {
-                        IpFinder = new TcpDiscoveryStaticIpFinder { Endpoints = values }
+                        IpFinder = new TcpDiscoveryStaticIpFinder {Endpoints = values}
                     };
                     break;
             }
@@ -223,7 +221,7 @@ namespace AspNetCore.IgniteServer
                     tcpDiscoverySpi.LocalPort = value;
                     break;
                 case null:
-                    _igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi { LocalPort = value };
+                    _igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi {LocalPort = value};
                     break;
             }
         }
@@ -262,7 +260,7 @@ namespace AspNetCore.IgniteServer
             else
             {
                 _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration =
-                    new DataRegionConfiguration { Name = "default", MaxSize = (long)value * 1024 * 1024 };
+                    new DataRegionConfiguration {Name = "default", MaxSize = (long)value * 1024 * 1024};
             }
 
             _igniteConfiguration.DataStorageConfiguration.MetricsEnabled = _enableOffHeapMetrics;
@@ -294,7 +292,7 @@ namespace AspNetCore.IgniteServer
             else
             {
                 _igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration =
-                    new DataRegionConfiguration { Name = "default", PersistenceEnabled = value };
+                    new DataRegionConfiguration {Name = "default", PersistenceEnabled = value};
             }
         }
 
@@ -313,7 +311,7 @@ namespace AspNetCore.IgniteServer
             TaskCompletionSource<string> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
             _logger.Information("Starting Ignite Server...");
             Ignite = Ignition.Start(_igniteConfiguration);
-            Ignite.GetCluster().SetActive(true);
+            Ignite!.GetCluster().SetActive(true);
             Ignite.GetCluster().SetBaselineAutoAdjustEnabledFlag(true);
             Ignite.GetCluster().SetBaselineAutoAdjustTimeout(30000);
             bool? persistenceEnabled = _igniteConfiguration.DataStorageConfiguration?.DefaultDataRegionConfiguration
@@ -347,13 +345,13 @@ namespace AspNetCore.IgniteServer
 
             CacheRebalancingEventListener cacheRebalancingEventListener = new(Ignite, _logger);
             Ignite.GetEvents().LocalListen(cacheRebalancingEventListener, EventType.CacheRebalancePartDataLost);
-            DiscoveryEventListener discoveryEventListener = new(Ignite, _logger);
+            DiscoveryEventListener discoveryEventListener = new(_logger);
             Ignite.GetEvents().LocalListen(discoveryEventListener, EventType.NodeJoined, EventType.NodeLeft,
                 EventType.NodeFailed);
 
             CancellationTokenSource cts = new();
             Ignite.Stopped += (s, e) => tcs.SetResult(e.ToString());
-            int localSpidPort = (Ignite.GetConfiguration().DiscoverySpi as TcpDiscoverySpi).LocalPort;
+            int localSpidPort = ((TcpDiscoverySpi)Ignite.GetConfiguration().DiscoverySpi).LocalPort;
             _logger.Information(
                 $"Ignite Server is running (Local SpiDiscovery Port={localSpidPort}), press CTRL+C to terminate.");
             await tcs.Task.ConfigureAwait(false);

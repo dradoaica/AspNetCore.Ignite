@@ -21,11 +21,12 @@ namespace AspNetCore.Ignite
                 StringComparison.InvariantCultureIgnoreCase);
             string aspNetCoreIgniteSslCertificatePath = configuration["ASPNETCORE_IGNITE_SSL_CERTIFICATE_PATH"];
             string aspNetCoreIgniteSslCertificatePassword = configuration["ASPNETCORE_IGNITE_SSL_CERTIFICATE_PASSWORD"];
+            IgniteClientConfiguration igniteClientConfiguration = CacheFactory.GetIgniteClientConfiguration(
+                aspNetCoreIgniteEndpoint, aspNetCoreIgniteUserName, aspNetCoreIgnitePassword, aspNetCoreIgniteUseSsl,
+                aspNetCoreIgniteSslCertificatePath, aspNetCoreIgniteSslCertificatePassword);
             _igniteClient = Policy.Handle<Exception>()
                 .WaitAndRetry(5, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)))
-                .Execute(() => CacheFactory.ConnectAsClient(CacheFactory.GetIgniteClientConfiguration(
-                    aspNetCoreIgniteEndpoint, aspNetCoreIgniteUserName, aspNetCoreIgnitePassword, aspNetCoreIgniteUseSsl,
-                    aspNetCoreIgniteSslCertificatePath, aspNetCoreIgniteSslCertificatePassword)));
+                .Execute(() => CacheFactory.ConnectAsClient(igniteClientConfiguration));
         }
 
         public ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(string cacheName,
@@ -33,7 +34,9 @@ namespace AspNetCore.Ignite
         {
             return Policy.Handle<IgniteClientException>().Or<IOException>()
                 .WaitAndRetry(5, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)))
-                .Execute(() => CacheFactory.GetOrCreateCacheClient<TKey, TData>(_igniteClient, cacheName, extendConfigurationAction));
+                .Execute(() =>
+                    CacheFactory.GetOrCreateCacheClient<TKey, TData>(_igniteClient, cacheName,
+                        extendConfigurationAction));
         }
 
         public void DestroyCache(string cacheName)

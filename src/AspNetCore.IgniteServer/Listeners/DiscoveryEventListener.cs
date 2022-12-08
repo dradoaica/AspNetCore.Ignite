@@ -1,4 +1,3 @@
-using Apache.Ignite.Core;
 using Apache.Ignite.Core.Events;
 using Serilog.Core;
 
@@ -6,14 +5,9 @@ namespace AspNetCore.IgniteServer.Listeners
 {
     internal sealed class DiscoveryEventListener : IEventListener<DiscoveryEvent>
     {
-        private readonly IIgnite _ignite;
         private readonly Logger _logger;
 
-        public DiscoveryEventListener(IIgnite ignite, Logger logger)
-        {
-            _ignite = ignite;
-            _logger = logger;
-        }
+        public DiscoveryEventListener(Logger logger) => _logger = logger;
 
         public bool Invoke(DiscoveryEvent evt)
         {
