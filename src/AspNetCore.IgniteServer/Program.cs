@@ -215,11 +215,11 @@ namespace AspNetCore.IgniteServer
 
                 if (clusterEndpointArgument.HasValue())
                 {
-                    _igniteServerRunner.SetClusterEnpoints(clusterEndpointArgument.Values);
+                    _igniteServerRunner.SetClusterEndpoints(clusterEndpointArgument.Values);
                 }
                 else if (useTcpDiscoveryStaticIpFinder)
                 {
-                    _igniteServerRunner.SetClusterEnpoints(_defaultClusterEndpoints);
+                    _igniteServerRunner.SetClusterEndpoints(_defaultClusterEndpoints);
                 }
 
                 if (consistentIdArgument.HasValue())
