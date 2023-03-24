@@ -37,8 +37,10 @@ namespace AspNetCore.IgniteServer.Utils
                     logEvent.Message,
                     logEvent.Parameters);
             }
-            
-            string nativeErrorInfo = logEvent.Properties.ContainsKey("nativeErrorInfo") ? logEvent.Properties["nativeErrorInfo"] as string : null;
+
+            string nativeErrorInfo = logEvent.Properties.ContainsKey("nativeErrorInfo")
+                ? logEvent.Properties["nativeErrorInfo"] as string
+                : null;
             if (!string.IsNullOrEmpty(nativeErrorInfo))
             {
                 log.Write(logEventLevel, nativeErrorInfo);

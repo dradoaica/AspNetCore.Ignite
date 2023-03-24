@@ -90,6 +90,11 @@ namespace AspNetCore.IgniteServer
 
         public IIgnite? Ignite { get; private set; }
 
+        public void Dispose()
+        {
+            Dispose(true);
+        }
+
         private static IgniteConfiguration LoadConfiguration(string filename)
         {
             string configStr = File.ReadAllText(filename);
@@ -97,7 +102,7 @@ namespace AspNetCore.IgniteServer
             return igniteConfiguration;
         }
 
-        private IgniteConfiguration GetDefaultConfiguration()
+        private static IgniteConfiguration GetDefaultConfiguration()
         {
             IgniteConfiguration cfg = new()
             {
@@ -180,11 +185,6 @@ namespace AspNetCore.IgniteServer
 
                 _disposed = true;
             }
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
         }
 
         public void SetClusterEndpoints(ICollection<string> values)
