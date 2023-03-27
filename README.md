@@ -15,7 +15,6 @@ Options:
   -ConfigFile    XML configuration file. If not specified then default configuration is used.
   -OffHeap       Size of off-heap memory given in megabytes.
   -OnHeap        Size of on-heap memory given in megabytes.
-  -SetLeader     Set this node as the leader of the cluster.
   -SpiPort       Specifies port for Discovery Spi.
   -Cluster       Specifies IP address and port of a cluster node. Multiple nodes can be specified.
   -ConsistentId  Specifies as a consistent id of the node. This value is used in topology.
