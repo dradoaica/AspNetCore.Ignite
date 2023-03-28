@@ -12,6 +12,11 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{B8EFF47C-5066-4893-9728-D92D424FE69A}"
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
+		.dockerignore = .dockerignore
+		.gitignore = .gitignore
+		LICENSE.md = LICENSE.md
+		NuGet.Config = NuGet.Config
+		README.md = README.md
 	EndProjectSection
 EndProject
 Global
