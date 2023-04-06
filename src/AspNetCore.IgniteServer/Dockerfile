@@ -1,5 +1,5 @@
 # Build with docker build -t AspNetCore.ignite-server .
-FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
 WORKDIR /src
 COPY ["NuGet.Config", "."]
 COPY ["src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj", "src/AspNetCore.IgniteServer/"]
@@ -23,7 +23,7 @@ RUN dpkg -i packages-microsoft-prod.deb
 
 RUN apt-get update
 RUN apt-get install -y apt-transport-https
-RUN apt-get install -y aspnetcore-runtime-6.0
+RUN apt-get install -y aspnetcore-runtime-7.0
 
 # Install IGNITE
 ENV IGNITE_VERSION 2.14.0
