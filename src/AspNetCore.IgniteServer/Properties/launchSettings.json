@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "AspNetCore.IgniteServer": {
+      "commandName": "Project"
+    },
+    "Docker": {
+      "commandName": "Docker"
+    }
+  }
+}

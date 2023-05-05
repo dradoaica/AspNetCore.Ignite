@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>10</LangVersion>
+    <Authors>AspNetCore.Ignite</Authors>
+    <Company>AspNetCore.Ignite</Company>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Apache.Ignite" Version="2.15.0"/>
+    <PackageReference Include="Apache.Ignite.Linq" Version="2.15.0"/>
+    <PackageReference Include="ConfigureAwait.Fody" Version="3.3.2"/>
+    <PackageReference Include="Fody" Version="6.7.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="7.0.0"/>
+    <PackageReference Include="Polly" Version="7.2.3"/>
+  </ItemGroup>
+  <!--
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="copy &quot;$(ProjectDir)$(OutDir)*.dll&quot; &quot;$(SolutionDir)out\server\&quot;&#xD;&#xA;copy &quot;$(ProjectDir)$(OutDir)*.json&quot; &quot;$(SolutionDir)out\server\&quot;" />
+  </Target>
+  -->
+</Project>
