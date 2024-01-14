@@ -42,12 +42,4 @@
       </list>
     </property>
   </bean>
-  <bean id="opencensusWrapper" class="org.springframework.beans.factory.config.MethodInvokingBean">
-    <property name="staticMethod" value="io.opencensus.exporter.stats.prometheus.PrometheusStatsCollector.createAndRegister"/>
-  </bean>
-  <bean id="httpServer" class="io.prometheus.client.exporter.HTTPServer">
-    <constructor-arg type="java.lang.String" value="0.0.0.0"/>
-    <constructor-arg type="int" value="9000"/>
-    <constructor-arg type="boolean" value="true"/>
-  </bean>
 </beans>
