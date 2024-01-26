@@ -34,7 +34,7 @@ There are two predefined configuration files available in ```config``` folder:
 
 * Runs the server locally with the specified amount of memory. It uses 1G of heap memory (for computation and queries)
   and 2G
-  of off heap memory (data storage). It uses default seetings, e.g., the Spi port will be the first available port
+  of off heap memory (data storage). It uses default settings, e.g., the Spi port will be the first available port
   starting from 47500.
 
 ```
@@ -49,4 +49,20 @@ enabled, Ignite needs to form a topology before the cluster is activated.
 If the cluster is created for the first
 time, the cluster has to be activated when it reaches the required topology. The cluster records the topology
 information,
-which is used when the cluster is resumed. 
+which is used when the cluster is resumed.
+
+## Configuring Memory
+
+```
+ON_HEAP_MEMORY (JVM heap max size)
+    + OFF_HEAP_MEMORY (default region max size)
+    + OFF_HEAP_MEMORY * 0.3 (indexes also require memory; basic use cases will add a 30% increase) 
+    + MIN(256MB, OFF_HEAP_MEMORY) (OFF_HEAP_MEMORY < 1 GB)
+        || OFF_HEAP_MEMORY/4 (OFF_HEAP_MEMORY between 1 GB and 8 GB)
+        || 2GB (OFF_HEAP_MEMORY > 8 GB) 
+            (default region checkpointing buffer size)
+    + 100MB (sysMemPlc region max size) 
+    + 100MB (metastoreMemPlc region max size) 
+    + 100MB (TxLog region max size) 
+    + 100MB (volatileDsMemPlc region max size)
+```

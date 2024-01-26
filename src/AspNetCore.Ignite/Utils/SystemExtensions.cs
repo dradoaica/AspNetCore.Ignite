@@ -19,7 +19,7 @@ public static class SystemExtensions
     /// </summary>
     /// <param name="typeName">Type name to remove assembly info from.</param>
     /// <returns>Type name without assembly info.</returns>
-    public static string RemoveAssemblyInfo(string typeName)
+    private static string RemoveAssemblyInfo(string typeName)
     {
         // Get start of "Version=..., Culture=..., PublicKeyToken=..." string.
         var versionIndex = typeName.IndexOf("Version=", StringComparison.Ordinal);

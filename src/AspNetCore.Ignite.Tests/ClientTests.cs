@@ -6,7 +6,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 public class ClientTests
 {
     [TestMethod]
-    public void Test_CacheFactory_ConnectAsClient()
+    public void TestCacheFactoryConnectAsClient()
     {
         var igniteClient = CacheFactory.ConnectAsClient(CacheFactory.GetIgniteClientConfiguration());
         Assert.IsNotNull(igniteClient);

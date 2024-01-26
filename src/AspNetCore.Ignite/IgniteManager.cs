@@ -2,9 +2,9 @@ namespace AspNetCore.Ignite;
 
 using System;
 using System.IO;
+using Abstractions;
 using Apache.Ignite.Core.Client;
 using Apache.Ignite.Core.Client.Cache;
-using Interfaces;
 using Microsoft.Extensions.Configuration;
 using Polly;
 

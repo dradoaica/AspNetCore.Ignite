@@ -7,9 +7,9 @@ using Serilog.Core;
 internal sealed class CacheRebalancingEventListener : IEventListener<CacheRebalancingEvent>
 {
     private readonly IIgnite ignite;
-    private readonly Logger logger;
+    private readonly Logger? logger;
 
-    public CacheRebalancingEventListener(IIgnite ignite, Logger logger)
+    public CacheRebalancingEventListener(IIgnite ignite, Logger? logger)
     {
         this.ignite = ignite;
         this.logger = logger;
@@ -19,7 +19,7 @@ internal sealed class CacheRebalancingEventListener : IEventListener<CacheRebala
     {
         if (evt.Type == EventType.CacheRebalancePartDataLost)
         {
-            this.logger.Warning(
+            this.logger?.Warning(
                 $"Name: {evt.Name}; CacheName: {evt.CacheName}; DiscoveryEventName: {evt.DiscoveryEventName}; DiscoveryNodeAddresses: {string.Join(",", evt.DiscoveryNode.Addresses)}; DiscoveryHostNames: {string.Join(",", evt.DiscoveryNode.HostNames)}");
             try
             {

@@ -3,8 +3,6 @@ namespace AspNetCore.IgniteServer;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.InteropServices;
-using System.Threading;
 using System.Threading.Tasks;
 using Apache.Ignite.Core;
 using Apache.Ignite.Core.Cache.Query;
@@ -19,12 +17,9 @@ using Apache.Ignite.Core.Ssl;
 using Apache.Ignite.NLog;
 using Ignite;
 using Listeners;
-using Serilog;
-using Serilog.Core;
 
 internal sealed class IgniteServerRunner : IDisposable
 {
-    private static readonly Logger Logger;
     private readonly bool enableOffHeapMetrics;
     private readonly IgniteConfiguration igniteConfiguration;
     private readonly string? igniteUserPassword;
@@ -32,16 +27,6 @@ internal sealed class IgniteServerRunner : IDisposable
     private readonly string? sslClientCertificatePath;
     private readonly bool useClientSsl;
     private bool disposed;
-
-    static IgniteServerRunner()
-    {
-        var loggerConfiguration =
-            new LoggerConfiguration().ReadFrom.Configuration(Program.Configuration);
-        Logger = loggerConfiguration.CreateLogger();
-        Log.Logger = Logger;
-        AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-        TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
-    }
 
     public IgniteServerRunner(TimeSpan metricsExpireTime, TimeSpan metricsLogFrequency,
         TimeSpan metricsUpdateFrequency,
@@ -151,43 +136,17 @@ internal sealed class IgniteServerRunner : IDisposable
         return cfg;
     }
 
-    private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
-    {
-        if (e.ExceptionObject is Exception ex)
-        {
-            Logger.Error(ex, "UnhandledException");
-        }
-        else
-        {
-            var msg = "";
-            if (e.ExceptionObject != null)
-            {
-                msg = e.ExceptionObject.ToString();
-            }
-
-            var exCode = Marshal.GetLastWin32Error();
-            if (exCode != 0)
-            {
-                msg += " ErrorCode: " + exCode.ToString("X16");
-            }
-
-            Logger.Error($"Unhandled External Exception: {msg}");
-        }
-    }
-
-    private static void TaskScheduler_UnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e)
-    {
-        Logger.Error(e.Exception, "ERROR: UNOBSERVED TASK EXCEPTION");
-        e.SetObserved();
-    }
-
     private void Dispose(bool disposing)
     {
         if (!this.disposed)
         {
             if (disposing)
             {
-                this.Ignite?.Dispose();
+                if (this.Ignite != null)
+                {
+                    this.Ignite.Dispose();
+                    this.Ignite = null;
+                }
             }
 
             this.disposed = true;
@@ -251,14 +210,10 @@ internal sealed class IgniteServerRunner : IDisposable
             throw new InvalidOperationException("Cannot configure running instances.");
         }
 
-        if (this.igniteConfiguration.DataStorageConfiguration == null)
+        this.igniteConfiguration.DataStorageConfiguration ??= new DataStorageConfiguration
         {
-            this.igniteConfiguration.DataStorageConfiguration = new DataStorageConfiguration
-            {
-                WalSegmentSize = 256 * 1024 * 1024
-            };
-        }
-
+            WalSegmentSize = 256 * 1024 * 1024
+        };
         if (this.igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration != null)
         {
             this.igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.MaxSize =
@@ -284,14 +239,10 @@ internal sealed class IgniteServerRunner : IDisposable
             throw new InvalidOperationException("Cannot configure running instances.");
         }
 
-        if (this.igniteConfiguration.DataStorageConfiguration == null)
+        this.igniteConfiguration.DataStorageConfiguration ??= new DataStorageConfiguration
         {
-            this.igniteConfiguration.DataStorageConfiguration = new DataStorageConfiguration
-            {
-                WalSegmentSize = 256 * 1024 * 1024
-            };
-        }
-
+            WalSegmentSize = 256 * 1024 * 1024
+        };
         if (this.igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration != null)
         {
             this.igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.PersistenceEnabled =
@@ -317,7 +268,7 @@ internal sealed class IgniteServerRunner : IDisposable
     public async Task Run()
     {
         TaskCompletionSource<string> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        Logger.Information("Starting Ignite Server...");
+        Program.Logger?.Information("Starting Ignite server runner...");
         this.Ignite = Ignition.Start(this.igniteConfiguration);
         this.Ignite!.GetCluster().SetActive(true);
         this.Ignite.GetCluster().SetBaselineAutoAdjustEnabledFlag(true);
@@ -351,27 +302,28 @@ internal sealed class IgniteServerRunner : IDisposable
             }
         }
 
-        CacheRebalancingEventListener cacheRebalancingEventListener = new(this.Ignite, Logger);
+        CacheRebalancingEventListener cacheRebalancingEventListener = new(this.Ignite, Program.Logger);
         this.Ignite.GetEvents().LocalListen(cacheRebalancingEventListener, EventType.CacheRebalancePartDataLost);
-        DiscoveryEventListener discoveryEventListener = new(Logger);
+        DiscoveryEventListener discoveryEventListener = new(Program.Logger);
         this.Ignite.GetEvents().LocalListen(discoveryEventListener, EventType.NodeJoined, EventType.NodeLeft,
             EventType.NodeFailed);
 
-        CancellationTokenSource cts = new();
-        this.Ignite.Stopped += (s, e) => tcs.SetResult(e.ToString());
+        this.Ignite.Stopped += (s, e) => tcs.SetResult(s?.ToString());
         var localSpidPort = ((TcpDiscoverySpi)this.Ignite.GetConfiguration().DiscoverySpi).LocalPort;
-        Logger.Information(
-            $"Ignite Server is running (Local SpiDiscovery Port={localSpidPort}), press CTRL+C to terminate.");
+        Program.Logger?.Information(
+            $"Ignite server runner is running (Local SpiDiscovery Port={localSpidPort}), press CTRL+C to terminate.");
         await tcs.Task.ConfigureAwait(false);
-        Logger.Information("Ignite Server stopped.");
+        Program.Logger?.Information($"'{tcs.Task.Result}' stopped.");
     }
 
     public void Terminate()
     {
         if (this.Ignite != null)
         {
+            Program.Logger?.Information("Terminating Ignite server runner...");
             Ignition.Stop(this.Ignite.Name, true);
-            this.Ignite = null;
+            this.Dispose();
+            Program.Logger?.Information("Ignite server runner terminated.");
         }
     }
 
@@ -379,8 +331,10 @@ internal sealed class IgniteServerRunner : IDisposable
     {
         if (this.Ignite != null)
         {
+            Program.Logger?.Information("Stopping Ignite server runner...");
             Ignition.Stop(this.Ignite.Name, false);
-            this.Ignite = null;
+            this.Dispose();
+            Program.Logger?.Information("Ignite server runner stopped.");
         }
     }
 }

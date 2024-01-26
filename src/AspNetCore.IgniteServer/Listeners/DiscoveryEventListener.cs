@@ -5,25 +5,25 @@ using Serilog.Core;
 
 internal sealed class DiscoveryEventListener : IEventListener<DiscoveryEvent>
 {
-    private readonly Logger logger;
+    private readonly Logger? logger;
 
-    public DiscoveryEventListener(Logger logger) => this.logger = logger;
+    public DiscoveryEventListener(Logger? logger) => this.logger = logger;
 
     public bool Invoke(DiscoveryEvent evt)
     {
         if (evt.Type == EventType.NodeJoined)
         {
-            this.logger.Information(
+            this.logger?.Information(
                 $"Name: {evt.Name}; EventNodeAddresses: {string.Join(",", evt.EventNode.Addresses)}; EventNodeHostNames: {string.Join(",", evt.EventNode.HostNames)}");
         }
         else if (evt.Type == EventType.NodeLeft)
         {
-            this.logger.Warning(
+            this.logger?.Warning(
                 $"Name: {evt.Name}; EventNodeAddresses: {string.Join(",", evt.EventNode.Addresses)}; EventNodeHostNames: {string.Join(",", evt.EventNode.HostNames)}");
         }
         else if (evt.Type == EventType.NodeFailed)
         {
-            this.logger.Error(
+            this.logger?.Error(
                 $"Name: {evt.Name}; EventNodeAddresses: {string.Join(",", evt.EventNode.Addresses)}; EventNodeHostNames: {string.Join(",", evt.EventNode.HostNames)}");
         }
 

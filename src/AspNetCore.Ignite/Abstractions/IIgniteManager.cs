@@ -1,4 +1,4 @@
-﻿namespace AspNetCore.Ignite.Interfaces;
+﻿namespace AspNetCore.Ignite.Abstractions;
 
 using System;
 using Apache.Ignite.Core.Client.Cache;

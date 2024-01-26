@@ -37,8 +37,8 @@ internal sealed class SerilogTarget : TargetWithLayout
                 logEvent.Parameters);
         }
 
-        var nativeErrorInfo = logEvent.Properties.ContainsKey("nativeErrorInfo")
-            ? logEvent.Properties["nativeErrorInfo"] as string
+        var nativeErrorInfo = logEvent.Properties.TryGetValue("nativeErrorInfo", out var property)
+            ? property as string
             : null;
         if (!string.IsNullOrEmpty(nativeErrorInfo))
         {
@@ -68,22 +68,17 @@ internal sealed class SerilogTarget : TargetWithLayout
             return LogEventLevel.Warning;
         }
 
-        if (logEventLevel == LogLevel.Error)
-        {
-            return LogEventLevel.Error;
-        }
-
-        return LogEventLevel.Fatal;
+        return logEventLevel == LogLevel.Error ? LogEventLevel.Error : LogEventLevel.Fatal;
     }
 
-    private static string DumpException(Exception e)
+    private static string DumpException(Exception ex)
     {
         StringBuilder sb = new();
-        while (e != null)
+        while (ex != null)
         {
-            sb.AppendLine(e.Message);
-            sb.AppendLine(e.StackTrace);
-            e = e.InnerException;
+            sb.AppendLine(ex.Message);
+            sb.AppendLine(ex.StackTrace);
+            ex = ex.InnerException;
         }
 
         return sb.ToString();
