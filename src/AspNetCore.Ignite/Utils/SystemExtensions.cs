@@ -1,6 +1,6 @@
-﻿namespace AspNetCore.Ignite.Utils;
+﻿using System;
 
-using System;
+namespace AspNetCore.Ignite.Utils;
 
 public static class SystemExtensions
 {
@@ -11,8 +11,10 @@ public static class SystemExtensions
     /// </summary>
     /// <param name="type">Type to get full name for.</param>
     /// <returns>Full name of specified type without additional info of the assembly.</returns>
-    public static string FullNameWithoutAssemblyInfo(this Type type) =>
-        !type.IsGenericType ? type.FullName : RemoveAssemblyInfo(type.FullName);
+    public static string FullNameWithoutAssemblyInfo(this Type type)
+    {
+        return !type.IsGenericType ? type.FullName : RemoveAssemblyInfo(type.FullName);
+    }
 
     /// <summary>
     ///     Removes all assembly info from the specified type name.

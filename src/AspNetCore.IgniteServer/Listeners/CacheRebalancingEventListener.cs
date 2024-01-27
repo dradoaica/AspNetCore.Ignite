@@ -1,8 +1,8 @@
-namespace AspNetCore.IgniteServer.Listeners;
-
 using Apache.Ignite.Core;
 using Apache.Ignite.Core.Events;
 using Serilog.Core;
+
+namespace AspNetCore.IgniteServer.Listeners;
 
 internal sealed class CacheRebalancingEventListener : IEventListener<CacheRebalancingEvent>
 {
@@ -19,11 +19,11 @@ internal sealed class CacheRebalancingEventListener : IEventListener<CacheRebala
     {
         if (evt.Type == EventType.CacheRebalancePartDataLost)
         {
-            this.logger?.Warning(
+            logger?.Warning(
                 $"Name: {evt.Name}; CacheName: {evt.CacheName}; DiscoveryEventName: {evt.DiscoveryEventName}; DiscoveryNodeAddresses: {string.Join(",", evt.DiscoveryNode.Addresses)}; DiscoveryHostNames: {string.Join(",", evt.DiscoveryNode.HostNames)}");
             try
             {
-                this.ignite.ResetLostPartitions(evt.CacheName);
+                ignite.ResetLostPartitions(evt.CacheName);
             }
             catch
             {

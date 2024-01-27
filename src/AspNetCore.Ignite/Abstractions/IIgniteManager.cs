@@ -1,7 +1,7 @@
-﻿namespace AspNetCore.Ignite.Abstractions;
-
-using System;
+﻿using System;
 using Apache.Ignite.Core.Client.Cache;
+
+namespace AspNetCore.Ignite.Abstractions;
 
 public interface IIgniteManager
 {

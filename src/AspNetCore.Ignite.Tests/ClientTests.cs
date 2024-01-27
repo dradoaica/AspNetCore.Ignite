@@ -1,6 +1,6 @@
-﻿namespace AspNetCore.Ignite.Tests;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+namespace AspNetCore.Ignite.Tests;
 
 [TestClass]
 public class ClientTests

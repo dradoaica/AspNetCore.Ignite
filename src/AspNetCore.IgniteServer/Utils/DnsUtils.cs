@@ -1,15 +1,21 @@
-﻿namespace AspNetCore.IgniteServer.Utils;
-
-using System;
+﻿using System;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 
+namespace AspNetCore.IgniteServer.Utils;
+
 internal static class DnsUtils
 {
-    internal static string GetLocalIpAddress() => GetLocalIpAddress(Dns.GetHostName());
+    internal static string GetLocalIpAddress()
+    {
+        return GetLocalIpAddress(Dns.GetHostName());
+    }
 
-    internal static string GetLocalIpAddress(Uri uri) => GetLocalIpAddress(uri.Host);
+    internal static string GetLocalIpAddress(Uri uri)
+    {
+        return GetLocalIpAddress(uri.Host);
+    }
 
     private static string GetLocalIpAddress(string hostName)
     {

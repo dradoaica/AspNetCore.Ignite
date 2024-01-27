@@ -1,5 +1,3 @@
-namespace AspNetCore.IgniteServer;
-
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -15,8 +13,10 @@ using Apache.Ignite.Core.Discovery.Tcp.Static;
 using Apache.Ignite.Core.Events;
 using Apache.Ignite.Core.Ssl;
 using Apache.Ignite.NLog;
-using Ignite;
-using Listeners;
+using AspNetCore.Ignite;
+using AspNetCore.IgniteServer.Listeners;
+
+namespace AspNetCore.IgniteServer;
 
 internal sealed class IgniteServerRunner : IDisposable
 {
@@ -43,23 +43,23 @@ internal sealed class IgniteServerRunner : IDisposable
         this.sslClientCertificatePath = sslClientCertificatePath;
         this.sslClientCertificatePassword = sslClientCertificatePassword;
         this.igniteUserPassword = igniteUserPassword;
-        this.igniteConfiguration = string.IsNullOrWhiteSpace(configurationFile)
+        igniteConfiguration = string.IsNullOrWhiteSpace(configurationFile)
             ? GetDefaultConfiguration()
             : LoadConfiguration(configurationFile);
-        this.igniteConfiguration.SpringConfigUrl = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config",
+        igniteConfiguration.SpringConfigUrl = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config",
             this.useClientSsl ? "spring-config-client-with-ssl.xml" : "spring-config.xml");
-        this.igniteConfiguration.MetricsExpireTime = metricsExpireTime;
-        this.igniteConfiguration.MetricsLogFrequency = metricsLogFrequency;
-        this.igniteConfiguration.MetricsUpdateFrequency = metricsUpdateFrequency;
+        igniteConfiguration.MetricsExpireTime = metricsExpireTime;
+        igniteConfiguration.MetricsLogFrequency = metricsLogFrequency;
+        igniteConfiguration.MetricsUpdateFrequency = metricsUpdateFrequency;
         if (authenticationEnabled)
         {
-            this.igniteConfiguration.AuthenticationEnabled = true;
-            this.SetPersistence(true);
+            igniteConfiguration.AuthenticationEnabled = true;
+            SetPersistence(true);
         }
 
         if (useSsl)
         {
-            this.igniteConfiguration.SslContextFactory = new SslContextFactory
+            igniteConfiguration.SslContextFactory = new SslContextFactory
             {
                 KeyStoreFilePath = sslKeyStoreFilePath,
                 KeyStorePassword = sslKeyStorePassword,
@@ -69,12 +69,15 @@ internal sealed class IgniteServerRunner : IDisposable
             };
         }
 
-        this.igniteConfiguration.Logger = new IgniteNLogLogger();
+        igniteConfiguration.Logger = new IgniteNLogLogger();
     }
 
     public IIgnite? Ignite { get; private set; }
 
-    public void Dispose() => this.Dispose(true);
+    public void Dispose()
+    {
+        Dispose(true);
+    }
 
     private static IgniteConfiguration LoadConfiguration(string filename)
     {
@@ -138,35 +141,35 @@ internal sealed class IgniteServerRunner : IDisposable
 
     private void Dispose(bool disposing)
     {
-        if (!this.disposed)
+        if (!disposed)
         {
             if (disposing)
             {
-                if (this.Ignite != null)
+                if (Ignite != null)
                 {
-                    this.Ignite.Dispose();
-                    this.Ignite = null;
+                    Ignite.Dispose();
+                    Ignite = null;
                 }
             }
 
-            this.disposed = true;
+            disposed = true;
         }
     }
 
     public void SetClusterEndpoints(ICollection<string> values)
     {
-        if (this.Ignite != null)
+        if (Ignite != null)
         {
             throw new InvalidOperationException("Cannot configure running instances.");
         }
 
-        switch (this.igniteConfiguration.DiscoverySpi)
+        switch (igniteConfiguration.DiscoverySpi)
         {
             case TcpDiscoverySpi tcpDiscoverySpi:
                 tcpDiscoverySpi.IpFinder = new TcpDiscoveryStaticIpFinder {Endpoints = values};
                 break;
             case null:
-                this.igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi
+                igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi
                 {
                     IpFinder = new TcpDiscoveryStaticIpFinder {Endpoints = values}
                 };
@@ -176,120 +179,120 @@ internal sealed class IgniteServerRunner : IDisposable
 
     public void SetServerPort(int value)
     {
-        if (this.Ignite != null)
+        if (Ignite != null)
         {
             throw new InvalidOperationException("Cannot configure running instances.");
         }
 
-        switch (this.igniteConfiguration.DiscoverySpi)
+        switch (igniteConfiguration.DiscoverySpi)
         {
             case TcpDiscoverySpi tcpDiscoverySpi:
                 tcpDiscoverySpi.LocalPort = value;
                 break;
             case null:
-                this.igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi {LocalPort = value};
+                igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi {LocalPort = value};
                 break;
         }
     }
 
     public void SetOnHeapMemoryLimit(int value)
     {
-        if (this.Ignite != null)
+        if (Ignite != null)
         {
             throw new InvalidOperationException("Cannot configure running instances.");
         }
 
-        this.igniteConfiguration.JvmInitialMemoryMb = value / 2;
-        this.igniteConfiguration.JvmMaxMemoryMb = value;
+        igniteConfiguration.JvmInitialMemoryMb = value / 2;
+        igniteConfiguration.JvmMaxMemoryMb = value;
     }
 
     public void SetOffHeapMemoryLimit(int value)
     {
-        if (this.Ignite != null)
+        if (Ignite != null)
         {
             throw new InvalidOperationException("Cannot configure running instances.");
         }
 
-        this.igniteConfiguration.DataStorageConfiguration ??= new DataStorageConfiguration
+        igniteConfiguration.DataStorageConfiguration ??= new DataStorageConfiguration
         {
             WalSegmentSize = 256 * 1024 * 1024
         };
-        if (this.igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration != null)
+        if (igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration != null)
         {
-            this.igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.MaxSize =
+            igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.MaxSize =
                 (long)value * 1024 * 1024;
         }
         else
         {
-            this.igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration =
+            igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration =
                 new DataRegionConfiguration {Name = "default", MaxSize = (long)value * 1024 * 1024};
         }
 
-        this.igniteConfiguration.DataStorageConfiguration.MetricsEnabled = this.enableOffHeapMetrics;
-        this.igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.MetricsEnabled =
-            this.enableOffHeapMetrics;
-        this.igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.PageEvictionMode =
+        igniteConfiguration.DataStorageConfiguration.MetricsEnabled = enableOffHeapMetrics;
+        igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.MetricsEnabled =
+            enableOffHeapMetrics;
+        igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.PageEvictionMode =
             DataPageEvictionMode.Random2Lru;
     }
 
     public void SetPersistence(bool value)
     {
-        if (this.Ignite != null)
+        if (Ignite != null)
         {
             throw new InvalidOperationException("Cannot configure running instances.");
         }
 
-        this.igniteConfiguration.DataStorageConfiguration ??= new DataStorageConfiguration
+        igniteConfiguration.DataStorageConfiguration ??= new DataStorageConfiguration
         {
             WalSegmentSize = 256 * 1024 * 1024
         };
-        if (this.igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration != null)
+        if (igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration != null)
         {
-            this.igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.PersistenceEnabled =
+            igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration.PersistenceEnabled =
                 value;
         }
         else
         {
-            this.igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration =
+            igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration =
                 new DataRegionConfiguration {Name = "default", PersistenceEnabled = value};
         }
     }
 
     public void SetConsistentId(string cid)
     {
-        if (this.Ignite != null)
+        if (Ignite != null)
         {
             throw new InvalidOperationException("Cannot configure running instances.");
         }
 
-        this.igniteConfiguration.ConsistentId = cid;
+        igniteConfiguration.ConsistentId = cid;
     }
 
     public async Task Run()
     {
         TaskCompletionSource<string> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
         Program.Logger?.Information("Starting Ignite server runner...");
-        this.Ignite = Ignition.Start(this.igniteConfiguration);
-        this.Ignite!.GetCluster().SetActive(true);
-        this.Ignite.GetCluster().SetBaselineAutoAdjustEnabledFlag(true);
-        this.Ignite.GetCluster().SetBaselineAutoAdjustTimeout(30000);
-        var persistenceEnabled = this.igniteConfiguration.DataStorageConfiguration?.DefaultDataRegionConfiguration
+        Ignite = Ignition.Start(igniteConfiguration);
+        Ignite!.GetCluster().SetActive(true);
+        Ignite.GetCluster().SetBaselineAutoAdjustEnabledFlag(true);
+        Ignite.GetCluster().SetBaselineAutoAdjustTimeout(30000);
+        var persistenceEnabled = igniteConfiguration.DataStorageConfiguration?.DefaultDataRegionConfiguration
             ?.PersistenceEnabled;
         if (persistenceEnabled.HasValue && persistenceEnabled.Value)
         {
-            if (!string.IsNullOrWhiteSpace(this.igniteUserPassword))
+            if (!string.IsNullOrWhiteSpace(igniteUserPassword))
             {
                 try
                 {
                     using var igniteClient = CacheFactory.ConnectAsClient(
                         CacheFactory.GetIgniteClientConfiguration(userName: "ignite", password: "ignite",
-                            useSsl: this.useClientSsl,
-                            certificatePath: this.sslClientCertificatePath,
-                            certificatePassword: this.sslClientCertificatePassword));
+                            useSsl: useClientSsl,
+                            certificatePath: sslClientCertificatePath,
+                            certificatePassword: sslClientCertificatePassword));
                     var alterUserSqlDmlCommand =
                         CacheFactory.GetOrCreateCacheClient<string, string>(igniteClient, "alterUserSqlDmlCommand");
                     alterUserSqlDmlCommand.Query(
-                        new SqlFieldsQuery($"ALTER USER \"ignite\" WITH PASSWORD '{this.igniteUserPassword}';"));
+                        new SqlFieldsQuery($"ALTER USER \"ignite\" WITH PASSWORD '{igniteUserPassword}';"));
                     igniteClient.DestroyCache("alterUserSqlDmlCommand");
                 }
                 catch (IgniteClientException icex)
@@ -302,14 +305,14 @@ internal sealed class IgniteServerRunner : IDisposable
             }
         }
 
-        CacheRebalancingEventListener cacheRebalancingEventListener = new(this.Ignite, Program.Logger);
-        this.Ignite.GetEvents().LocalListen(cacheRebalancingEventListener, EventType.CacheRebalancePartDataLost);
+        CacheRebalancingEventListener cacheRebalancingEventListener = new(Ignite, Program.Logger);
+        Ignite.GetEvents().LocalListen(cacheRebalancingEventListener, EventType.CacheRebalancePartDataLost);
         DiscoveryEventListener discoveryEventListener = new(Program.Logger);
-        this.Ignite.GetEvents().LocalListen(discoveryEventListener, EventType.NodeJoined, EventType.NodeLeft,
+        Ignite.GetEvents().LocalListen(discoveryEventListener, EventType.NodeJoined, EventType.NodeLeft,
             EventType.NodeFailed);
 
-        this.Ignite.Stopped += (s, e) => tcs.SetResult(s?.ToString());
-        var localSpidPort = ((TcpDiscoverySpi)this.Ignite.GetConfiguration().DiscoverySpi).LocalPort;
+        Ignite.Stopped += (s, e) => tcs.SetResult(s?.ToString());
+        var localSpidPort = ((TcpDiscoverySpi)Ignite.GetConfiguration().DiscoverySpi).LocalPort;
         Program.Logger?.Information(
             $"Ignite server runner is running (Local SpiDiscovery Port={localSpidPort}), press CTRL+C to terminate.");
         await tcs.Task.ConfigureAwait(false);
@@ -318,22 +321,22 @@ internal sealed class IgniteServerRunner : IDisposable
 
     public void Terminate()
     {
-        if (this.Ignite != null)
+        if (Ignite != null)
         {
             Program.Logger?.Information("Terminating Ignite server runner...");
-            Ignition.Stop(this.Ignite.Name, true);
-            this.Dispose();
+            Ignition.Stop(Ignite.Name, true);
+            Dispose();
             Program.Logger?.Information("Ignite server runner terminated.");
         }
     }
 
     public void Stop()
     {
-        if (this.Ignite != null)
+        if (Ignite != null)
         {
             Program.Logger?.Information("Stopping Ignite server runner...");
-            Ignition.Stop(this.Ignite.Name, false);
-            this.Dispose();
+            Ignition.Stop(Ignite.Name, false);
+            Dispose();
             Program.Logger?.Information("Ignite server runner stopped.");
         }
     }

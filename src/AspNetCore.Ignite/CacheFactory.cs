@@ -1,6 +1,4 @@
-﻿namespace AspNetCore.Ignite;
-
-using System;
+﻿using System;
 using System.Security.Authentication;
 using Apache.Ignite.Core;
 using Apache.Ignite.Core.Cache;
@@ -8,7 +6,9 @@ using Apache.Ignite.Core.Cache.Configuration;
 using Apache.Ignite.Core.Client;
 using Apache.Ignite.Core.Client.Cache;
 using Apache.Ignite.Core.Log;
-using Utils;
+using AspNetCore.Ignite.Utils;
+
+namespace AspNetCore.Ignite;
 
 public static class CacheFactory
 {
@@ -58,8 +58,10 @@ public static class CacheFactory
         return Ignition.Start(igniteConfiguration);
     }
 
-    public static IIgniteClient ConnectAsClient(IgniteClientConfiguration igniteClientConfiguration) =>
-        Ignition.StartClient(igniteClientConfiguration);
+    public static IIgniteClient ConnectAsClient(IgniteClientConfiguration igniteClientConfiguration)
+    {
+        return Ignition.StartClient(igniteClientConfiguration);
+    }
 
     public static ICache<TKey, TData> GetOrCreateCache<TKey, TData>(IIgnite ignite, string cacheName,
         Action<CacheConfiguration> extendConfigurationAction = null)

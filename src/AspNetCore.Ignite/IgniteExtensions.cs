@@ -1,7 +1,7 @@
-﻿namespace AspNetCore.Ignite;
-
-using Abstractions;
+﻿using AspNetCore.Ignite.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
+
+namespace AspNetCore.Ignite;
 
 public static class IgniteExtensions
 {

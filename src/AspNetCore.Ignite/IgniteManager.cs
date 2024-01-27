@@ -1,12 +1,12 @@
-namespace AspNetCore.Ignite;
-
 using System;
 using System.IO;
-using Abstractions;
 using Apache.Ignite.Core.Client;
 using Apache.Ignite.Core.Client.Cache;
+using AspNetCore.Ignite.Abstractions;
 using Microsoft.Extensions.Configuration;
 using Polly;
+
+namespace AspNetCore.Ignite;
 
 public class IgniteManager : IIgniteManager
 {
@@ -24,24 +24,26 @@ public class IgniteManager : IIgniteManager
         var igniteClientConfiguration = CacheFactory.GetIgniteClientConfiguration(
             aspNetCoreIgniteEndpoint, aspNetCoreIgniteUserName, aspNetCoreIgnitePassword, aspNetCoreIgniteUseSsl,
             aspNetCoreIgniteSslCertificatePath, aspNetCoreIgniteSslCertificatePassword);
-        this.igniteClient = Policy.Handle<Exception>()
+        igniteClient = Policy.Handle<Exception>()
             .WaitAndRetry(5, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)))
             .Execute(() => CacheFactory.ConnectAsClient(igniteClientConfiguration));
     }
 
     public ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(string cacheName,
-        Action<CacheClientConfiguration> extendConfigurationAction = null) =>
-        Policy.Handle<IgniteClientException>().Or<IOException>()
+        Action<CacheClientConfiguration> extendConfigurationAction = null)
+    {
+        return Policy.Handle<IgniteClientException>().Or<IOException>()
             .WaitAndRetry(5, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)))
             .Execute(() =>
-                CacheFactory.GetOrCreateCacheClient<TKey, TData>(this.igniteClient, cacheName,
+                CacheFactory.GetOrCreateCacheClient<TKey, TData>(igniteClient, cacheName,
                     extendConfigurationAction));
+    }
 
     public void DestroyCache(string cacheName)
     {
         try
         {
-            this.igniteClient.DestroyCache(cacheName);
+            igniteClient.DestroyCache(cacheName);
         }
         catch (IgniteClientException icex)
         {

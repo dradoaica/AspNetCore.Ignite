@@ -1,5 +1,3 @@
-namespace AspNetCore.IgniteServer.Utils;
-
 using System;
 using System.Linq;
 using System.Text;
@@ -10,10 +8,15 @@ using Serilog.Core;
 using Serilog.Events;
 using Serilog.Parsing;
 
+namespace AspNetCore.IgniteServer.Utils;
+
 [Target("SerilogTarget")]
 internal sealed class SerilogTarget : TargetWithLayout
 {
-    public SerilogTarget(string name) => this.Name = name;
+    public SerilogTarget(string name)
+    {
+        Name = name;
+    }
 
     protected override void Write(LogEventInfo logEvent)
     {
