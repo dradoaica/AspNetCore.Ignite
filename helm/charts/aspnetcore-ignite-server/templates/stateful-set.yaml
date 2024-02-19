@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "aspnetcore-ignite-server.fullname" . }}
+  labels:
+    {{- include "aspnetcore-ignite-server.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "aspnetcore-ignite-server.selectorLabels" . | nindent 6 }}
+  serviceName: {{ include "aspnetcore-ignite-server.fullname" . }}
+  replicas: {{ .Values.replicaCount }}
+  template:
+    metadata:
+      labels:
+        {{- include "aspnetcore-ignite-server.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "aspnetcore-ignite-server.serviceAccountName" . }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: "{{ .Values.priorityClassName }}"
+      {{- end }}
+      {{- if .Values.extraVolumes }}
+      volumes:
+        {{- toYaml .Values.extraVolumes | nindent 8 }}
+      {{- end }}
+      {{- if .Values.extraInitContainers }}
+      initContainers:
+        {{- toYaml .Values.extraInitContainers | nindent 8 }}
+      {{- end }}
+      containers:
+      {{- if .Values.extraContainers }}
+        {{- toYaml .Values.extraContainers | nindent 8 }}
+      {{- end }}
+        - name: ignite
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          readinessProbe:
+            httpGet:
+              path: /ignite?cmd=probe
+              port: 8080
+            initialDelaySeconds: 5
+            failureThreshold: 3
+            periodSeconds: 10
+            timeoutSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /ignite?cmd=version
+              port: 8080
+            initialDelaySeconds: 5
+            failureThreshold: 3
+            periodSeconds: 10
+            timeoutSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if .Values.envVars }}
+          env:
+            {{- toYaml .Values.envVars | nindent 12 }}
+          {{- else }}
+          {{- if .Values.env }}
+          env:
+            - name: "DEFAULT_CONSISTENT_ID"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: "K8S_NAMESPACE"
+              value: "{{ .Release.Namespace }}"
+            - name: "K8S_SERVICE_NAME"
+              value: "{{ include "aspnetcore-ignite-server.fullname" . }}"
+            {{- range $name, $value := .Values.env }}
+            - name: "{{ $name }}"
+              value: "{{ $value }}"
+          {{- end }}
+          {{- end }}
+          {{- end }}
+          {{- if .Values.envFrom }}
+          envFrom:
+            {{- toYaml .Values.envFrom | nindent 12 }}
+          {{- end }}
+          ports:
+            - containerPort: 11211 # JDBC port number.
+            - containerPort: 47100 # communication SPI port number.
+            - containerPort: 47500 # discovery SPI port number.
+            - containerPort: 49112 # JMX port number.
+            - containerPort: 10800 # SQL port number.
+            - containerPort: 8080 # REST port number.
+            - containerPort: 10900 # Thin clients port number.
+          volumeMounts:
+            - mountPath: "/app/work"
+              name: work-volume
+      {{- with .Values.extraVolumeMounts }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: work-volume
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+    {{- with .Values.storageClassName }}
+        storageClassName: {{ . }}
+    {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.workVolume.size }}

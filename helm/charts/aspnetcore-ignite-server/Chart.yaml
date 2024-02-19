@@ -1,0 +1,11 @@
+apiVersion: v2
+name: aspnetcore-ignite-server
+description: Chart for deploying a ASP.NET Core Ignite Server on Kubernetes as StatefulSet
+type: application
+version: 2.16.0
+appVersion: "2.16"
+keywords:
+  - ignite
+maintainers:
+  - name: dradoaica
+kubeVersion: ">= 1.26.0"
