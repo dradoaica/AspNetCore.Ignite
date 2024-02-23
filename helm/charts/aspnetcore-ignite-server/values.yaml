@@ -13,7 +13,7 @@ rbac:
   create: true
 
 serviceAccount:
-  create: false
+  create: true
   name: ""
 
 env:
