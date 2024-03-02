@@ -2,12 +2,12 @@ nameOverride: ""
 
 fullnameOverride: ""
 
+replicaCount: 1
+
 image:
   repository: dradoaica/aspnetcore.ignite-server
   tag: "2.16"
   pullPolicy: IfNotPresent
-
-replicaCount: 1
 
 rbac:
   create: true
