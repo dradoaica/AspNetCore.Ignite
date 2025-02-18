@@ -130,6 +130,7 @@ internal sealed class IgniteServerRunner : IDisposable
                     "--add-opens=java.base/java.time=ALL-UNNAMED",
                     "--add-opens=java.base/java.text=ALL-UNNAMED",
                     "--add-opens=java.management/sun.management=ALL-UNNAMED",
+                    "--add-opens=java.desktop/java.awt.font=ALL-UNNAMED",
                 },
             PeerAssemblyLoadingMode = PeerAssemblyLoadingMode.CurrentAppDomain,
             DataStorageConfiguration = new DataStorageConfiguration { WalSegmentSize = 256 * 1024 * 1024 },

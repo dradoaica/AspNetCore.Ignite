@@ -23,7 +23,9 @@ Directory.SetCurrentDirectory(AppContext.BaseDirectory);
 // fix for 'Stack smashing detected: dotnet terminated'
 Environment.SetEnvironmentVariable("COMPlus_EnableAlternateStackCheck", "1");
 // enable modules: Kubernetes, REST API, OpenCensus, etc.
-Environment.SetEnvironmentVariable("OPTION_LIBS", "ignite-kubernetes, ignite-rest-http, ignite-opencensus");
+Environment.SetEnvironmentVariable(
+    "OPTION_LIBS",
+    "ignite-kubernetes, ignite-rest-http, ignite-json, ignite-opencensus");
 
 var configuration = CreateIgniteConfiguration();
 ConfigureIgniteLogging(configuration);

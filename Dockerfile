@@ -12,7 +12,7 @@ FROM build AS publish
 RUN dotnet publish "AspNetCore.IgniteServer.csproj" -c Release -o /app/publish --no-restore
 
 # Build runtime image
-FROM azul/zulu-openjdk:17 AS runtime
+FROM eclipse-temurin:17-jre AS runtime
 
 RUN apt-get update \
     # Install prerequisites
@@ -34,10 +34,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Install IGNITE
-ENV IGNITE_VERSION 2.16.0
+ARG IGNITE_VERSION=2.17.0
 
 # Ignite home
-ENV IGNITE_HOME /opt/ignite/apache-ignite-${IGNITE_VERSION}-bin
+ARG IGNITE_HOME=/opt/ignite/apache-ignite-${IGNITE_VERSION}-bin
+ENV IGNITE_HOME=$IGNITE_HOME
 
 # Do not rely on anything provided by base image(s), but be explicit, if they are installed already it is noop then
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -52,9 +53,8 @@ RUN curl https://dlcdn.apache.org/ignite/${IGNITE_VERSION}/apache-ignite-${IGNIT
     && rm ignite.zip
 
 RUN mv apache-ignite-${IGNITE_VERSION}-bin/libs/optional/ignite-rest-http apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-rest-http
-
+RUN mv apache-ignite-${IGNITE_VERSION}-bin/libs/optional/ignite-json apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-json
 RUN mv apache-ignite-${IGNITE_VERSION}-bin/libs/optional/ignite-kubernetes apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-kubernetes
-
 RUN mv apache-ignite-${IGNITE_VERSION}-bin/libs/optional/ignite-opencensus apache-ignite-${IGNITE_VERSION}-bin/libs/ignite-opencensus
 
 RUN rm -r apache-ignite-${IGNITE_VERSION}-bin/benchmarks
