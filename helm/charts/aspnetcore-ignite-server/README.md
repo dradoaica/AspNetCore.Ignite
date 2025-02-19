@@ -17,7 +17,7 @@ helm install --name aspnetcore-ignite-server helm/charts/aspnetcore-ignite-serve
 | `nameOverride`                  | String to partially override ignite.fullname template with a string (will prepend the release name)            | `nil`                                |
 | `fullnameOverride`              | String to fully override ignite.fullname template with a string                                                | `nil`                                |
 | `image.repository`              | Image repository                                                                                               | `dradoaica/aspnetcore.ignite-server` |
-| `image.tag`                     | Image tag                                                                                                      | `2.16`                               |
+| `image.tag`                     | Image tag                                                                                                      | `2.17`                               |
 | `image.pullPolicy`              | Image pull policy                                                                                              | `IfNotPresent`                       |
 | `replicaCount`                  | Number of pods for ignite applications                                                                         | `1`                                  |
 | `rbac.create`                   | Whether or not to create RBAC items (e.g. role, role-binding)                                                  | `true`                               |
