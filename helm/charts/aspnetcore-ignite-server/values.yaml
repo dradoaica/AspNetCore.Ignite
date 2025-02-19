@@ -6,7 +6,7 @@ replicaCount: 1
 
 image:
   repository: dradoaica/aspnetcore.ignite-server
-  tag: "2.16"
+  tag: "2.17"
   pullPolicy: IfNotPresent
 
 rbac:
