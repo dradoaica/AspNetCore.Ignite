@@ -18,18 +18,25 @@ public static class CacheFactory
         string password = null,
         bool useSsl = false,
         string certificatePath = null,
-        string certificatePassword = null)
+        string certificatePassword = null
+    )
     {
         IgniteClientConfiguration igniteClientConfiguration = new()
         {
-            Endpoints = new[] { endpoint },
+            Endpoints = new[]
+            {
+                endpoint,
+            },
             RetryPolicy = new ClientRetryReadPolicy(),
             RetryLimit = 5,
             SocketTimeout = TimeSpan.FromSeconds(30),
             EnablePartitionAwareness = true,
             EnableHeartbeats = true,
             // Enable trace logging to observe discovery process.
-            Logger = new ConsoleLogger { MinLevel = LogLevel.Trace },
+            Logger = new ConsoleLogger
+            {
+                MinLevel = LogLevel.Trace,
+            },
         };
         if (!string.IsNullOrWhiteSpace(userName))
         {
@@ -68,14 +75,22 @@ public static class CacheFactory
     public static ICache<TKey, TData> GetOrCreateCache<TKey, TData>(
         IIgnite ignite,
         string cacheName,
-        Action<CacheConfiguration> extendConfigurationAction = null)
+        Action<CacheConfiguration> extendConfigurationAction = null
+    )
     {
         CacheConfiguration cacheCfg = new()
         {
             Name = cacheName,
             CacheMode = CacheMode.Partitioned,
             GroupName = typeof(TData).FullNameWithoutAssemblyInfo(),
-            QueryEntities = new[] { new QueryEntity { KeyType = typeof(TKey), ValueType = typeof(TData) } },
+            QueryEntities = new[]
+            {
+                new QueryEntity
+                {
+                    KeyType = typeof(TKey),
+                    ValueType = typeof(TData),
+                },
+            },
             Backups = 1,
             PlatformCacheConfiguration = new PlatformCacheConfiguration
             {
@@ -91,26 +106,34 @@ public static class CacheFactory
     public static ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
         IIgniteClient ignite,
         string cacheName,
-        Action<CacheClientConfiguration> extendConfigurationAction = null)
+        Action<CacheClientConfiguration> extendConfigurationAction = null
+    )
     {
-        CacheClientConfiguration cacheCfg =
-            new(
-                new CacheConfiguration
-                {
-                    PlatformCacheConfiguration = new PlatformCacheConfiguration
-                    {
-                        KeyTypeName = typeof(TKey).FullNameWithoutAssemblyInfo(),
-                        ValueTypeName = typeof(TData).FullNameWithoutAssemblyInfo(),
-                    },
-                },
-                true)
+        CacheClientConfiguration cacheCfg = new(
+            new CacheConfiguration
             {
-                Name = cacheName,
-                CacheMode = CacheMode.Partitioned,
-                GroupName = typeof(TData).FullNameWithoutAssemblyInfo(),
-                QueryEntities = new[] { new QueryEntity { KeyType = typeof(TKey), ValueType = typeof(TData) } },
-                Backups = 1,
-            };
+                PlatformCacheConfiguration = new PlatformCacheConfiguration
+                {
+                    KeyTypeName = typeof(TKey).FullNameWithoutAssemblyInfo(),
+                    ValueTypeName = typeof(TData).FullNameWithoutAssemblyInfo(),
+                },
+            },
+            true
+        )
+        {
+            Name = cacheName,
+            CacheMode = CacheMode.Partitioned,
+            GroupName = typeof(TData).FullNameWithoutAssemblyInfo(),
+            QueryEntities = new[]
+            {
+                new QueryEntity
+                {
+                    KeyType = typeof(TKey),
+                    ValueType = typeof(TData),
+                },
+            },
+            Backups = 1,
+        };
         extendConfigurationAction?.Invoke(cacheCfg);
         return ignite.GetOrCreateCache<TKey, TData>(cacheCfg);
     }

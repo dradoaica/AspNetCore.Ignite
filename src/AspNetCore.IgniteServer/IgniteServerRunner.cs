@@ -44,20 +44,21 @@ internal sealed class IgniteServerRunner : IDisposable
         string? sslTrustStorePassword = null,
         bool useClientSsl = false,
         string? sslClientCertificatePath = null,
-        string? sslClientCertificatePassword = null)
+        string? sslClientCertificatePassword = null
+    )
     {
         this.enableOffHeapMetrics = enableOffHeapMetrics;
         this.useClientSsl = useClientSsl;
         this.sslClientCertificatePath = sslClientCertificatePath;
         this.sslClientCertificatePassword = sslClientCertificatePassword;
         this.igniteUserPassword = igniteUserPassword;
-        igniteConfiguration = string.IsNullOrWhiteSpace(configurationFile)
-            ? GetDefaultConfiguration()
+        igniteConfiguration = string.IsNullOrWhiteSpace(configurationFile) ? GetDefaultConfiguration()
             : LoadConfiguration(configurationFile);
         igniteConfiguration.SpringConfigUrl = Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory,
             "config",
-            this.useClientSsl ? "spring-config-client-with-ssl.xml" : "spring-config.xml");
+            this.useClientSsl ? "spring-config-client-with-ssl.xml" : "spring-config.xml"
+        );
         igniteConfiguration.MetricsExpireTime = metricsExpireTime;
         igniteConfiguration.MetricsLogFrequency = metricsLogFrequency;
         igniteConfiguration.MetricsUpdateFrequency = metricsUpdateFrequency;
@@ -96,62 +97,47 @@ internal sealed class IgniteServerRunner : IDisposable
         IgniteConfiguration cfg = new()
         {
             AutoGenerateIgniteInstanceName = true,
-            JvmOptions =
-                new[]
-                {
-                    "-XX:+AlwaysPreTouch",
-                    "-XX:+UseG1GC",
-                    "-XX:+ScavengeBeforeFullGC",
-                    "-XX:+DisableExplicitGC",
-                    "-Djava.net.preferIPv4Stack=true",
-                    "-DIGNITE_QUIET=false",
-                    "-DIGNITE_WAL_MMAP=false",
-                    "-DIGNITE_WAIT_FOR_BACKUPS_ON_SHUTDOWN=true",
-                    "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
-                    "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED",
-                    "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
-                    "--add-opens=java.base/sun.util.calendar=ALL-UNNAMED",
-                    "--add-opens=java.management/com.sun.jmx.mbeanserver=ALL-UNNAMED",
-                    "--add-opens=jdk.internal.jvmstat/sun.jvmstat.monitor=ALL-UNNAMED",
-                    "--add-opens=java.base/sun.reflect.generics.reflectiveObjects=ALL-UNNAMED",
-                    "--add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED",
-                    "--add-opens=java.base/java.io=ALL-UNNAMED",
-                    "--add-opens=java.base/java.nio=ALL-UNNAMED",
-                    "--add-opens=java.base/java.net=ALL-UNNAMED",
-                    "--add-opens=java.base/java.util=ALL-UNNAMED",
-                    "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
-                    "--add-opens=java.base/java.util.concurrent.locks=ALL-UNNAMED",
-                    "--add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED",
-                    "--add-opens=java.base/java.lang=ALL-UNNAMED",
-                    "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED",
-                    "--add-opens=java.base/java.math=ALL-UNNAMED",
-                    "--add-opens=java.sql/java.sql=ALL-UNNAMED",
-                    "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
-                    "--add-opens=java.base/java.time=ALL-UNNAMED",
-                    "--add-opens=java.base/java.text=ALL-UNNAMED",
-                    "--add-opens=java.management/sun.management=ALL-UNNAMED",
-                    "--add-opens=java.desktop/java.awt.font=ALL-UNNAMED",
-                },
+            JvmOptions = new[]
+            {
+                "-XX:+AlwaysPreTouch", "-XX:+UseG1GC", "-XX:+ScavengeBeforeFullGC", "-XX:+DisableExplicitGC",
+                "-Djava.net.preferIPv4Stack=true", "-DIGNITE_QUIET=false", "-DIGNITE_WAL_MMAP=false",
+                "-DIGNITE_WAIT_FOR_BACKUPS_ON_SHUTDOWN=true", "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
+                "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED", "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+                "--add-opens=java.base/sun.util.calendar=ALL-UNNAMED",
+                "--add-opens=java.management/com.sun.jmx.mbeanserver=ALL-UNNAMED",
+                "--add-opens=jdk.internal.jvmstat/sun.jvmstat.monitor=ALL-UNNAMED",
+                "--add-opens=java.base/sun.reflect.generics.reflectiveObjects=ALL-UNNAMED",
+                "--add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED",
+                "--add-opens=java.base/java.io=ALL-UNNAMED", "--add-opens=java.base/java.nio=ALL-UNNAMED",
+                "--add-opens=java.base/java.net=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED",
+                "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
+                "--add-opens=java.base/java.util.concurrent.locks=ALL-UNNAMED",
+                "--add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED",
+                "--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED",
+                "--add-opens=java.base/java.math=ALL-UNNAMED", "--add-opens=java.sql/java.sql=ALL-UNNAMED",
+                "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED", "--add-opens=java.base/java.time=ALL-UNNAMED",
+                "--add-opens=java.base/java.text=ALL-UNNAMED", "--add-opens=java.management/sun.management=ALL-UNNAMED",
+                "--add-opens=java.desktop/java.awt.font=ALL-UNNAMED",
+            },
             PeerAssemblyLoadingMode = PeerAssemblyLoadingMode.CurrentAppDomain,
-            DataStorageConfiguration = new DataStorageConfiguration { WalSegmentSize = 256 * 1024 * 1024 },
+            DataStorageConfiguration = new DataStorageConfiguration
+            {
+                WalSegmentSize = 256 * 1024 * 1024,
+            },
             WorkDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "work"),
-            CommunicationSpi =
-                new TcpCommunicationSpi
-                {
-                    MessageQueueLimit = 2048,
-                    SlowClientQueueLimit = 2048,
-                    SocketWriteTimeout = 5000,
-                    ConnectTimeout = TimeSpan.FromSeconds(10),
-                },
+            CommunicationSpi = new TcpCommunicationSpi
+            {
+                MessageQueueLimit = 2048,
+                SlowClientQueueLimit = 2048,
+                SocketWriteTimeout = 5000,
+                ConnectTimeout = TimeSpan.FromSeconds(10),
+            },
             FailureDetectionTimeout = TimeSpan.FromSeconds(30),
             ClientFailureDetectionTimeout = TimeSpan.FromSeconds(60),
             NetworkTimeout = TimeSpan.FromSeconds(10),
             IncludedEventTypes = new[]
             {
-                EventType.NodeJoined,
-                EventType.NodeLeft,
-                EventType.NodeFailed,
-                EventType.CacheRebalancePartDataLost,
+                EventType.NodeJoined, EventType.NodeLeft, EventType.NodeFailed, EventType.CacheRebalancePartDataLost,
             },
         };
         return cfg;
@@ -184,12 +170,18 @@ internal sealed class IgniteServerRunner : IDisposable
         switch (igniteConfiguration.DiscoverySpi)
         {
             case TcpDiscoverySpi tcpDiscoverySpi:
-                tcpDiscoverySpi.IpFinder = new TcpDiscoveryStaticIpFinder { Endpoints = values };
+                tcpDiscoverySpi.IpFinder = new TcpDiscoveryStaticIpFinder
+                {
+                    Endpoints = values,
+                };
                 break;
             case null:
                 igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi
                 {
-                    IpFinder = new TcpDiscoveryStaticIpFinder { Endpoints = values },
+                    IpFinder = new TcpDiscoveryStaticIpFinder
+                    {
+                        Endpoints = values,
+                    },
                 };
                 break;
         }
@@ -208,7 +200,10 @@ internal sealed class IgniteServerRunner : IDisposable
                 tcpDiscoverySpi.LocalPort = value;
                 break;
             case null:
-                igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi { LocalPort = value };
+                igniteConfiguration.DiscoverySpi = new TcpDiscoverySpi
+                {
+                    LocalPort = value,
+                };
                 break;
         }
     }
@@ -242,8 +237,11 @@ internal sealed class IgniteServerRunner : IDisposable
         }
         else
         {
-            igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration =
-                new DataRegionConfiguration { Name = "default", MaxSize = (long)value * 1024 * 1024 };
+            igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration = new DataRegionConfiguration
+            {
+                Name = "default",
+                MaxSize = (long)value * 1024 * 1024,
+            };
         }
 
         igniteConfiguration.DataStorageConfiguration.MetricsEnabled = enableOffHeapMetrics;
@@ -270,8 +268,11 @@ internal sealed class IgniteServerRunner : IDisposable
         }
         else
         {
-            igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration =
-                new DataRegionConfiguration { Name = "default", PersistenceEnabled = value };
+            igniteConfiguration.DataStorageConfiguration.DefaultDataRegionConfiguration = new DataRegionConfiguration
+            {
+                Name = "default",
+                PersistenceEnabled = value,
+            };
         }
     }
 
@@ -307,11 +308,14 @@ internal sealed class IgniteServerRunner : IDisposable
                             password: "ignite",
                             useSsl: useClientSsl,
                             certificatePath: sslClientCertificatePath,
-                            certificatePassword: sslClientCertificatePassword));
+                            certificatePassword: sslClientCertificatePassword
+                        )
+                    );
                     var alterUserSqlDmlCommand =
                         CacheFactory.GetOrCreateCacheClient<string, string>(igniteClient, "alterUserSqlDmlCommand");
                     alterUserSqlDmlCommand.Query(
-                        new SqlFieldsQuery($"ALTER USER \"ignite\" WITH PASSWORD '{igniteUserPassword}';"));
+                        new SqlFieldsQuery($"ALTER USER \"ignite\" WITH PASSWORD '{igniteUserPassword}';")
+                    );
                     igniteClient.DestroyCache("alterUserSqlDmlCommand");
                 }
                 catch (IgniteClientException icex)
@@ -333,7 +337,8 @@ internal sealed class IgniteServerRunner : IDisposable
         ignite.Stopped += (s, _) => tcs.SetResult(s?.ToString());
         var localSpidPort = ((TcpDiscoverySpi)ignite.GetConfiguration().DiscoverySpi).LocalPort;
         Program.Logger?.Information(
-            $"Ignite server runner is running (Local SpiDiscovery Port={localSpidPort}), press CTRL+C to terminate.");
+            $"Ignite server runner is running (Local SpiDiscovery Port={localSpidPort}), press CTRL+C to terminate."
+        );
         await tcs.Task.ConfigureAwait(false);
         Program.Logger?.Information($"'{tcs.Task.Result}' stopped.");
     }

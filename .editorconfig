@@ -251,15 +251,40 @@ resharper_space_within_empty_braces = true
 resharper_space_within_single_line_array_initializer_braces = true
 # More JetBrains Rider/ReSharper code styles
 max_line_length = 120
-resharper_csharp_wrap_after_declaration_lpar = true
-resharper_csharp_wrap_after_invocation_lpar = true
-resharper_csharp_wrap_arguments_style = chop_if_long
-resharper_csharp_wrap_parameters_style = chop_if_long
 resharper_keep_existing_declaration_parens_arrangement = false
 resharper_keep_existing_invocation_parens_arrangement = false
 resharper_keep_existing_primary_constructor_declaration_parens_arrangement = true
 resharper_place_expr_method_on_single_line = true
 resharper_trailing_comma_in_multiline_lists = true
-resharper_wrap_array_initializer_style = chop_if_long
 resharper_wrap_chained_binary_expressions = chop_if_long
-resharper_wrap_chained_method_calls = chop_if_long
+# Prettier style parenthesis formatting
+resharper_csharp_wrap_parameters_style = chop_if_long
+# Declaration parenthesis formatting
+resharper_csharp_wrap_before_declaration_lpar = false
+resharper_csharp_wrap_after_declaration_lpar = true
+resharper_csharp_wrap_before_declaration_rpar = true
+# Invocation parenthesis formatting
+resharper_csharp_wrap_before_invocation_lpar = false
+resharper_csharp_wrap_after_invocation_lpar = true
+resharper_csharp_wrap_before_invocation_rpar = true
+# Arguments wrapping
+resharper_csharp_wrap_arguments_style = chop_if_long
+# Method call wrapping
+resharper_csharp_wrap_after_dot_in_method_calls = false
+resharper_csharp_wrap_chained_method_calls = chop_if_long
+resharper_csharp_wrap_before_binary_opsign = false
+resharper_csharp_wrap_before_ternary_opsigns = true
+resharper_csharp_wrap_ternary_expr_style = wrap_if_long
+resharper_csharp_nested_ternary_style = simple_wrap
+resharper_csharp_align_multiline_array_and_object_initializer = false
+resharper_csharp_align_multiline_switch_expression = false
+resharper_csharp_place_constructor_initializer_on_same_line = false
+resharper_csharp_place_simple_initializer_on_single_line = false
+resharper_csharp_max_initializer_elements_on_line = 0
+resharper_csharp_wrap_linq_expressions = chop_if_long
+# Generic type wrapping
+resharper_csharp_place_type_constraints_on_same_line = false
+resharper_csharp_wrap_before_first_type_parameter_constraint = true
+resharper_csharp_wrap_multiple_type_parameter_constraints_style = chop_always
+resharper_csharp_trailing_comma_in_singleline_lists = true
+resharper_csharp_trailing_comma_in_multiline_lists = true

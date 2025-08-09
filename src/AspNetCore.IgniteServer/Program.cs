@@ -25,44 +25,54 @@ Environment.SetEnvironmentVariable("COMPlus_EnableAlternateStackCheck", "1");
 // enable modules: Kubernetes, REST API, OpenCensus, etc.
 Environment.SetEnvironmentVariable(
     "OPTION_LIBS",
-    "ignite-kubernetes, ignite-rest-http, ignite-json, ignite-opencensus");
+    "ignite-kubernetes, ignite-rest-http, ignite-json, ignite-opencensus"
+);
 
 var configuration = CreateIgniteConfiguration();
 ConfigureIgniteLogging(configuration);
 ConfigureGracefulShutdown();
 
-CommandLineApplication commandLineApplication = new() { Name = "AspNetCore.IgniteServer" };
+CommandLineApplication commandLineApplication = new()
+{
+    Name = "AspNetCore.IgniteServer",
+};
 commandLineApplication.HelpOption("-?|-Help");
 var configFileArgument = commandLineApplication.Option(
     "-ConfigFile",
     "XML configuration file. If not file is specified then default configuration is used.",
-    CommandOptionType.SingleValue);
+    CommandOptionType.SingleValue
+);
 var offHeapArgument = commandLineApplication.Option(
     "-OffHeap",
     "Size of off-heap memory given in megabytes.",
-    CommandOptionType.SingleValue);
+    CommandOptionType.SingleValue
+);
 var onHeapArgument = commandLineApplication.Option(
     "-OnHeap",
     "Size of on-heap memory given in megabytes.",
-    CommandOptionType.SingleValue);
+    CommandOptionType.SingleValue
+);
 var serverPortArgument = commandLineApplication.Option(
     "-SpiPort",
     "Specifies port for Discovery Spi.",
-    CommandOptionType.SingleValue);
+    CommandOptionType.SingleValue
+);
 var clusterEndpointArgument = commandLineApplication.Option(
     "-Cluster",
     "Specifies IP address and port of a cluster node. Multiple nodes can be specified.",
-    CommandOptionType.MultipleValue);
+    CommandOptionType.MultipleValue
+);
 var consistentIdArgument = commandLineApplication.Option(
     "-ConsistentId",
     "Specifies as a consistent id of the node. This value is used in topology.",
-    CommandOptionType.SingleValue);
+    CommandOptionType.SingleValue
+);
 var persistenceEnabled = commandLineApplication.Option(
     "-PersistenceEnabled",
     "If set, it enables persistence mode.",
-    CommandOptionType.NoValue);
-commandLineApplication.OnExecute(
-    async () =>
+    CommandOptionType.NoValue
+);
+commandLineApplication.OnExecute(async () =>
     {
         if (!int.TryParse(configuration["DEFAULT_ON_HEAP_MEMORY"], out var defaultOnHeapMemory))
         {
@@ -76,11 +86,13 @@ commandLineApplication.OnExecute(
 
         var useTcpDiscoveryStaticIpFinder = "true".Equals(
             configuration["USE_TCP_DISCOVERY_STATIC_IP_FINDER"],
-            StringComparison.OrdinalIgnoreCase);
+            StringComparison.OrdinalIgnoreCase
+        );
         var defaultConsistentId = configuration["DEFAULT_CONSISTENT_ID"];
         var enableAuthentication = "true".Equals(
             configuration["ENABLE_AUTHENTICATION"],
-            StringComparison.OrdinalIgnoreCase);
+            StringComparison.OrdinalIgnoreCase
+        );
         var k8sNamespace = configuration["K8S_NAMESPACE"];
         var k8sServiceName = configuration["K8S_SERVICE_NAME"];
         var igniteUserPassword = configuration["IGNITE_USER_PASSWORD"];
@@ -95,7 +107,8 @@ commandLineApplication.OnExecute(
         var springConfigPath = Path.Combine(
             AppDomain.CurrentDomain.BaseDirectory,
             "config",
-            useClientSsl ? "spring-config-client-with-ssl.xml" : "spring-config.xml");
+            useClientSsl ? "spring-config-client-with-ssl.xml" : "spring-config.xml"
+        );
         var metricsExpireTime = TimeSpan.FromHours(24);
         if (int.TryParse(configuration["METRICS_EXPIRE_TIME_IN_HOURS"], out var metricsExpireTimeInHours))
         {
@@ -116,7 +129,8 @@ commandLineApplication.OnExecute(
 
         var enableOffHeapMetrics = "true".Equals(
             configuration["ENABLE_OFF_HEAP_METRICS"],
-            StringComparison.OrdinalIgnoreCase);
+            StringComparison.OrdinalIgnoreCase
+        );
         var springConfigText = await File.ReadAllTextAsync(springConfigPath, Encoding.UTF8).ConfigureAwait(false);
         springConfigText = springConfigText?.Replace("K8S_NAMESPACE", k8sNamespace)
             ?.Replace("K8S_SERVICE_NAME", k8sServiceName);
@@ -130,7 +144,8 @@ commandLineApplication.OnExecute(
 
         springConfigText = springConfigText?.Replace(
             "OPEN_CENSUS_METRIC_EXPORTER_SPI_PERIOD",
-            metricsUpdateFrequency.TotalMilliseconds.ToString(CultureInfo.InvariantCulture));
+            metricsUpdateFrequency.TotalMilliseconds.ToString(CultureInfo.InvariantCulture)
+        );
         await File.WriteAllTextAsync(springConfigPath, springConfigText, Encoding.UTF8).ConfigureAwait(false);
         var configFile = configFileArgument.HasValue() ? configFileArgument.Value() : null;
         igniteServerRunner = new IgniteServerRunner(
@@ -148,15 +163,16 @@ commandLineApplication.OnExecute(
             sslTrustStorePassword,
             useClientSsl,
             sslClientCertificatePath,
-            sslClientCertificatePassword);
+            sslClientCertificatePassword
+        );
         igniteServerRunner.SetOffHeapMemoryLimit(
-            offHeapArgument.HasValue()
-                ? int.Parse(offHeapArgument.Value(), CultureInfo.InvariantCulture)
-                : defaultOffHeapMemory);
+            offHeapArgument.HasValue() ? int.Parse(offHeapArgument.Value(), CultureInfo.InvariantCulture)
+                : defaultOffHeapMemory
+        );
         igniteServerRunner.SetOnHeapMemoryLimit(
-            onHeapArgument.HasValue()
-                ? int.Parse(onHeapArgument.Value(), CultureInfo.InvariantCulture)
-                : defaultOnHeapMemory);
+            onHeapArgument.HasValue() ? int.Parse(onHeapArgument.Value(), CultureInfo.InvariantCulture)
+                : defaultOnHeapMemory
+        );
         if (serverPortArgument.HasValue())
         {
             igniteServerRunner.SetServerPort(int.Parse(serverPortArgument.Value(), CultureInfo.InvariantCulture));
@@ -193,15 +209,18 @@ commandLineApplication.OnExecute(
             sslKeyStoreFsw = WatchFile(
                 Path.GetFileName(sslKeyStoreFilePath),
                 Path.GetDirectoryName(Path.GetFullPath(sslKeyStoreFilePath)),
-                state => OnSslFileCreatedOrChanged());
+                state => OnSslFileCreatedOrChanged()
+            );
             sslTrustStoreFsw = WatchFile(
                 Path.GetFileName(sslTrustStoreFilePath),
                 Path.GetDirectoryName(Path.GetFullPath(sslTrustStoreFilePath)),
-                state => OnSslFileCreatedOrChanged());
+                state => OnSslFileCreatedOrChanged()
+            );
             sslClientCertificateFsw = WatchFile(
                 Path.GetFileName(sslClientCertificatePath),
                 Path.GetDirectoryName(Path.GetFullPath(sslClientCertificatePath)),
-                state => OnSslFileCreatedOrChanged());
+                state => OnSslFileCreatedOrChanged()
+            );
         }
 
         try
@@ -223,7 +242,8 @@ commandLineApplication.OnExecute(
         }
 
         return 0;
-    });
+    }
+);
 
 try
 {
@@ -325,7 +345,8 @@ static void OnSslFileCreatedOrChanged()
     TaskCompletionSource<bool> taskCompletionSource = new();
     const int absoluteExpirationRelativeToNowInSeconds = 10;
     CancellationChangeToken expirationToken = new(
-        new CancellationTokenSource(TimeSpan.FromSeconds(absoluteExpirationRelativeToNowInSeconds + .01)).Token);
+        new CancellationTokenSource(TimeSpan.FromSeconds(absoluteExpirationRelativeToNowInSeconds + .01)).Token
+    );
     MemoryCacheEntryOptions memoryCacheEntryOptions = new()
     {
         AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(absoluteExpirationRelativeToNowInSeconds),
@@ -344,16 +365,21 @@ static void OnSslFileCreatedOrChanged()
                     igniteServerRunner?.Terminate();
                 }
             },
-        });
+        }
+    );
     MemoryCache.Set(nameof(OnSslFileCreatedOrChanged), taskCompletionSource, memoryCacheEntryOptions);
 }
 
 public static partial class Program
 {
-    private static readonly List<string> DefaultClusterEndpoints = [$"{DnsUtils.GetLocalIpAddress()}:47500"];
+    private static readonly List<string> DefaultClusterEndpoints = [$"{DnsUtils.GetLocalIpAddress()}:47500",];
 
-    private static readonly MemoryCache MemoryCache =
-        new(new MemoryCacheOptions { ExpirationScanFrequency = TimeSpan.FromSeconds(5) });
+    private static readonly MemoryCache MemoryCache = new(
+        new MemoryCacheOptions
+        {
+            ExpirationScanFrequency = TimeSpan.FromSeconds(5),
+        }
+    );
 
     private static volatile bool shouldStart = true;
     private static IgniteServerRunner? igniteServerRunner;

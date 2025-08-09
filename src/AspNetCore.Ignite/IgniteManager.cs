@@ -19,7 +19,8 @@ public class IgniteManager : IIgniteManager
         var aspNetCoreIgnitePassword = configuration["ASPNETCORE_IGNITE_PASSWORD"];
         var aspNetCoreIgniteUseSsl = "true".Equals(
             configuration["ASPNETCORE_IGNITE_USE_SSL"],
-            StringComparison.InvariantCultureIgnoreCase);
+            StringComparison.InvariantCultureIgnoreCase
+        );
         var aspNetCoreIgniteSslCertificatePath = configuration["ASPNETCORE_IGNITE_SSL_CERTIFICATE_PATH"];
         var aspNetCoreIgniteSslCertificatePassword = configuration["ASPNETCORE_IGNITE_SSL_CERTIFICATE_PASSWORD"];
         var igniteClientConfiguration = CacheFactory.GetIgniteClientConfiguration(
@@ -28,7 +29,8 @@ public class IgniteManager : IIgniteManager
             aspNetCoreIgnitePassword,
             aspNetCoreIgniteUseSsl,
             aspNetCoreIgniteSslCertificatePath,
-            aspNetCoreIgniteSslCertificatePassword);
+            aspNetCoreIgniteSslCertificatePassword
+        );
         igniteClient = Policy.Handle<Exception>()
             .WaitAndRetry(6, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)))
             .Execute(() => CacheFactory.ConnectAsClient(igniteClientConfiguration));
@@ -36,11 +38,13 @@ public class IgniteManager : IIgniteManager
 
     public ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
         string cacheName,
-        Action<CacheClientConfiguration> extendConfigurationAction = null) => Policy.Handle<IgniteClientException>()
+        Action<CacheClientConfiguration> extendConfigurationAction = null
+    ) => Policy.Handle<IgniteClientException>()
         .Or<IOException>()
         .WaitAndRetry(6, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)))
-        .Execute(
-            () => CacheFactory.GetOrCreateCacheClient<TKey, TData>(igniteClient, cacheName, extendConfigurationAction));
+        .Execute(() =>
+            CacheFactory.GetOrCreateCacheClient<TKey, TData>(igniteClient, cacheName, extendConfigurationAction)
+        );
 
     public void DestroyCache(string cacheName)
     {

@@ -15,7 +15,8 @@ internal sealed class CacheRebalancingEventListener(IIgnite ignite, Logger? logg
         }
 
         logger?.Warning(
-            $"Name: {evt.Name}; CacheName: {evt.CacheName}; DiscoveryEventName: {evt.DiscoveryEventName}; DiscoveryNodeAddresses: {string.Join(",", evt.DiscoveryNode.Addresses)}; DiscoveryHostNames: {string.Join(",", evt.DiscoveryNode.HostNames)}");
+            $"Name: {evt.Name}; CacheName: {evt.CacheName}; DiscoveryEventName: {evt.DiscoveryEventName}; DiscoveryNodeAddresses: {string.Join(",", evt.DiscoveryNode.Addresses)}; DiscoveryHostNames: {string.Join(",", evt.DiscoveryNode.HostNames)}"
+        );
         try
         {
             ignite.ResetLostPartitions(evt.CacheName);
