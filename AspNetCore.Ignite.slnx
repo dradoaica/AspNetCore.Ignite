@@ -1,0 +1,16 @@
+﻿<Solution>
+    <Folder Name="/Solution Items/">
+        <File Path=".dockerignore"/>
+        <File Path=".editorconfig"/>
+        <File Path=".gitattributes"/>
+        <File Path=".gitignore"/>
+        <File Path="Dockerfile"/>
+        <File Path="global.json"/>
+        <File Path="LICENSE.md"/>
+        <File Path="NuGet.Config"/>
+        <File Path="README.md"/>
+    </Folder>
+    <Project Path="src/AspNetCore.Ignite.Tests/AspNetCore.Ignite.Tests.csproj"/>
+    <Project Path="src/AspNetCore.Ignite/AspNetCore.Ignite.csproj"/>
+    <Project Path="src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj"/>
+</Solution>
