@@ -1,156 +1,181 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <Nullable>annotations</Nullable>
-    <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
-    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
-    <DockerfileContext>..\..</DockerfileContext>
-    <LangVersion>default</LangVersion>
-  </PropertyGroup>
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>annotations</Nullable>
+        <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+        <DockerfileContext>..\..</DockerfileContext>
+        <LangVersion>default</LangVersion>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Apache.Ignite" Version="2.16.0"/>
-    <PackageReference Include="Apache.Ignite.Linq" Version="2.16.0"/>
-    <PackageReference Include="Apache.Ignite.NLog" Version="2.16.0"/>
-    <PackageReference Include="ConfigureAwait.Fody" Version="3.3.2"/>
-    <PackageReference Include="Fody" Version="6.8.0">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.0"/>
-    <PackageReference Include="Microsoft.Extensions.CommandLineUtils" Version="1.1.1"/>
-    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="8.0.0"/>
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0"/>
-    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.6"/>
-    <PackageReference Include="PacketDotNet" Version="1.4.7"/>
-    <PackageReference Include="Serilog" Version="3.1.1"/>
-    <PackageReference Include="Serilog.Enrichers.Environment" Version="2.3.0"/>
-    <PackageReference Include="Serilog.Enrichers.Thread" Version="3.1.0"/>
-    <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0"/>
-    <PackageReference Include="Serilog.Settings.Configuration" Version="8.0.0"/>
-    <PackageReference Include="Serilog.Sinks.Console" Version="5.0.1"/>
-    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0"/>
-    <PackageReference Include="Serilog.Sinks.Elasticsearch" Version="9.0.3"/>
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Apache.Ignite" Version="2.17.0"/>
+        <PackageReference Include="Apache.Ignite.Linq" Version="2.17.0"/>
+        <PackageReference Include="Apache.Ignite.NLog" Version="2.17.0"/>
+        <PackageReference Include="ConfigureAwait.Fody" Version="3.3.2"/>
+        <PackageReference Include="Fody" Version="6.9.3">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.CommandLineUtils" Version="1.1.1"/>
+        <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.0"/>
+        <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.22.1"/>
+        <PackageReference Include="PacketDotNet" Version="1.4.8"/>
+        <PackageReference Include="Serilog" Version="4.3.0"/>
+        <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1"/>
+        <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0"/>
+        <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.2"/>
+        <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0"/>
+        <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1"/>
+        <PackageReference Include="Serilog.Sinks.File" Version="7.0.0"/>
+        <PackageReference Include="Serilog.Sinks.Elasticsearch" Version="10.0.0"/>
+    </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\AspNetCore.Ignite\AspNetCore.Ignite.csproj"/>
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\AspNetCore.Ignite\AspNetCore.Ignite.csproj"/>
+    </ItemGroup>
 
-  <ItemGroup>
-    <None Update="appsettings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="config\serilog.config.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="config\server.jks">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="config\spring-config-client-with-ssl.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="config\spring-config.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="config\default-config.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="config\AspNetCore.serilog.config.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="config\persistent-config.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="config\thin-client-cert.pfx">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="config\trust.jks">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\animal-sniffer-annotations-1.14.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\annotations-16.0.3.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\checker-compat-qual-2.5.2.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\commons-lang-2.6.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\disruptor-3.4.2.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\error_prone_annotations-2.1.3.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\grpc-context-1.19.0.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\guava-26.0-android.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\ignite-kubernetes-2.16.0.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\ignite-opencensus-2.16.0.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\ignite-rest-http-2.16.0.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\j2objc-annotations-1.1.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\jackson-annotations-2.14.0.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\jackson-core-2.14.0.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\jackson-databind-2.14.0.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\javax.servlet-api-3.1.0.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\jetty-continuation-9.4.53.v20231009.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\jetty-http-9.4.53.v20231009.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\jetty-io-9.4.53.v20231009.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\jetty-server-9.4.53.v20231009.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\jetty-util-9.4.53.v20231009.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\jetty-xml-9.4.53.v20231009.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\jsr305-3.0.2.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\opencensus-api-0.22.0.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\opencensus-impl-0.22.0.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\opencensus-impl-core-0.22.0.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="libs\slf4j-api-1.7.33.jar">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
+    <ItemGroup>
+        <None Update="appsettings.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="config\server.jks">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="config\spring-config-client-with-ssl.xml">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="config\spring-config.xml">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="config\default-config.xml">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="config\AspNetCore.serilog.config.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="config\persistent-config.xml">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="config\thin-client-cert.pfx">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="config\trust.jks">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="serilog.config.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\j2objc-annotations-2.8.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\jackson-annotations-2.14.0.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\jackson-core-2.14.0.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\jackson-databind-2.14.0.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\javax.servlet-api-3.1.0.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\jetty-continuation-9.4.56.v20240826.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\jetty-http-9.4.56.v20240826.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\jetty-io-9.4.56.v20240826.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\jetty-server-9.4.56.v20240826.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\jetty-util-9.4.56.v20240826.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\jetty-xml-9.4.56.v20240826.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\jsr305-3.0.2.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\listenablefuture-9999.0-empty-to-avoid-conflict-with-guava.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\slf4j-api-1.7.33.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\simpleclient_httpserver-0.3.0.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\simpleclient_common-0.3.0.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\simpleclient-0.6.0.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\opencensus-impl-core-0.31.1.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\opencensus-impl-0.31.1.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\opencensus-exporter-stats-prometheus-0.31.1.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\opencensus-exporter-metrics-util-0.31.1.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\opencensus-api-0.31.1.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\ignite-rest-http-2.17.0.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\ignite-opencensus-2.17.0.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\ignite-kubernetes-2.17.0.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\guava-32.1.2-jre.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\grpc-context-1.62.2.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\grpc-api-1.62.2.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\failureaccess-1.0.1.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\error_prone_annotations-2.18.0.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\disruptor-3.4.2.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\commons-lang-2.6.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\checker-qual-3.33.0.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Update="libs\annotations-16.0.3.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+        <None Remove="libs\cache-api-1.0.0.jar"/>
+        <None Update="libs\ignite-json-2.17.0.jar">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
 
 </Project>

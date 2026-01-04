@@ -1,26 +1,23 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>netstandard2.1</TargetFramework>
-    <LangVersion>default</LangVersion>
-    <Authors>AspNetCore.Ignite</Authors>
-    <Company>AspNetCore.Ignite</Company>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <LangVersion>default</LangVersion>
+        <Authors>AspNetCore.Ignite</Authors>
+        <Company>AspNetCore.Ignite</Company>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Apache.Ignite" Version="2.16.0"/>
-    <PackageReference Include="Apache.Ignite.Linq" Version="2.16.0"/>
-    <PackageReference Include="ConfigureAwait.Fody" Version="3.3.2"/>
-    <PackageReference Include="Fody" Version="6.8.0">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.0"/>
-    <PackageReference Include="Polly" Version="8.2.1"/>
-  </ItemGroup>
-  <!--
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="copy &quot;$(ProjectDir)$(OutDir)*.dll&quot; &quot;$(SolutionDir)out\server\&quot;&#xD;&#xA;copy &quot;$(ProjectDir)$(OutDir)*.json&quot; &quot;$(SolutionDir)out\server\&quot;" />
-  </Target>
-  -->
+    <ItemGroup>
+        <PackageReference Include="Apache.Ignite" Version="2.17.0"/>
+        <PackageReference Include="Apache.Ignite.Linq" Version="2.17.0"/>
+        <PackageReference Include="ConfigureAwait.Fody" Version="3.3.2"/>
+        <PackageReference Include="Fody" Version="6.9.3">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.0"/>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0"/>
+        <PackageReference Include="Polly" Version="8.6.4"/>
+    </ItemGroup>
+
 </Project>

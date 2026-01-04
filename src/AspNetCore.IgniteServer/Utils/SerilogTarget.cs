@@ -1,19 +1,21 @@
-namespace AspNetCore.IgniteServer.Utils;
-
-using System;
-using System.Linq;
-using System.Text;
 using NLog;
 using NLog.Targets;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
 using Serilog.Parsing;
+using System;
+using System.Text;
+
+namespace AspNetCore.IgniteServer.Utils;
 
 [Target("SerilogTarget")]
 internal sealed class SerilogTarget : TargetWithLayout
 {
-    public SerilogTarget(string name) => this.Name = name;
+    public SerilogTarget(string name)
+    {
+        Name = name;
+    }
 
     protected override void Write(LogEventInfo logEvent)
     {
@@ -23,22 +25,33 @@ internal sealed class SerilogTarget : TargetWithLayout
         {
             // NLog treats a single string as a verbatim string; Serilog treats it as a String.Format format and hence collapses doubled braces
             // This is the most direct way to emit this without it being re-processed by Serilog (via @nblumhardt)
-            MessageTemplate template = new(new[] {new TextToken(logEvent.FormattedMessage)});
-            log.Write(new LogEvent(DateTimeOffset.Now, logEventLevel,
-                logEvent.Exception == null ? null : new Exception(DumpException(logEvent.Exception)), template,
-                Enumerable.Empty<LogEventProperty>()));
+            MessageTemplate template = new(
+                [
+                    new TextToken(logEvent.FormattedMessage),
+                ]
+            );
+            log.Write(
+                new LogEvent(
+                    DateTimeOffset.Now,
+                    logEventLevel,
+                    logEvent.Exception == null ? null : new Exception(DumpException(logEvent.Exception)),
+                    template,
+                    []
+                )
+            );
         }
         else
         {
             // Risk: tunneling an NLog format and assuming it will Just Work as a Serilog format
-            log.Write(logEventLevel,
+            log.Write(
+                logEventLevel,
                 logEvent.Exception == null ? null : new Exception(DumpException(logEvent.Exception)),
                 logEvent.Message,
-                logEvent.Parameters);
+                logEvent.Parameters
+            );
         }
 
-        var nativeErrorInfo = logEvent.Properties.ContainsKey("nativeErrorInfo")
-            ? logEvent.Properties["nativeErrorInfo"] as string
+        var nativeErrorInfo = logEvent.Properties.TryGetValue("nativeErrorInfo", out var property) ? property as string
             : null;
         if (!string.IsNullOrEmpty(nativeErrorInfo))
         {
@@ -68,22 +81,17 @@ internal sealed class SerilogTarget : TargetWithLayout
             return LogEventLevel.Warning;
         }
 
-        if (logEventLevel == LogLevel.Error)
-        {
-            return LogEventLevel.Error;
-        }
-
-        return LogEventLevel.Fatal;
+        return logEventLevel == LogLevel.Error ? LogEventLevel.Error : LogEventLevel.Fatal;
     }
 
-    private static string DumpException(Exception e)
+    private static string DumpException(Exception ex)
     {
         StringBuilder sb = new();
-        while (e != null)
+        while (ex != null)
         {
-            sb.AppendLine(e.Message);
-            sb.AppendLine(e.StackTrace);
-            e = e.InnerException;
+            sb.AppendLine(ex.Message);
+            sb.AppendLine(ex.StackTrace);
+            ex = ex.InnerException;
         }
 
         return sb.ToString();
