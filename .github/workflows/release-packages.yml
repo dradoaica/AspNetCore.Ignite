@@ -1,0 +1,56 @@
+name: Release Packages
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  PACK_PROJECT: src/AspNetCore.Ignite/AspNetCore.Ignite.csproj
+
+jobs:
+  release:
+    permissions:
+      contents: read # to checkout codebase
+      packages: write # to push NuGet packages to GitHub Packages
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+          source-url: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore Dependencies
+        run: dotnet restore "${{ env.PACK_PROJECT }}"
+
+      - name: Pack NuGet Packages
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/package/release
+          out="${GITHUB_WORKSPACE}/artifacts/package/release"
+          dotnet pack "${{ env.PACK_PROJECT }}" -c Release -o "$out" --no-restore
+
+      - name: Push to GitHub Packages
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          owner="${{ github.repository_owner }}"
+          for f in artifacts/package/release/AspNetCore.Ignite.*.nupkg; do
+            dotnet nuget push "$f" \
+              --api-key "${{ secrets.GITHUB_TOKEN }}" \
+              --source "https://nuget.pkg.github.com/${owner}/index.json" \
+              --skip-duplicate
+          done
