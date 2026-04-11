@@ -1,9 +1,9 @@
-﻿namespace AspNetCore.IgniteServer.Utils;
-
-using System;
+﻿using System;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+
+namespace AspNetCore.IgniteServer.Utils;
 
 internal static class DnsUtils
 {
