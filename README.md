@@ -65,15 +65,15 @@ memory calculation: ON_HEAP_MEMORY (JVM Heap max size)
 
 ## Build aspnetcore.ignite-server
 
-docker build -t dradoaica/aspnetcore.ignite-server:2.17.0 -f Dockerfile .
+docker build -t dradoaica/aspnetcore.ignite-server:2.18.0 -f Dockerfile .
 
 ## Push aspnetcore.ignite-server
 
-docker push dradoaica/aspnetcore.ignite-server:2.17.0
+docker push dradoaica/aspnetcore.ignite-server:2.18.0
 
 ## Run aspnetcore.ignite-server container
 
-docker run -p 0.0.0.0:10800:10800/tcp --name aspnetcore.ignite-server -d dradoaica/aspnetcore.ignite-server:2.17.0
+docker run -p 0.0.0.0:10800:10800/tcp --name aspnetcore.ignite-server -d dradoaica/aspnetcore.ignite-server:2.18.0
 
 ## Remove aspnetcore.ignite-server container
 
@@ -81,7 +81,7 @@ docker rm -f aspnetcore.ignite-server
 
 ## Remove aspnetcore.ignite-server image
 
-docker rmi dradoaica/aspnetcore.ignite-server:2.17.0
+docker rmi dradoaica/aspnetcore.ignite-server:2.18.0
 
 ## Helm Chart
 

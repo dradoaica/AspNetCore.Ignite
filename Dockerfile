@@ -37,7 +37,7 @@ ENV DOTNET_ROOT=/usr/local/dotnet
 ENV PATH=$PATH:$DOTNET_ROOT:$DOTNET_ROOT/tools
 
 # Install IGNITE
-ARG IGNITE_VERSION=2.17.0
+ARG IGNITE_VERSION=2.18.0
 
 # Ignite home
 ARG IGNITE_HOME=/opt/ignite/apache-ignite-${IGNITE_VERSION}-bin
