@@ -1,54 +1,92 @@
 # Contributing to AspNetCore.Ignite
 
-Thank you for your interest in contributing to AspNetCore.Ignite! We're excited to collaborate with you and see
-how together we can improve and evolve this application.
+Thank you for your interest in contributing to AspNetCore.Ignite! Contributions of all sizes are welcome — bug reports,
+documentation fixes, new features and version upgrades.
 
-## Getting Started
+## Repository Layout
 
-If this is your first visit, a great way to begin is by tackling issues tagged as `"help wanted"` or
-`"good first issue"`. These are specially curated to help you get acquainted with the project and make a meaningful
-impact early on.
+| Path                          | Description                                                                                          |
+|-------------------------------|------------------------------------------------------------------------------------------------------|
+| `src/AspNetCore.Ignite`       | `netstandard2.1` library published as a NuGet package (cache factory, DI extensions, Ignite helpers) |
+| `src/AspNetCore.IgniteServer` | `net10.0` host running Apache Ignite in embedded mode (CLI options, Spring XML configs, Java libs)   |
+| `src/AspNetCore.Ignite.Tests` | MSTest tests                                                                                         |
+| `cmd`                         | Helper scripts (running a local node, generating SSL key stores)                                     |
+| `Dockerfile`                  | Server image (Eclipse Temurin 17 JRE + .NET runtime + Apache Ignite binaries)                        |
+| `.github/workflows`           | Release pipelines for the NuGet package and the Docker image                                         |
 
-## Spot a Typo?
+## Prerequisites
 
-Typos and other small fixes are important to us -— no contribution is too small! If you spot something small, go ahead
-and open a Pull Request. For these types of contributions, there's no need to create a separate issue.
+- [.NET SDK 10](https://dotnet.microsoft.com/download) (see `global.json`)
+- Java 17 JDK/JRE with `JAVA_HOME` set — Apache Ignite runs on the JVM, even when hosted from .NET
+- Docker (optional, for building and testing the server image)
 
-## Have a Suggestion?
+## Building and Testing
 
-If you have a suggestion on how to enhance AspNetCore.Ignite, please open an issue with the following details:
+```bash
+dotnet build AspNetCore.Ignite.slnx
+```
 
-- A clear title and description of the suggestion
-- Any relevant examples or mockups
-- Indicate whether you're interested in implementing the feature yourself
+The tests connect to a real node through the thin client on `127.0.0.1:10800`, so start a local server first:
 
-We'll review your suggestion and have a discussion about its potential inclusion in the project.
+```bash
+cd src/AspNetCore.IgniteServer/bin/Debug/net10.0
+dotnet AspNetCore.IgniteServer.dll -OnHeap 1024 -OffHeap 2048 -Cluster "127.0.0.1:47500"
+```
 
-## Contribution Principles
+or run the Docker image (see the [README](README.md)), then:
 
-When considering contributions, we're guided by several principles that align with the project's vision:
+```bash
+dotnet test AspNetCore.Ignite.slnx
+```
 
-- **Best Practices**: We want this application to be canonical and reflect the best practices in the industry and in
-  .NET and Angular.
+If your change touches the server, also verify that the Docker image still builds and starts:
 
-- **Selectivity in Tools and Libraries**: There is a rich ecosystem of tools, projects, and libraries out there, and we
-  cannot use all of them in this sample. We would like this repo to reflect the use of a realistic set of technologies,
-  not to be a showcase or example of every possible thing it could use.
+```bash
+docker build -t aspnetcore.ignite-server:dev -f Dockerfile .
+docker run --rm -p 10800:10800 aspnetcore.ignite-server:dev
+```
 
-- **Architectural Integrity**: We welcome refactoring and architectural improvements, provided they're justified.
-  Large-scale changes should come with a clear rationale, such as significant enhancements to the application's design
-  or performance.
+## Reporting Bugs and Suggesting Features
 
-- **Enhancing Reliability and Scalability**: We welcome contributions that improve the application's reliability and
-  scalability. These could include updates to error handling, redundancy mechanisms, data access, and any other changes
-  that help AspNetCore.Ignite operate more robustly under load. We'd love to see relevant test scenarios or
-  metrics for these contributions.
+Open an [issue](https://github.com/dradoaica/AspNetCore.Ignite/issues) and include:
 
-- **Performance Enhancements**: If you're looking to speed up AspNetCore.Ignite, we're all for it! Please include
-  benchmark comparisons to demonstrate the improvements. Performance improvements that make the code less readable or
-  canonical may have more scrutiny applied.
+- The version of AspNetCore.Ignite (and therefore Apache Ignite) you are using
+- How the server is run (locally, Docker, Kubernetes / Helm chart) and relevant configuration (`appsettings.json`
+  /environment variables, config file used, persistence, SSL, authentication)
+- Steps to reproduce, expected vs. actual behavior, and relevant logs
+
+For feature suggestions, describe the use case and say whether you'd like to implement it yourself. For larger changes,
+please open an issue to discuss the approach before starting work.
+
+**Security vulnerabilities must not be reported in public issues** — follow the [Security Policy](SECURITY.md) instead.
+
+## Pull Requests
+
+1. Fork the repository and create a branch from `main`.
+2. Keep each PR focused on a single change. Small fixes (typos, docs) don't need an issue first.
+3. Follow the existing code style; it is defined in `.editorconfig`. Run `dotnet format` before committing.
+4. Add or update tests where it makes sense, and make sure the solution builds without new warnings.
+5. Update `README.md` if you change CLI options, configuration keys, ports or Docker usage.
+6. Never commit real certificates, key stores, passwords or other secrets.
+
+## Contribution Guidelines
+
+- **Upgrading Apache Ignite.** The project version follows the Apache Ignite version. An upgrade must keep these in
+  sync:
+    - the `Apache.Ignite*` package references and `<Version>` in the `.csproj` files
+    - `IGNITE_VERSION` in the `Dockerfile`
+    - the Ignite jars in `src/AspNetCore.IgniteServer/libs` (and their dependencies)
+    - the version numbers in `README.md`
+- **Java dependencies.** Jars in `src/AspNetCore.IgniteServer/libs` should come from the matching Apache Ignite
+  distribution (`libs/optional`) or Maven Central. Mention their source and version in the PR.
+- **Library compatibility.** `AspNetCore.Ignite` targets `netstandard2.1`; don't raise the target framework or add
+  heavy dependencies without discussing it first.
+- **Configuration.** New server settings should be configurable through `appsettings.json` and environment variables (so
+  they work in Docker and Kubernetes), with safe, backward-compatible defaults.
+- **Reliability and performance.** Changes to clustering, discovery, persistence or memory settings should explain the
+  rationale and, where possible, include test scenarios, benchmarks or metrics.
 
 ## Code of Conduct
 
-To ensure a welcoming and positive environment for everyone, please adhere to our Code of Conduct. Respectful
-collaboration is key to a successful project.
+This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected
+to uphold it.
