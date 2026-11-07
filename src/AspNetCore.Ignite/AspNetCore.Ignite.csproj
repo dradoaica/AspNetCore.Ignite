@@ -13,6 +13,8 @@
         <RepositoryUrl>https://github.com/dradoaica/AspNetCore.Ignite.git</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <PackageReadmeFile>README.md</PackageReadmeFile>
+        <!-- breaking changes of the version are in docs/upgrading.md -->
+        <PackageReleaseNotes>Upgrading (breaking changes): https://github.com/dradoaica/AspNetCore.Ignite/blob/main/docs/upgrading.md</PackageReleaseNotes>
         <!-- SourceLink is built into the .NET SDK; ship symbols and embed untracked sources for debugging -->
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>

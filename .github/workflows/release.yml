@@ -209,6 +209,11 @@ jobs:
           set -euo pipefail
           chart=charts/aspnetcore-ignite-server/Chart.yaml
           branch="aspnetcore-ignite-server-${VERSION}"
+          # the chart may already be released for this image (e.g., the release branches of both repositories)
+          if grep -q -E "^appVersion: \"?${VERSION}\"?$" "$chart"; then
+            echo "::notice::The chart already has appVersion ${VERSION}: no pull request."
+            exit 0
+          fi
           # appVersion follows the image; the chart version gets a patch bump
           sed -i -E "s/^appVersion: .*/appVersion: \"${VERSION}\"/" "$chart"
           current="$(sed -n -E 's/^version: (.*)/\1/p' "$chart")"

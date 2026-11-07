@@ -11,6 +11,9 @@ a StatefulSet. A deployment should:
   `terminationGracePeriodSeconds` (e.g., 300); together with `READY_WHEN_REBALANCED`, a rolling restart moves on only
   once the restarted node holds its data again,
 * add a PodDisruptionBudget (`maxUnavailable: 1`) so that drains evict one node at a time,
+* give `helm upgrade --wait` a `--timeout` above its 5 minute default: a rolling restart waits for each node to
+  rebalance, up to `REBALANCE_READINESS_MAX_WAIT_IN_SECONDS` per node (e.g., `--timeout 60m` for 5 nodes and the
+  default 10 minutes; less with little data),
 * give each pod a unique, stable `DEFAULT_CONSISTENT_ID` (e.g., the pod name) and, with persistence, a volume at
   `/app/work`,
 * set `ACTIVATION_MIN_SERVER_NODES` to the initial number of replicas (persistence); until they joined, no pod is

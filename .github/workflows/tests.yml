@@ -11,17 +11,15 @@ on:
   workflow_call:
     inputs:
       helm-charts-ref:
-        description: Branch, tag or commit of dradoaica/helm-charts whose aspnetcore-ignite-server chart is tested
+        description: Branch, tag or commit of dradoaica/helm-charts whose aspnetcore-ignite-server chart is tested (default the branch of the same name if it exists, otherwise main)
         type: string
-        # the chart branch released together with this one (main once both are merged)
-        default: release/2.19.0
+        default: ""
   workflow_dispatch:
     inputs:
       helm-charts-ref:
-        description: Branch, tag or commit of dradoaica/helm-charts whose aspnetcore-ignite-server chart is tested
+        description: Branch, tag or commit of dradoaica/helm-charts whose aspnetcore-ignite-server chart is tested (default the branch of the same name if it exists, otherwise main)
         type: string
-        # the chart branch released together with this one (main once both are merged)
-        default: release/2.19.0
+        default: ""
       upgrade-test:
         description: Also test the upgrade from chart 2.18.2 (image 2.18.0) with its data
         type: boolean
@@ -138,11 +136,29 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v6
 
+      # the chart branch released together with this branch: the same name in dradoaica/helm-charts if it exists
+      - name: Resolve Helm Chart Ref
+        id: chart-ref
+        env:
+          INPUT_REF: ${{ inputs.helm-charts-ref }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_REF}" ]; then
+            ref="${INPUT_REF}"
+          elif git ls-remote --exit-code --heads https://github.com/dradoaica/helm-charts.git "${BRANCH}" > /dev/null; then
+            ref="${BRANCH}"
+          else
+            ref=main
+          fi
+          echo "Testing the chart of dradoaica/helm-charts@${ref}"
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout Helm Chart
         uses: actions/checkout@v6
         with:
           repository: dradoaica/helm-charts
-          ref: ${{ inputs.helm-charts-ref || 'release/2.19.0' }}
+          ref: ${{ steps.chart-ref.outputs.ref }}
           path: helm-charts
 
       - name: Load Image
@@ -206,11 +222,29 @@ jobs:
           ref: aspnetcore-ignite-server-2.18.2
           path: helm-charts-old
 
+      # the chart branch released together with this branch: the same name in dradoaica/helm-charts if it exists
+      - name: Resolve Helm Chart Ref
+        id: chart-ref
+        env:
+          INPUT_REF: ${{ inputs.helm-charts-ref }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_REF}" ]; then
+            ref="${INPUT_REF}"
+          elif git ls-remote --exit-code --heads https://github.com/dradoaica/helm-charts.git "${BRANCH}" > /dev/null; then
+            ref="${BRANCH}"
+          else
+            ref=main
+          fi
+          echo "Testing the chart of dradoaica/helm-charts@${ref}"
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout Helm Chart
         uses: actions/checkout@v6
         with:
           repository: dradoaica/helm-charts
-          ref: ${{ inputs.helm-charts-ref || 'release/2.19.0' }}
+          ref: ${{ steps.chart-ref.outputs.ref }}
           path: helm-charts
 
       - name: Load Image

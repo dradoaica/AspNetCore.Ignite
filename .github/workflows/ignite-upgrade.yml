@@ -1,0 +1,39 @@
+name: Ignite Upgrade
+
+# Dependabot bumps Apache.Ignite (IgniteVersion in Directory.Packages.props), but the hashes of the Java modules
+# (JavaLibs.props) must follow, or the build fails: this workflow updates them on Dependabot's branch.
+# A push with GITHUB_TOKEN does not start new workflow runs: re-run the Tests workflow of the pull request, or set a
+# DEPENDABOT_PUSH_TOKEN secret (a token with contents:write, as a Dependabot secret) whose pushes do start them.
+on:
+  pull_request:
+    paths:
+      - Directory.Packages.props
+
+permissions:
+  contents: write # to push the updated hashes to the pull request branch
+
+jobs:
+  java-libs:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.DEPENDABOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Update Java Module Hashes
+        run: ./scripts/update-java-libs.sh
+
+      - name: Push
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- src/AspNetCore.IgniteServer/JavaLibs.props; then
+            echo "The hashes are up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Update the Java module hashes for $(sed -n -E 's/.*<IgniteVersion>(.*)<\/IgniteVersion>.*/\1/p' Directory.Packages.props)"
+          git push
