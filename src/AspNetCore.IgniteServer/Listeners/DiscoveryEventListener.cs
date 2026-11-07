@@ -1,28 +1,28 @@
 using Apache.Ignite.Core.Events;
 using Serilog.Core;
+using Serilog.Events;
 
 namespace AspNetCore.IgniteServer.Listeners;
 
 internal sealed class DiscoveryEventListener(Logger? logger) : IEventListener<DiscoveryEvent>
 {
+    private const string MessageTemplate =
+        "Name: {Name}; EventNodeAddresses: {EventNodeAddresses}; EventNodeHostNames: {EventNodeHostNames}";
+
     public bool Invoke(DiscoveryEvent evt)
     {
-        if (evt.Type == EventType.NodeJoined)
+        LogEventLevel? level = evt.Type == EventType.NodeJoined ? LogEventLevel.Information
+            : evt.Type == EventType.NodeLeft ? LogEventLevel.Warning
+            : evt.Type == EventType.NodeFailed ? LogEventLevel.Error
+            : null;
+        if (level.HasValue)
         {
-            logger?.Information(
-                $"Name: {evt.Name}; EventNodeAddresses: {string.Join(",", evt.EventNode.Addresses)}; EventNodeHostNames: {string.Join(",", evt.EventNode.HostNames)}"
-            );
-        }
-        else if (evt.Type == EventType.NodeLeft)
-        {
-            logger?.Warning(
-                $"Name: {evt.Name}; EventNodeAddresses: {string.Join(",", evt.EventNode.Addresses)}; EventNodeHostNames: {string.Join(",", evt.EventNode.HostNames)}"
-            );
-        }
-        else if (evt.Type == EventType.NodeFailed)
-        {
-            logger?.Error(
-                $"Name: {evt.Name}; EventNodeAddresses: {string.Join(",", evt.EventNode.Addresses)}; EventNodeHostNames: {string.Join(",", evt.EventNode.HostNames)}"
+            logger?.Write(
+                level.Value,
+                MessageTemplate,
+                evt.Name,
+                string.Join(",", evt.EventNode.Addresses),
+                string.Join(",", evt.EventNode.HostNames)
             );
         }
 

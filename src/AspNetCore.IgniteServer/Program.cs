@@ -1,6 +1,5 @@
 using AspNetCore.IgniteServer;
 using AspNetCore.IgniteServer.Utils;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.CommandLineUtils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
@@ -13,7 +12,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using SerilogLogger = Serilog.Core.Logger;
@@ -36,7 +34,7 @@ CommandLineApplication commandLineApplication = new()
 commandLineApplication.HelpOption("-?|-Help");
 var configFileArgument = commandLineApplication.Option(
     "-ConfigFile",
-    "XML configuration file. If not file is specified then default configuration is used.",
+    "XML configuration file. If no file is specified then the default configuration is used.",
     CommandOptionType.SingleValue
 );
 var offHeapArgument = commandLineApplication.Option(
@@ -71,108 +69,101 @@ var persistenceEnabled = commandLineApplication.Option(
 );
 commandLineApplication.OnExecute(async () =>
     {
-        if (!int.TryParse(configuration["DEFAULT_ON_HEAP_MEMORY"], out var defaultOnHeapMemory))
-        {
-            defaultOnHeapMemory = 1024;
-        }
-
-        if (!int.TryParse(configuration["DEFAULT_OFF_HEAP_MEMORY"], out var defaultOffHeapMemory))
-        {
-            defaultOffHeapMemory = 2048;
-        }
-
-        var useTcpDiscoveryStaticIpFinder = "true".Equals(
-            configuration["USE_TCP_DISCOVERY_STATIC_IP_FINDER"],
-            StringComparison.OrdinalIgnoreCase
-        );
+        var defaultOnHeapMemory = GetInt(configuration, "DEFAULT_ON_HEAP_MEMORY", 1024);
+        var defaultOffHeapMemory = GetInt(configuration, "DEFAULT_OFF_HEAP_MEMORY", 2048);
+        var useTcpDiscoveryStaticIpFinder = GetBool(configuration, "USE_TCP_DISCOVERY_STATIC_IP_FINDER");
         var defaultConsistentId = configuration["DEFAULT_CONSISTENT_ID"];
-        var enableAuthentication = "true".Equals(
-            configuration["ENABLE_AUTHENTICATION"],
-            StringComparison.OrdinalIgnoreCase
-        );
-        var k8sNamespace = configuration["K8S_NAMESPACE"];
-        var k8sServiceName = configuration["K8S_SERVICE_NAME"];
+        var enableAuthentication = GetBool(configuration, "ENABLE_AUTHENTICATION");
         var igniteUserPassword = configuration["IGNITE_USER_PASSWORD"];
-        var useSsl = "true".Equals(configuration["USE_SSL"], StringComparison.OrdinalIgnoreCase);
+        var useSsl = GetBool(configuration, "USE_SSL");
         var sslKeyStoreFilePath = configuration["SSL_KEY_STORE_FILE_PATH"];
         var sslKeyStorePassword = configuration["SSL_KEY_STORE_PASSWORD"];
         var sslTrustStoreFilePath = configuration["SSL_TRUST_STORE_FILE_PATH"];
         var sslTrustStorePassword = configuration["SSL_TRUST_STORE_PASSWORD"];
-        var useClientSsl = "true".Equals(configuration["USE_CLIENT_SSL"], StringComparison.OrdinalIgnoreCase);
+        var useClientSsl = GetBool(configuration, "USE_CLIENT_SSL");
         var sslClientCertificatePath = configuration["SSL_CLIENT_CERTIFICATE_PATH"];
         var sslClientCertificatePassword = configuration["SSL_CLIENT_CERTIFICATE_PASSWORD"];
-        var springConfigPath = Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory,
-            "config",
-            useClientSsl ? "spring-config-client-with-ssl.xml" : "spring-config.xml"
-        );
-        var metricsExpireTime = TimeSpan.FromHours(24);
-        if (int.TryParse(configuration["METRICS_EXPIRE_TIME_IN_HOURS"], out var metricsExpireTimeInHours))
+        var metricsExpireTime = TimeSpan.FromHours(GetInt(configuration, "METRICS_EXPIRE_TIME_IN_HOURS", 24));
+        var metricsLogFrequency =
+            TimeSpan.FromMinutes(GetInt(configuration, "METRICS_LOG_FREQUENCY_IN_MINUTES", 5));
+        var metricsUpdateFrequency =
+            TimeSpan.FromSeconds(GetInt(configuration, "METRICS_UPDATE_FREQUENCY_IN_SECONDS", 60));
+        var enableOffHeapMetrics = GetBool(configuration, "ENABLE_OFF_HEAP_METRICS");
+        var activationMinServerNodes = Math.Max(1, GetInt(configuration, "ACTIVATION_MIN_SERVER_NODES", 1));
+        var autoResetLostPartitions = GetBool(configuration, "AUTO_RESET_LOST_PARTITIONS", true);
+        if (useSsl)
         {
-            metricsExpireTime = TimeSpan.FromHours(metricsExpireTimeInHours);
+            RequireSetting("SSL_KEY_STORE_FILE_PATH", sslKeyStoreFilePath);
+            RequireSetting("SSL_TRUST_STORE_FILE_PATH", sslTrustStoreFilePath);
         }
 
-        var metricsLogFrequency = TimeSpan.FromMinutes(5);
-        if (int.TryParse(configuration["METRICS_LOG_FREQUENCY_IN_MINUTES"], out var metricsLogFrequencyInMinutes))
-        {
-            metricsLogFrequency = TimeSpan.FromMinutes(metricsLogFrequencyInMinutes);
-        }
-
-        var metricsUpdateFrequency = TimeSpan.FromSeconds(60);
-        if (int.TryParse(configuration["METRICS_UPDATE_FREQUENCY_IN_SECONDS"], out var metricsUpdateFrequencyInSeconds))
-        {
-            metricsUpdateFrequency = TimeSpan.FromSeconds(metricsUpdateFrequencyInSeconds);
-        }
-
-        var enableOffHeapMetrics = "true".Equals(
-            configuration["ENABLE_OFF_HEAP_METRICS"],
-            StringComparison.OrdinalIgnoreCase
-        );
-        var springConfigText = await File.ReadAllTextAsync(springConfigPath, Encoding.UTF8).ConfigureAwait(false);
-        springConfigText = springConfigText?.Replace("K8S_NAMESPACE", k8sNamespace)
-            ?.Replace("K8S_SERVICE_NAME", k8sServiceName);
         if (useClientSsl)
         {
-            springConfigText = springConfigText?.Replace("SSL_KEY_STORE_FILE_PATH", sslKeyStoreFilePath)
-                ?.Replace("SSL_KEY_STORE_PASSWORD", sslKeyStorePassword)
-                ?.Replace("SSL_TRUST_STORE_FILE_PATH", sslTrustStoreFilePath)
-                ?.Replace("SSL_TRUST_STORE_PASSWORD", sslTrustStorePassword);
+            RequireSetting("SSL_KEY_STORE_FILE_PATH", sslKeyStoreFilePath);
+            RequireSetting("SSL_TRUST_STORE_FILE_PATH", sslTrustStoreFilePath);
+            RequireSetting("SSL_CLIENT_CERTIFICATE_PATH", sslClientCertificatePath);
         }
 
-        springConfigText = springConfigText?.Replace(
-            "OPEN_CENSUS_METRIC_EXPORTER_SPI_PERIOD",
-            metricsUpdateFrequency.TotalMilliseconds.ToString(CultureInfo.InvariantCulture)
-        );
-        await File.WriteAllTextAsync(springConfigPath, springConfigText, Encoding.UTF8).ConfigureAwait(false);
-        var configFile = configFileArgument.HasValue() ? configFileArgument.Value() : null;
+        if (enableAuthentication && string.IsNullOrWhiteSpace(igniteUserPassword))
+        {
+            Logger?.Warning(
+                "Authentication is enabled but IGNITE_USER_PASSWORD is not set: the default 'ignite' user keeps its well-known password."
+            );
+        }
+
+        var springConfigPath = await SpringConfigRenderer.RenderToFileAsync(
+                Path.Combine(
+                    AppContext.BaseDirectory,
+                    "config",
+                    useClientSsl ? "spring-config-client-with-ssl.xml" : "spring-config.xml"
+                ),
+                new Dictionary<string, string?>
+                {
+                    ["K8S_NAMESPACE"] = configuration["K8S_NAMESPACE"],
+                    ["K8S_SERVICE_NAME"] = configuration["K8S_SERVICE_NAME"],
+                    ["SSL_KEY_STORE_FILE_PATH"] = sslKeyStoreFilePath,
+                    ["SSL_KEY_STORE_PASSWORD"] = sslKeyStorePassword,
+                    ["SSL_TRUST_STORE_FILE_PATH"] = sslTrustStoreFilePath,
+                    ["SSL_TRUST_STORE_PASSWORD"] = sslTrustStorePassword,
+                    ["OPEN_CENSUS_METRIC_EXPORTER_SPI_PERIOD"] =
+                        metricsUpdateFrequency.TotalMilliseconds.ToString(CultureInfo.InvariantCulture),
+                }
+            )
+            .ConfigureAwait(false);
         igniteServerRunner = new IgniteServerRunner(
-            metricsExpireTime,
-            metricsLogFrequency,
-            metricsUpdateFrequency,
-            enableOffHeapMetrics,
-            enableAuthentication,
-            igniteUserPassword,
-            configFile,
-            useSsl,
-            sslKeyStoreFilePath,
-            sslKeyStorePassword,
-            sslTrustStoreFilePath,
-            sslTrustStorePassword,
-            useClientSsl,
-            sslClientCertificatePath,
-            sslClientCertificatePassword
+            new IgniteServerRunnerOptions
+            {
+                MetricsExpireTime = metricsExpireTime,
+                MetricsLogFrequency = metricsLogFrequency,
+                MetricsUpdateFrequency = metricsUpdateFrequency,
+                EnableOffHeapMetrics = enableOffHeapMetrics,
+                AuthenticationEnabled = enableAuthentication,
+                IgniteUserPassword = igniteUserPassword,
+                ConfigurationFile = configFileArgument.HasValue() ? configFileArgument.Value() : null,
+                SpringConfigPath = springConfigPath,
+                ActivationMinServerNodes = activationMinServerNodes,
+                AutoResetLostPartitions = autoResetLostPartitions,
+                UseSsl = useSsl,
+                SslKeyStoreFilePath = sslKeyStoreFilePath,
+                SslKeyStorePassword = sslKeyStorePassword,
+                SslTrustStoreFilePath = sslTrustStoreFilePath,
+                SslTrustStorePassword = sslTrustStorePassword,
+                UseClientSsl = useClientSsl,
+                SslClientCertificatePath = sslClientCertificatePath,
+                SslClientCertificatePassword = sslClientCertificatePassword,
+            }
         );
         igniteServerRunner.SetOffHeapMemoryLimit(
-            offHeapArgument.HasValue() ? int.Parse(offHeapArgument.Value(), CultureInfo.InvariantCulture)
+            offHeapArgument.HasValue() ? int.Parse(offHeapArgument.Value()!, CultureInfo.InvariantCulture)
                 : defaultOffHeapMemory
         );
         igniteServerRunner.SetOnHeapMemoryLimit(
-            onHeapArgument.HasValue() ? int.Parse(onHeapArgument.Value(), CultureInfo.InvariantCulture)
+            onHeapArgument.HasValue() ? int.Parse(onHeapArgument.Value()!, CultureInfo.InvariantCulture)
                 : defaultOnHeapMemory
         );
         if (serverPortArgument.HasValue())
         {
-            igniteServerRunner.SetServerPort(int.Parse(serverPortArgument.Value(), CultureInfo.InvariantCulture));
+            igniteServerRunner.SetServerPort(int.Parse(serverPortArgument.Value()!, CultureInfo.InvariantCulture));
         }
 
         if (clusterEndpointArgument.HasValue())
@@ -186,7 +177,7 @@ commandLineApplication.OnExecute(async () =>
 
         if (consistentIdArgument.HasValue())
         {
-            igniteServerRunner.SetConsistentId(consistentIdArgument.Value());
+            igniteServerRunner.SetConsistentId(consistentIdArgument.Value()!);
         }
         else if (!string.IsNullOrWhiteSpace(defaultConsistentId))
         {
@@ -198,35 +189,21 @@ commandLineApplication.OnExecute(async () =>
             igniteServerRunner.SetPersistence(true);
         }
 
-        IDisposable sslKeyStoreFsw = null;
-        IDisposable sslTrustStoreFsw = null;
-        if (useSsl)
+        List<IDisposable> fileWatchers = [];
+        if (useSsl || useClientSsl)
         {
-            sslKeyStoreFsw = WatchFile(
-                Path.GetFileName(sslKeyStoreFilePath),
-                Path.GetDirectoryName(Path.GetFullPath(sslKeyStoreFilePath)),
-                _ => OnSslFileCreatedOrChanged()
-            );
-            sslTrustStoreFsw = WatchFile(
-                Path.GetFileName(sslTrustStoreFilePath),
-                Path.GetDirectoryName(Path.GetFullPath(sslTrustStoreFilePath)),
-                _ => OnSslFileCreatedOrChanged()
-            );
+            fileWatchers.Add(WatchFile(sslKeyStoreFilePath!, OnSslFileCreatedOrChanged));
+            fileWatchers.Add(WatchFile(sslTrustStoreFilePath!, OnSslFileCreatedOrChanged));
         }
 
-        IDisposable sslClientCertificateFsw = null;
         if (useClientSsl)
         {
-            sslClientCertificateFsw = WatchFile(
-                Path.GetFileName(sslClientCertificatePath),
-                Path.GetDirectoryName(Path.GetFullPath(sslClientCertificatePath)),
-                _ => OnSslFileCreatedOrChanged()
-            );
+            fileWatchers.Add(WatchFile(sslClientCertificatePath!, OnSslFileCreatedOrChanged));
         }
 
         try
         {
-            while (shouldStart)
+            while (shouldStart && !shuttingDown)
             {
                 shouldStart = false;
                 await igniteServerRunner.Run().ConfigureAwait(false);
@@ -234,16 +211,7 @@ commandLineApplication.OnExecute(async () =>
         }
         finally
         {
-            if (useSsl)
-            {
-                sslKeyStoreFsw?.Dispose();
-                sslTrustStoreFsw?.Dispose();
-            }
-
-            if (useClientSsl)
-            {
-                sslClientCertificateFsw?.Dispose();
-            }
+            fileWatchers.ForEach(fileWatcher => fileWatcher.Dispose());
         }
 
         return 0;
@@ -260,9 +228,10 @@ catch (CommandParsingException ex)
     commandLineApplication.Error.WriteLine($"ERROR: {ex.Message}");
     commandLineApplication.ShowHelp();
 }
-catch (ArgumentException ex)
+catch (Exception ex) when (ex.GetBaseException() is ArgumentException argumentException)
 {
-    commandLineApplication.Error.WriteLine($"ERROR: {ex.Message}");
+    // OnExecute is async, so its exceptions arrive wrapped in an AggregateException
+    commandLineApplication.Error.WriteLine($"ERROR: {argumentException.Message}");
     commandLineApplication.ShowHelp();
 }
 finally
@@ -309,12 +278,14 @@ static void ConfigureGracefulShutdown()
 
 static void CurrentDomainProcessExit(object? sender, EventArgs e)
 {
+    shuttingDown = true;
+    shouldStart = false;
     Logger?.Information("Stopping Ignite server...");
     igniteServerRunner?.Stop();
     Logger?.Information("Ignite server stopped.");
 }
 
-static void CurrentDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
+static void CurrentDomainUnhandledException(object? sender, UnhandledExceptionEventArgs e)
 {
     if (e.ExceptionObject is Exception ex)
     {
@@ -329,67 +300,85 @@ static void CurrentDomainUnhandledException(object sender, UnhandledExceptionEve
             msg += " ErrorCode: " + exCode.ToString("X16", CultureInfo.InvariantCulture);
         }
 
-        Logger?.Error($"Unhandled External Exception: {msg}");
+        Logger?.Error("Unhandled External Exception: {Message}", msg);
     }
 }
 
-static void TaskSchedulerUnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e)
+static void TaskSchedulerUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
 {
     Logger?.Error(e.Exception, "ERROR: UNOBSERVED TASK EXCEPTION");
     e.SetObserved();
 }
 
-static IDisposable WatchFile(string filter, string path, Action<object> action)
+static int GetInt(IConfiguration configuration, string key, int defaultValue) =>
+    int.TryParse(configuration[key], NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value
+        : defaultValue;
+
+static bool GetBool(IConfiguration configuration, string key, bool defaultValue = false) =>
+    bool.TryParse(configuration[key], out var value) ? value : defaultValue;
+
+static void RequireSetting(string key, string? value)
 {
-    using PhysicalFileProvider physicalFileProvider = new(path);
-    physicalFileProvider.UseActivePolling = true;
-    physicalFileProvider.UsePollingFileWatcher = true;
-    var changeToken = physicalFileProvider.Watch(filter);
-    return changeToken.RegisterChangeCallback(action, null);
+    if (string.IsNullOrWhiteSpace(value))
+    {
+        throw new ArgumentException($"{key} must be set when SSL is enabled.");
+    }
 }
 
-static void OnSslFileCreatedOrChanged()
+/// <summary>Invokes <paramref name="onChange" /> on every change of the file until the returned handle is disposed.</summary>
+static IDisposable WatchFile(string filePath, Action onChange)
 {
-    TaskCompletionSource<bool> taskCompletionSource = new();
-    const int absoluteExpirationRelativeToNowInSeconds = 10;
-    CancellationChangeToken expirationToken = new(
-        new CancellationTokenSource(TimeSpan.FromSeconds(absoluteExpirationRelativeToNowInSeconds + .01)).Token
-    );
-    MemoryCacheEntryOptions memoryCacheEntryOptions = new()
+    var fullPath = Path.GetFullPath(filePath);
+    PhysicalFileProvider physicalFileProvider = new(Path.GetDirectoryName(fullPath)!)
     {
-        AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(absoluteExpirationRelativeToNowInSeconds),
+        UseActivePolling = true,
+        UsePollingFileWatcher = true,
     };
-    memoryCacheEntryOptions.AddExpirationToken(expirationToken);
-    memoryCacheEntryOptions.PostEvictionCallbacks.Add(
-        new PostEvictionCallbackRegistration
-        {
-            EvictionCallback = (k, _, r, __) =>
-            {
-                if (k is nameof(OnSslFileCreatedOrChanged) &&
-                    r is EvictionReason.Expired or EvictionReason.TokenExpired &&
-                    !shouldStart)
-                {
-                    shouldStart = true;
-                    igniteServerRunner?.Terminate();
-                }
-            },
-        }
-    );
-    MemoryCache.Set(nameof(OnSslFileCreatedOrChanged), taskCompletionSource, memoryCacheEntryOptions);
+    var changeRegistration = ChangeToken.OnChange(() => physicalFileProvider.Watch(Path.GetFileName(fullPath)), onChange);
+    return new FileWatcher(physicalFileProvider, changeRegistration);
 }
+
+static void OnSslFileCreatedOrChanged() =>
+    // debounce: certificate rotation usually touches several files, restart once they have settled
+    SslFileChangeDebounceTimer.Change(SslFileChangeDebounceInterval, Timeout.InfiniteTimeSpan);
 
 public static partial class Program
 {
     private static readonly List<string> DefaultClusterEndpoints = [$"{DnsUtils.GetLocalIpAddress()}:47500",];
 
-    private static readonly MemoryCache MemoryCache = new(
-        new MemoryCacheOptions
-        {
-            ExpirationScanFrequency = TimeSpan.FromSeconds(5),
-        }
+    private static readonly TimeSpan SslFileChangeDebounceInterval = TimeSpan.FromSeconds(10);
+
+    private static readonly Timer SslFileChangeDebounceTimer = new(
+        _ => RestartAfterSslFileChange(),
+        null,
+        Timeout.Infinite,
+        Timeout.Infinite
     );
 
     private static volatile bool shouldStart = true;
+    private static volatile bool shuttingDown;
     private static IgniteServerRunner? igniteServerRunner;
     internal static SerilogLogger? Logger { get; private set; }
+
+    private static void RestartAfterSslFileChange()
+    {
+        if (shuttingDown || shouldStart)
+        {
+            return;
+        }
+
+        Logger?.Information("SSL files changed, restarting Ignite server...");
+        shouldStart = true;
+        igniteServerRunner?.Terminate();
+    }
+
+    private sealed class FileWatcher(PhysicalFileProvider physicalFileProvider, IDisposable changeRegistration)
+        : IDisposable
+    {
+        public void Dispose()
+        {
+            changeRegistration.Dispose();
+            physicalFileProvider.Dispose();
+        }
+    }
 }

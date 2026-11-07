@@ -7,7 +7,6 @@ COPY ["src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj", "src/AspNetC
 RUN dotnet restore "src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj"
 COPY . .
 WORKDIR "/src/src/AspNetCore.IgniteServer"
-RUN dotnet build "AspNetCore.IgniteServer.csproj" -c Release -o /app/build
 
 FROM build AS publish
 RUN dotnet publish "AspNetCore.IgniteServer.csproj" -c Release -o /app/publish --no-restore
@@ -15,18 +14,20 @@ RUN dotnet publish "AspNetCore.IgniteServer.csproj" -c Release -o /app/publish -
 # Build runtime image
 FROM eclipse-temurin:17-jre-noble AS runtime
 
+ARG DOTNET_CHANNEL=10.0
+
 RUN apt-get update \
     # Install prerequisites
     && apt-get install -y --no-install-recommends \
-       software-properties-common \
        wget \
        ca-certificates \
+       # .NET globalization support
+       libicu74 \
     \
-    && apt-get update \
-    # Install .NET
+    # Install .NET (pinned to the channel the server targets)
     && wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh \
     && chmod +x dotnet-install.sh \
-    && ./dotnet-install.sh --version latest --runtime dotnet --install-dir /usr/local/dotnet \
+    && ./dotnet-install.sh --channel ${DOTNET_CHANNEL} --runtime dotnet --install-dir /usr/local/dotnet \
     \
     # Cleanup \
     && rm ./dotnet-install.sh \
@@ -36,8 +37,9 @@ RUN apt-get update \
 ENV DOTNET_ROOT=/usr/local/dotnet
 ENV PATH=$PATH:$DOTNET_ROOT:$DOTNET_ROOT/tools
 
-# Install IGNITE
+# Install IGNITE (archive.apache.org keeps every release, dlcdn only the current ones)
 ARG IGNITE_VERSION=2.18.0
+ARG IGNITE_SHA512=f1eba2c899e3aa4a3f50f9db9da1342ce6a0009de8e1fb2c9e751cb84346a764fe2385e2753eac1a90e500ff1a7fd531ea1b0251072ba7b57373b63b829a68bd
 
 # Ignite home
 ARG IGNITE_HOME=/opt/ignite/apache-ignite-${IGNITE_VERSION}-bin
@@ -51,7 +53,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /opt/ignite
 
-RUN curl https://dlcdn.apache.org/ignite/${IGNITE_VERSION}/apache-ignite-${IGNITE_VERSION}-bin.zip -o ignite.zip \
+RUN curl -fsSL https://archive.apache.org/dist/ignite/${IGNITE_VERSION}/apache-ignite-${IGNITE_VERSION}-bin.zip -o ignite.zip \
+    && echo "${IGNITE_SHA512}  ignite.zip" | sha512sum -c - \
     && unzip ignite.zip \
     && rm ignite.zip
 

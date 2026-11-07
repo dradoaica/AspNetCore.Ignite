@@ -3,7 +3,7 @@
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <TargetFramework>net10.0</TargetFramework>
-        <Nullable>annotations</Nullable>
+        <Nullable>enable</Nullable>
         <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
         <DockerfileContext>..\..</DockerfileContext>
@@ -14,12 +14,12 @@
         <PackageReference Include="Apache.Ignite" Version="2.18.0"/>
         <PackageReference Include="Apache.Ignite.Linq" Version="2.18.0"/>
         <PackageReference Include="Apache.Ignite.NLog" Version="2.18.0"/>
-        <PackageReference Include="ConfigureAwait.Fody" Version="3.4.0"/>
+        <PackageReference Include="ConfigureAwait.Fody" Version="3.4.0" PrivateAssets="all"/>
         <PackageReference Include="Fody" Version="6.9.3">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.7"/>
+        <PackageReference Include="Microsoft.Extensions.FileProviders.Physical" Version="10.0.7"/>
         <PackageReference Include="Microsoft.Extensions.CommandLineUtils" Version="1.1.1"/>
         <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.7"/>
         <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.7"/>
@@ -36,14 +36,26 @@
     </ItemGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="AspNetCore.Ignite.Tests"/>
+    </ItemGroup>
+
+    <!-- Sample keystores/certificates (publicly known passwords) are for local development only and never published. -->
+    <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+        <None Update="config\server.jks;config\trust.jks;config\thin-client-cert.pfx">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+    <ItemGroup Condition="'$(Configuration)' != 'Debug'">
+        <None Remove="config\server.jks;config\trust.jks;config\thin-client-cert.pfx"/>
+        <Content Remove="config\server.jks;config\trust.jks;config\thin-client-cert.pfx"/>
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\AspNetCore.Ignite\AspNetCore.Ignite.csproj"/>
     </ItemGroup>
 
     <ItemGroup>
         <None Update="appsettings.json">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
-        <None Update="config\server.jks">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
         <None Update="config\spring-config-client-with-ssl.xml">
@@ -55,16 +67,7 @@
         <None Update="config\default-config.xml">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
-        <None Update="config\AspNetCore.serilog.config.json">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
         <None Update="config\persistent-config.xml">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
-        <None Update="config\thin-client-cert.pfx">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
-        <None Update="config\trust.jks">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
         <None Update="serilog.config.json">

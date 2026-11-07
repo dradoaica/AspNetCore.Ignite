@@ -84,7 +84,7 @@ internal sealed class SerilogTarget : TargetWithLayout
         return logEventLevel == LogLevel.Error ? LogEventLevel.Error : LogEventLevel.Fatal;
     }
 
-    private static string DumpException(Exception ex)
+    private static string DumpException(Exception? ex)
     {
         StringBuilder sb = new();
         while (ex != null)

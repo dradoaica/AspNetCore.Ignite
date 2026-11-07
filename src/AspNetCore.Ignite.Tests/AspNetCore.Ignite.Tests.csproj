@@ -4,6 +4,7 @@
         <TargetFramework>net10.0</TargetFramework>
         <IsPackable>false</IsPackable>
         <LangVersion>default</LangVersion>
+        <Nullable>enable</Nullable>
     </PropertyGroup>
 
     <ItemGroup>
@@ -18,6 +19,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\AspNetCore.Ignite\AspNetCore.Ignite.csproj"/>
+        <ProjectReference Include="..\AspNetCore.IgniteServer\AspNetCore.IgniteServer.csproj"/>
     </ItemGroup>
 
 </Project>

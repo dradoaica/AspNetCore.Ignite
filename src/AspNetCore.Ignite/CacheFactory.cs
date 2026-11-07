@@ -12,31 +12,32 @@ namespace AspNetCore.Ignite;
 
 public static class CacheFactory
 {
+    public const string DefaultEndpoint = "127.0.0.1";
+
     public static IgniteClientConfiguration GetIgniteClientConfiguration(
-        string endpoint = "127.0.0.1",
-        string userName = null,
-        string password = null,
+        string? endpoint = DefaultEndpoint,
+        string? userName = null,
+        string? password = null,
         bool useSsl = false,
-        string certificatePath = null,
-        string certificatePassword = null
+        string? certificatePath = null,
+        string? certificatePassword = null,
+        bool skipServerCertificateValidation = false,
+        bool checkCertificateRevocation = true,
+        ILogger? logger = null
     )
     {
         IgniteClientConfiguration igniteClientConfiguration = new()
         {
             Endpoints =
             [
-                endpoint,
+                string.IsNullOrWhiteSpace(endpoint) ? DefaultEndpoint : endpoint,
             ],
             RetryPolicy = new ClientRetryReadPolicy(),
             RetryLimit = 5,
             SocketTimeout = TimeSpan.FromSeconds(30),
             EnablePartitionAwareness = true,
             EnableHeartbeats = true,
-            // Enable trace logging to observe the discovery process.
-            Logger = new ConsoleLogger
-            {
-                MinLevel = LogLevel.Trace,
-            },
+            Logger = logger,
         };
         if (!string.IsNullOrWhiteSpace(userName))
         {
@@ -54,8 +55,8 @@ public static class CacheFactory
             {
                 CertificatePath = certificatePath,
                 CertificatePassword = certificatePassword,
-                CheckCertificateRevocation = true,
-                SkipServerCertificateValidation = true,
+                CheckCertificateRevocation = checkCertificateRevocation,
+                SkipServerCertificateValidation = skipServerCertificateValidation,
                 SslProtocols = SslProtocols.Tls12,
             };
         }
@@ -65,7 +66,7 @@ public static class CacheFactory
 
     public static IIgnite ConnectAsClient(IgniteConfiguration igniteConfiguration)
     {
-        Ignition.ClientMode = true;
+        igniteConfiguration.ClientMode = true;
 
         return Ignition.Start(igniteConfiguration);
     }
@@ -76,7 +77,7 @@ public static class CacheFactory
     public static ICache<TKey, TData> GetOrCreateCache<TKey, TData>(
         IIgnite ignite,
         string cacheName,
-        Action<CacheConfiguration> extendConfigurationAction = null
+        Action<CacheConfiguration>? extendConfigurationAction = null
     )
     {
         CacheConfiguration cacheCfg = new()
@@ -107,7 +108,7 @@ public static class CacheFactory
     public static ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
         IIgniteClient ignite,
         string cacheName,
-        Action<CacheClientConfiguration> extendConfigurationAction = null
+        Action<CacheClientConfiguration>? extendConfigurationAction = null
     )
     {
         CacheClientConfiguration cacheCfg = new(

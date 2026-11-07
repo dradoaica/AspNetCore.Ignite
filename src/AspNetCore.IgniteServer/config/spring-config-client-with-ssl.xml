@@ -54,7 +54,7 @@
         <property name="metricExporterSpi">
             <list>
                 <bean class="org.apache.ignite.spi.metric.opencensus.OpenCensusMetricExporterSpi">
-                    <property name="period" value="10000"/>
+                    <property name="period" value="OPEN_CENSUS_METRIC_EXPORTER_SPI_PERIOD"/>
                 </bean>
             </list>
         </property>

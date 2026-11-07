@@ -5,7 +5,17 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DEFAULT_CONSISTENT_ID": "00000000-0000-0000-0000-000000000000",
+        "IGNITE_USER_PASSWORD": "ignite",
+        "USE_SSL": "true",
+        "SSL_KEY_STORE_FILE_PATH": "config/server.jks",
+        "SSL_KEY_STORE_PASSWORD": "123456",
+        "SSL_TRUST_STORE_FILE_PATH": "config/trust.jks",
+        "SSL_TRUST_STORE_PASSWORD": "123456",
+        "USE_CLIENT_SSL": "true",
+        "SSL_CLIENT_CERTIFICATE_PATH": "config/thin-client-cert.pfx",
+        "SSL_CLIENT_CERTIFICATE_PASSWORD": "123456"
       }
     }
   }
