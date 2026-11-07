@@ -35,6 +35,12 @@ internal sealed class IgniteServerSettings
     [ConfigurationKeyName("PERSISTENCE_ENABLED")]
     public bool PersistenceEnabled { get; set; }
 
+    [ConfigurationKeyName("PEER_ASSEMBLY_LOADING")]
+    public bool PeerAssemblyLoading { get; set; }
+
+    [ConfigurationKeyName("REST_ENABLED")]
+    public bool RestEnabled { get; set; }
+
     [ConfigurationKeyName("ENABLE_AUTHENTICATION")]
     public bool EnableAuthentication { get; set; }
 
@@ -102,7 +108,16 @@ internal sealed class IgniteServerSettings
     public int MetricsUpdateFrequencyInSeconds { get; set; } = 60;
 
     [ConfigurationKeyName("ENABLE_OFF_HEAP_METRICS")]
-    public bool EnableOffHeapMetrics { get; set; }
+    public bool EnableOffHeapMetrics { get; set; } = true;
+
+    [ConfigurationKeyName("MANAGEMENT_ENABLED")]
+    public bool ManagementEnabled { get; set; } = true;
+
+    [ConfigurationKeyName("MANAGEMENT_PORT")]
+    public int ManagementPort { get; set; } = 9464;
+
+    [ConfigurationKeyName("GRACEFUL_STOP_TIMEOUT_IN_SECONDS")]
+    public int GracefulStopTimeoutInSeconds { get; set; } = 20;
 
     [ConfigurationKeyName("SHUTDOWN_TIMEOUT_IN_SECONDS")]
     public int ShutdownTimeoutInSeconds { get; set; } = 30;
@@ -164,6 +179,18 @@ internal sealed class IgniteServerSettings
             errors.Add("SHUTDOWN_TIMEOUT_IN_SECONDS must be positive.");
         }
 
+        if (GracefulStopTimeoutInSeconds <= 0 || GracefulStopTimeoutInSeconds >= ShutdownTimeoutInSeconds)
+        {
+            errors.Add(
+                "GRACEFUL_STOP_TIMEOUT_IN_SECONDS must be positive and less than SHUTDOWN_TIMEOUT_IN_SECONDS (the host waits for the stop)."
+            );
+        }
+
+        if (ManagementPort is <= 0 or > 65535)
+        {
+            errors.Add("MANAGEMENT_PORT must be a valid port.");
+        }
+
         if (UseSsl || UseClientSsl)
         {
             RequireValue(errors, "SSL_KEY_STORE_FILE_PATH", SslKeyStoreFilePath);
@@ -188,6 +215,7 @@ internal sealed class IgniteServerSettings
         IgniteUserPassword = IgniteUserPassword,
         IgniteUserPreviousPassword = IgniteUserPreviousPassword,
         ConfigurationFile = string.IsNullOrWhiteSpace(ConfigFile) ? null : ConfigFile,
+        PeerAssemblyLoading = PeerAssemblyLoading,
         SpringConfigPath = springConfigPath,
         ActivationMinServerNodes = ActivationMinServerNodes,
         BaselineAutoAdjustTimeout = TimeSpan.FromSeconds(BaselineAutoAdjustTimeoutInSeconds),
@@ -213,11 +241,17 @@ internal sealed class IgniteServerSettings
         ["SSL_KEY_STORE_PASSWORD"] = SslKeyStorePassword,
         ["SSL_TRUST_STORE_FILE_PATH"] = SslTrustStoreFilePath,
         ["SSL_TRUST_STORE_PASSWORD"] = SslTrustStorePassword,
-        ["OPEN_CENSUS_METRIC_EXPORTER_SPI_PERIOD"] =
-            ((long)TimeSpan.FromSeconds(MetricsUpdateFrequencyInSeconds).TotalMilliseconds).ToString(
-                System.Globalization.CultureInfo.InvariantCulture
-            ),
     };
+
+    /// <summary>XML elements inserted verbatim (not escaped) at the placeholders of the Spring configuration templates.</summary>
+    public IReadOnlyDictionary<string, string?> ToSpringConfigXmlPlaceholders() => new Dictionary<string, string?>
+    {
+        // without a connector configuration Ignite starts neither the REST API (Jetty) nor the TCP binary protocol
+        [ConnectorConfigurationPlaceholder] = RestEnabled ? null
+            : "<property name=\"connectorConfiguration\"><null/></property>",
+    };
+
+    internal const string ConnectorConfigurationPlaceholder = "<!-- CONNECTOR_CONFIGURATION -->";
 
     private static void RequireValue(List<string> errors, string key, string? value)
     {

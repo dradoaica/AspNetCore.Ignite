@@ -14,6 +14,9 @@ internal sealed record IgniteServerRunnerOptions
     /// <summary>The password to replace with <see cref="IgniteUserPassword" /> when rotating it on an existing cluster.</summary>
     public string? IgniteUserPreviousPassword { get; init; }
     public string? ConfigurationFile { get; init; }
+
+    /// <summary>Loads .NET assemblies sent by other nodes (and so runs their code): off unless the cluster is trusted.</summary>
+    public bool PeerAssemblyLoading { get; init; }
     public string? SpringConfigPath { get; init; }
 
     /// <summary>Persistent clusters are activated only once this many server nodes have joined.</summary>

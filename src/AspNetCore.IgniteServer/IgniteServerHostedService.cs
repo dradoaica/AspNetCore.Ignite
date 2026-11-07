@@ -13,7 +13,8 @@ namespace AspNetCore.IgniteServer;
 internal sealed class IgniteServerHostedService(
     IgniteServerSettings settings,
     ILogger logger,
-    IHostApplicationLifetime lifetime
+    IHostApplicationLifetime lifetime,
+    IgniteNodeState nodeState
 ) : BackgroundService
 {
     private const int DefaultDiscoveryPort = 47500;
@@ -31,12 +32,13 @@ internal sealed class IgniteServerHostedService(
     {
         // before stopping the node, so that RunAsync does not take the stop for a failure
         stopping = true;
-        runner?.Stop();
+        runner?.Stop(TimeSpan.FromSeconds(settings.GracefulStopTimeoutInSeconds));
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public override void Dispose()
     {
+        nodeState.SetRunner(null);
         runner?.Dispose();
         base.Dispose();
     }
@@ -87,17 +89,33 @@ internal sealed class IgniteServerHostedService(
                 );
             }
 
+            if (!settings.UseSsl)
+            {
+                logger.Warning(
+                    "USE_SSL is disabled: nodes join the cluster unauthenticated and unencrypted, so restrict the discovery and communication ports (47500, 47100) to the cluster's nodes, e.g., with a NetworkPolicy."
+                );
+            }
+
+            if (settings.PeerAssemblyLoading)
+            {
+                logger.Warning(
+                    "PEER_ASSEMBLY_LOADING is enabled: this node loads and runs .NET assemblies sent by any node of the cluster."
+                );
+            }
+
             var springConfigPath = await SpringConfigRenderer.RenderToFileAsync(
                     Path.Combine(
                         AppContext.BaseDirectory,
                         "config",
                         settings.UseClientSsl ? "spring-config-client-with-ssl.xml" : "spring-config.xml"
                     ),
-                    settings.ToSpringConfigPlaceholders()
+                    settings.ToSpringConfigPlaceholders(),
+                    settings.ToSpringConfigXmlPlaceholders()
                 )
                 .ConfigureAwait(false);
             runner = new IgniteServerRunner(settings.ToRunnerOptions(springConfigPath), logger);
             ApplySettings(runner, settings, DnsUtils.GetLocalIpAddress);
+            nodeState.SetRunner(runner);
             using var sslFileWatcher = CreateSslFileWatcher();
             do
             {

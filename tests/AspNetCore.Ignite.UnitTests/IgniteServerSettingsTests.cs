@@ -72,25 +72,70 @@ public sealed class IgniteServerSettingsTests
         Assert.Contains(errors, error => error.StartsWith("SSL_CLIENT_CERTIFICATE_PATH", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public void ToSpringConfigPlaceholders_CoversTheTemplates()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SpringConfigPlaceholders_CoverTheTemplates_AndRestIsOffByDefault(bool restEnabled)
     {
-        var placeholders = Load(new Dictionary<string, string?> { ["METRICS_UPDATE_FREQUENCY_IN_SECONDS"] = "30", })
-            .ToSpringConfigPlaceholders();
+        var settings = Load(new Dictionary<string, string?> { ["REST_ENABLED"] = restEnabled ? "true" : null, });
         var configDirectory = Path.Combine(AppContext.BaseDirectory, "config");
 
-        Assert.Equal("30000", placeholders["OPEN_CENSUS_METRIC_EXPORTER_SPI_PERIOD"]);
         foreach (var template in new[] { "spring-config.xml", "spring-config-client-with-ssl.xml", })
         {
             var rendered = AspNetCore.IgniteServer.Utils.SpringConfigRenderer.Render(
                 File.ReadAllText(Path.Combine(configDirectory, template)),
-                placeholders
+                settings.ToSpringConfigPlaceholders(),
+                settings.ToSpringConfigXmlPlaceholders()
             );
-            foreach (var placeholder in placeholders.Keys)
+            foreach (var placeholder in settings.ToSpringConfigPlaceholders().Keys.Concat(settings.ToSpringConfigXmlPlaceholders().Keys))
             {
                 Assert.DoesNotContain(placeholder, rendered);
             }
+
+            // no connector configuration: neither the REST API nor the TCP binary protocol
+            Assert.Equal(!restEnabled, rendered.Contains("<property name=\"connectorConfiguration\"><null/></property>"));
+            Assert.DoesNotContain("OpenCensus", rendered);
+            System.Xml.Linq.XDocument.Parse(rendered);
         }
+    }
+
+    [Fact]
+    public void Defaults_SecureAndObservable()
+    {
+        var settings = Load([]);
+
+        Assert.False(settings.PeerAssemblyLoading);
+        Assert.False(settings.RestEnabled);
+        Assert.True(settings.ManagementEnabled);
+        Assert.Equal(9464, settings.ManagementPort);
+        Assert.True(settings.EnableOffHeapMetrics);
+        Assert.False(settings.ToRunnerOptions("spring.xml").PeerAssemblyLoading);
+    }
+
+    [Theory]
+    [InlineData("30", "30")]
+    [InlineData("0", "30")]
+    [InlineData("10", "abc")]
+    public void Validate_GracefulStopMustEndBeforeTheShutdownTimeout(string gracefulStopTimeout, string shutdownTimeout)
+    {
+        IgniteServerSettings settings;
+        try
+        {
+            settings = Load(
+                new Dictionary<string, string?>
+                {
+                    ["GRACEFUL_STOP_TIMEOUT_IN_SECONDS"] = gracefulStopTimeout,
+                    ["SHUTDOWN_TIMEOUT_IN_SECONDS"] = shutdownTimeout,
+                }
+            );
+        }
+        catch (InvalidOperationException)
+        {
+            // not a number: the binder rejects it, which also stops the server (exit code 1)
+            return;
+        }
+
+        Assert.Contains(settings.Validate(), error => error.StartsWith("GRACEFUL_STOP_TIMEOUT_IN_SECONDS", StringComparison.Ordinal));
     }
 
     [Fact]

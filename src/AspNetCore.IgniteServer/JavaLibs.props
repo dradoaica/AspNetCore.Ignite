@@ -1,10 +1,10 @@
 <Project>
 
     <!--
-      Java modules loaded next to the Ignite core jars of the Apache.Ignite package: Kubernetes discovery, REST API,
-      JSON and OpenCensus metrics (with their dependencies). They are downloaded from Maven Central on build and
+      Java modules loaded next to the Ignite core jars of the Apache.Ignite package: Kubernetes discovery, REST API and
+      JSON (with their runtime dependencies, as their Maven POMs declare). They are downloaded from Maven Central on build and
       verified against these SHA-256 hashes, then copied to libs/ of the build and publish output.
-      When IgniteVersion changes, update the hashes of the org.apache.ignite modules.
+      When IgniteVersion changes, run scripts/update-java-libs.sh to update the hashes.
     -->
     <PropertyGroup>
         <JavaLibsMavenRepositoryUrl>https://repo1.maven.org/maven2</JavaLibsMavenRepositoryUrl>
@@ -12,20 +12,10 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <JavaLib Include="org.jetbrains:annotations" Version="16.0.3" Sha256="04b16e8d2309bf7771fbee16187b76f63af6ccd023cf664ec846e4e8e65c5b3f"/>
-        <JavaLib Include="org.checkerframework:checker-qual" Version="3.33.0" Sha256="e316255bbfcd9fe50d165314b85abb2b33cb2a66a93c491db648e498a82c2de1"/>
         <JavaLib Include="commons-lang:commons-lang" Version="2.6" Sha256="50f11b09f877c294d56f24463f47d28f929cf5044f648661c0f0cfbae9a2f49c"/>
-        <JavaLib Include="com.lmax:disruptor" Version="3.4.2" Sha256="f412ecbb235c2460b45e63584109723dea8d94b819c78c9bfc38f50cba8546c0"/>
-        <JavaLib Include="com.google.errorprone:error_prone_annotations" Version="2.18.0" Sha256="9e6814cb71816988a4fd1b07a993a8f21bb7058d522c162b1de849e19bea54ae"/>
-        <JavaLib Include="com.google.guava:failureaccess" Version="1.0.1" Sha256="a171ee4c734dd2da837e4b16be9df4661afab72a41adaf31eb84dfdaf936ca26"/>
-        <JavaLib Include="io.grpc:grpc-api" Version="1.62.2" Sha256="2e896944cf513e0e5cfd32bcd72c89601a27c6ca56916f84b20f3a13bacf1b1f"/>
-        <JavaLib Include="io.grpc:grpc-context" Version="1.62.2" Sha256="9959747df6a753119e1c1a3dff01aa766d2455f5e4860acaa305359e1d533a05"/>
-        <JavaLib Include="com.google.guava:guava" Version="32.1.2-jre" Sha256="bc65dea7cfd9e4dacf8419d8af0e741655857d27885bb35d943d7187fc3a8fce"/>
         <JavaLib Include="org.apache.ignite:ignite-json" Version="$(IgniteVersion)" Sha256="aabd0247e547fbf6019a4e03cb0a07e3677449e60d820beda45f40fb8d3ec0e1"/>
         <JavaLib Include="org.apache.ignite:ignite-kubernetes" Version="$(IgniteVersion)" Sha256="1d2442c976013ed9e7559f518fa58e4cce9a9e1b04c4dd42fe11162605240403"/>
-        <JavaLib Include="org.apache.ignite:ignite-opencensus" Version="$(IgniteVersion)" Sha256="84466b2629d135f4afea1436f6ac9ccbc7bc2ef87ec284f914d2b789e4b0a3c6"/>
         <JavaLib Include="org.apache.ignite:ignite-rest-http" Version="$(IgniteVersion)" Sha256="53c209aabdb45aa49f62bfa67a01ffff974d0f9f0f8a2bc768e2bcd07018e8bf"/>
-        <JavaLib Include="com.google.j2objc:j2objc-annotations" Version="2.8" Sha256="f02a95fa1a5e95edb3ed859fd0fb7df709d121a35290eff8b74dce2ab7f4d6ed"/>
         <JavaLib Include="com.fasterxml.jackson.core:jackson-annotations" Version="2.19.0" Sha256="ead60e9cac0e42b57092b9e2d087ff43536e9477d4486ba393037a8cc156cda7"/>
         <JavaLib Include="com.fasterxml.jackson.core:jackson-core" Version="2.19.0" Sha256="da8e859bac94874528116a25f20c68560e4287acbf27628711b8a4f96b028430"/>
         <JavaLib Include="com.fasterxml.jackson.core:jackson-databind" Version="2.19.0" Sha256="ceda311f476c3b18e1d2b240c94e2dcb9c8d44e70f8afa9facab88bac4ddc03a"/>
@@ -35,20 +25,11 @@
         <JavaLib Include="org.eclipse.jetty:jetty-server" Version="11.0.24" Sha256="1021ca69a4cb56bda466ca9bbb0fcaff3df31629a2ecf7240595f65aebaba34b"/>
         <JavaLib Include="org.eclipse.jetty:jetty-util" Version="11.0.24" Sha256="1ec701f505056443de134d0e5464e298aa15400981210c10b668a070ffd97bfd"/>
         <JavaLib Include="org.eclipse.jetty:jetty-xml" Version="11.0.24" Sha256="80e174e96d0620d9c27fd0a4d19a831278f1464c9c56bed9e437cc8a45255fd4"/>
-        <JavaLib Include="com.google.code.findbugs:jsr305" Version="3.0.2" Sha256="766ad2a0783f2687962c8ad74ceecc38a28b9f72a2d085ee438b7813e928d0c7"/>
-        <JavaLib Include="com.google.guava:listenablefuture" Version="9999.0-empty-to-avoid-conflict-with-guava" Sha256="b372a037d4230aa57fbeffdef30fd6123f9c0c2db85d0aced00c91b974f33f99"/>
-        <JavaLib Include="io.opencensus:opencensus-api" Version="0.31.1" Sha256="f1474d47f4b6b001558ad27b952e35eda5cc7146788877fc52938c6eba24b382"/>
-        <JavaLib Include="io.opencensus:opencensus-exporter-metrics-util" Version="0.31.1" Sha256="57eb102352cde1c40b73ed9ba9e38074bad60f5cc2cd4e87af7e01e2963c7d01"/>
-        <JavaLib Include="io.opencensus:opencensus-exporter-stats-prometheus" Version="0.31.1" Sha256="34e25a7bb985262f00f7d660ad62502b999773348c094f25f5159a01279905f1"/>
-        <JavaLib Include="io.opencensus:opencensus-impl" Version="0.31.1" Sha256="8249a5c7a6bb172a48c12dae9da30305e5b91ae7a900b2ff4234b75debff4c88"/>
-        <JavaLib Include="io.opencensus:opencensus-impl-core" Version="0.31.1" Sha256="78ecb82f6694a03e76a75b984c533b9449c731d9832782bafb906df925d71983"/>
-        <JavaLib Include="io.prometheus:simpleclient" Version="0.6.0" Sha256="ebb8505b76ca31cdba9233d3e5b892af291bbd6e55e09718fd23624aec1d11d7"/>
-        <JavaLib Include="io.prometheus:simpleclient_common" Version="0.3.0" Sha256="3fa88bc91f674d55cf580c2e1351b5b7045ff01b481eaba16dccdb6662773ec0"/>
-        <JavaLib Include="io.prometheus:simpleclient_httpserver" Version="0.3.0" Sha256="4855415afc75899acd569595baec5e0dcb5ff4fa0eb4f424a89bcf0fe5998afe"/>
         <JavaLib Include="org.slf4j:slf4j-api" Version="1.7.36" Sha256="d3ef575e3e4979678dc01bf1dcce51021493b4d11fb7f1be8ad982877c16a1c0"/>
     </ItemGroup>
 
-    <Target Name="RestoreJavaLibs" BeforeTargets="AssignTargetPaths">
+    <!-- not in design-time builds (IDEs): they must not download, and work offline -->
+    <Target Name="RestoreJavaLibs" BeforeTargets="AssignTargetPaths" Condition="'$(DesignTimeBuild)' != 'true'">
         <ItemGroup>
             <_JavaLib Include="@(JavaLib)">
                 <GroupId>$([System.String]::Copy('%(Identity)').Split(':')[0])</GroupId>

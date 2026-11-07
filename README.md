@@ -34,7 +34,10 @@ There are two predefined configuration files available in `config` folder:
 * `default-config.xml` - this is minimal configuration for running memory only Ignite server.
 * `persistent-config.xml` - this is minimal configuration for running persistent Ignite server.
 
-The server runs on the .NET Generic Host: SIGTERM/CTRL+C stop the node gracefully within `SHUTDOWN_TIMEOUT_IN_SECONDS`.
+The server runs on the .NET Generic Host: SIGTERM/CTRL+C stop the node gracefully. The `GRACEFUL` shutdown policy
+waits until other nodes hold copies of the node's partitions, which never happens when the whole cluster stops; after
+`GRACEFUL_STOP_TIMEOUT_IN_SECONDS` an error is logged and the node stops with the process (persistent nodes recover
+from the WAL on the next start).
 
 | Exit code | Meaning |
 |---|---|
@@ -56,6 +59,8 @@ command line options.
 | `DEFAULT_CONSISTENT_ID` | `-ConsistentId` | _(empty)_ | Consistent id of the node. Must be **unique per node**; leave empty to let Ignite derive one. |
 | `PERSISTENCE_ENABLED` | `-PersistenceEnabled` | `false` | Enables persistence. |
 | `K8S_NAMESPACE` / `K8S_SERVICE_NAME` | | _(empty)_ | Kubernetes IP finder settings. |
+| `PEER_ASSEMBLY_LOADING` | | `false` | Load .NET assemblies sent by other nodes (and so run their code); only for trusted clusters. |
+| `REST_ENABLED` | | `false` | Start the REST API (Jetty, port 8080) and the TCP binary protocol (port 11211); both are unencrypted. |
 | `ENABLE_AUTHENTICATION` | | `true` | Enables authentication (implies persistence). |
 | `IGNITE_USER_PASSWORD` | | _(empty)_ | Password of the default `ignite` user (see [Authentication](#authentication)). |
 | `IGNITE_USER_PREVIOUS_PASSWORD` | | _(empty)_ | The current password, when rotating it to `IGNITE_USER_PASSWORD`. |
@@ -67,8 +72,11 @@ command line options.
 | `SSL_PROTOCOL` | | `TLS` | Java SSL protocol; `TLS` negotiates the highest version both sides support (TLS 1.3 on Java 17). |
 | `RESTART_ON_SSL_FILE_CHANGE` | | `true` | Restart the node when its SSL files change (see [Certificate rotation](#certificate-rotation)). |
 | `SSL_RESTART_MAX_JITTER_IN_SECONDS` | | `60` | Random delay (per node) added to SSL restarts. |
-| `SHUTDOWN_TIMEOUT_IN_SECONDS` | | `30` | Time a graceful stop may take; keep it below the pod's `terminationGracePeriodSeconds`. |
-| `METRICS_*`, `ENABLE_OFF_HEAP_METRICS` | | see `appsettings.json` | Metrics settings. |
+| `GRACEFUL_STOP_TIMEOUT_IN_SECONDS` | | `20` | Time the node may take to stop gracefully; less than `SHUTDOWN_TIMEOUT_IN_SECONDS`. |
+| `SHUTDOWN_TIMEOUT_IN_SECONDS` | | `30` | Time the whole stop may take; keep it below the pod's `terminationGracePeriodSeconds`. |
+| `MANAGEMENT_ENABLED` / `MANAGEMENT_PORT` | | `true` / `9464` | Health and metrics endpoints (see [Management](#management-health-and-metrics)). |
+| `ENABLE_OFF_HEAP_METRICS` | | `true` | Data region metrics. |
+| `METRICS_*` | | see `appsettings.json` | Ignite metrics update and log frequency. |
 
 Invalid settings are reported at startup (exit code `1`).
 
@@ -76,6 +84,30 @@ The keystores in `config/` (`server.jks`, `trust.jks`, `thin-client-cert.pfx`, p
 local development and tests only**: they are copied to the output of Debug builds (and used by `launchSettings.json`),
 but are not part of Release builds or the Docker image. Mount your own certificates and point the `SSL_*` settings at
 them; `scripts/ssl/ssl.ps1` shows how such a set (CA, key store, trust store, client certificate) is generated.
+
+### Management (health and metrics)
+
+With `MANAGEMENT_ENABLED` (the default), the server listens on `MANAGEMENT_PORT` (9464):
+
+| Endpoint | |
+|---|---|
+| `/health/live` | `200` while the process runs (liveness probe). |
+| `/health/ready` | `200` when the node is running and its cluster is active, `503` while starting, restarting or stopping (readiness probe). |
+| `/metrics` | Prometheus metrics: `ignite_node_*` (heap, CPU, threads, jobs, traffic), `ignite_cluster_*` (active, server and baseline nodes), `ignite_data_region_*` (off-heap, RAM, checkpoint buffer, dirty pages, fill factor, evictions; by `region`), the health checks, and the .NET runtime. |
+
+### Logging
+
+Logs go to the console (Serilog, `serilog.config.json`, level `Information`); the Docker image writes them as JSON
+lines (`RenderedCompactJsonFormatter`). Other sinks can be added with the usual Serilog settings, e.g., a file:
+`Serilog__WriteTo__1__Name=File`, `Serilog__WriteTo__1__Args__path=/app/work/logs/log-.log`,
+`Serilog__WriteTo__1__Args__rollingInterval=Day`.
+
+### Network security
+
+Ignite 2 authenticates thin clients, JDBC and REST, not nodes: any host that reaches the discovery (47500) and
+communication (47100) ports can join the cluster. Enable `USE_SSL` (nodes then need a certificate trusted by the trust
+store) and/or restrict these ports to the cluster's nodes; the server warns when `USE_SSL` is off. Peer assembly loading
+(`PEER_ASSEMBLY_LOADING`) lets any node run code on the others, so it is off by default.
 
 ### Authentication
 
@@ -104,9 +136,11 @@ services.AddIgnite(options => options.Cache.Backups = 2);     // and/or code
 services.AddHealthChecks().AddIgnite();                       // healthy when the cluster is reachable and active
 ```
 
-`IIgniteManager` connects on first use (with retries), not when the service is resolved. It creates and destroys
-caches and exposes the thin client (`IIgniteManager.Client`) for SQL, compute, transactions, etc. The client logs
-through `Microsoft.Extensions.Logging` (category `Apache.Ignite`).
+`IIgniteManager` connects on first use (with retries), not when the service is resolved; concurrent callers share one
+connection attempt (`GetClientAsync` waits for it without blocking a thread, which the health check relies on). It
+creates and destroys caches and exposes the thin client (`IIgniteManager.Client`) for SQL, compute, transactions, etc.
+The client logs through `Microsoft.Extensions.Logging` (category `Apache.Ignite`). For LINQ queries, add the
+`Apache.Ignite.Linq` package.
 
 | Setting | `IgniteClientOptions` | Default | Description |
 |---|---|---|---|
@@ -173,10 +207,10 @@ Caches created with `Cache.EnablePlatformCache` also keep their entries in the .
 ## Java modules
 
 The Ignite core jars come with the `Apache.Ignite` package. The optional modules the server uses (Kubernetes discovery,
-REST API, JSON, OpenCensus metrics and their dependencies) are listed in
+REST API and JSON, with the runtime dependencies their Maven POMs declare) are listed in
 `src/AspNetCore.IgniteServer/JavaLibs.props`: the build downloads them from Maven Central, verifies their SHA-256 and
-copies them to `libs/`. When upgrading Ignite (`IgniteVersion` in `Directory.Packages.props`), update the hashes of the
-`org.apache.ignite` modules.
+copies them to `libs/` (not in IDE design-time builds). When upgrading Ignite (`IgniteVersion` in
+`Directory.Packages.props`), run `scripts/update-java-libs.sh` to update the hashes.
 
 ## Tests
 
@@ -187,13 +221,15 @@ dotnet test tests/AspNetCore.Ignite.IntegrationTests
 ```
 
 The integration tests build the server image from the `Dockerfile` and run it with Docker (via Testcontainers):
-authentication, the client library, SSL with client certificates and certificate rotation, and a two-node cluster
-activation. They are skipped when Docker is not available.
+authentication, the client library and its health check, SSL with client certificates and certificate rotation, a
+two-node cluster activation, the management endpoints, REST, and the exit codes. They are skipped when Docker is not
+available. CI reports the unit test coverage in the job summary.
 
 ## Build aspnetcore.ignite-server
 
-The image is based on the .NET runtime image with Java 17 (Ubuntu packages) and is published for `linux/amd64` and
-`linux/arm64`, with SBOM and provenance attestations.
+The image is based on the ASP.NET Core runtime image with a Java 17 runtime reduced to the modules Ignite needs
+(`jlink`, from the Temurin JDK), and is published for `linux/amd64` and `linux/arm64` (each built natively), with SBOM
+and provenance attestations. `--build-arg VERSION=...` sets the assembly version (the release workflow passes the tag).
 
 ```
 docker build -t dradoaica/aspnetcore.ignite-server:2.18.1 -f Dockerfile .
@@ -216,9 +252,42 @@ docker rm -f aspnetcore.ignite-server
 
 docker rmi dradoaica/aspnetcore.ignite-server:2.18.1
 
-## Helm Chart
+## Kubernetes
 
-https://github.com/dradoaica/helm-charts/tree/main/charts/aspnetcore-ignite-server
+The [Helm chart](https://github.com/dradoaica/helm-charts/tree/main/charts/aspnetcore-ignite-server) runs the server as
+a StatefulSet. A deployment should:
+
+* probe `/health/live` and `/health/ready` on port 9464 (and scrape `/metrics`),
+* set `terminationGracePeriodSeconds` above `SHUTDOWN_TIMEOUT_IN_SECONDS`,
+* give each pod a unique, stable `DEFAULT_CONSISTENT_ID` (e.g., the pod name) and, with persistence, a volume at
+  `/app/work`,
+* set `ACTIVATION_MIN_SERVER_NODES` to the initial number of replicas (persistence),
+* enable `USE_SSL` and/or restrict the cluster ports with a NetworkPolicy:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: aspnetcore-ignite-server
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: aspnetcore-ignite-server
+  policyTypes: [Ingress]
+  ingress:
+    # discovery and communication: the cluster's own pods only
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: aspnetcore-ignite-server
+      ports:
+        - port: 47500
+        - port: 47100
+    # thin clients and management (narrow "from" to the client and monitoring namespaces)
+    - ports:
+        - port: 10800
+        - port: 9464
+```
 
 ## Upgrading to 2.18.1
 
@@ -226,6 +295,10 @@ https://github.com/dradoaica/helm-charts/tree/main/charts/aspnetcore-ignite-serv
   no longer contains the sample keystores: set these explicitly.
 * The client validates the server certificate by default (`ASPNETCORE_IGNITE_SSL_SKIP_SERVER_CERTIFICATE_VALIDATION`
   to opt out), and platform cache is off by default (`Cache.EnablePlatformCache` to opt in).
-* `IIgniteManager` has a new `Client` property (implementations outside this library must add it).
+* `IIgniteManager` has new `Client` and `GetClientAsync` members (implementations outside this library must add them),
+  and the library no longer depends on `Apache.Ignite.Linq` (add it for LINQ queries).
 * The server image no longer contains the Ignite binary distribution (`IGNITE_HOME`): the jars are in `/app/libs`.
+* REST (8080) and the TCP binary protocol (11211) are off (`REST_ENABLED`), peer assembly loading is off
+  (`PEER_ASSEMBLY_LOADING`), and OpenCensus metrics are replaced by `/metrics` on port 9464 (`MANAGEMENT_PORT`).
+* Logs go to the console only (JSON in the image); the file sink is opt-in.
 * SSL restarts are graceful and jittered; the process exits with `1` on failures (it always exited with `0`).

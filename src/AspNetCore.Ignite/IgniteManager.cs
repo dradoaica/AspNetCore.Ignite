@@ -12,6 +12,8 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace AspNetCore.Ignite;
 
@@ -22,6 +24,7 @@ public class IgniteManager : IIgniteManager, IDisposable
     private readonly RetryPolicy operationRetryPolicy;
     private readonly IgniteClientOptions options;
     private readonly object syncRoot = new();
+    private Task<IIgniteClient>? connecting;
     private bool disposed;
     private IIgniteClient? igniteClient;
 
@@ -50,6 +53,14 @@ public class IgniteManager : IIgniteManager, IDisposable
 
     /// <inheritdoc />
     public IIgniteClient Client => GetIgniteClient();
+
+    /// <inheritdoc />
+    public Task<IIgniteClient> GetClientAsync(CancellationToken cancellationToken = default)
+    {
+        var connection = GetOrStartConnecting();
+        return connection.IsCompleted || !cancellationToken.CanBeCanceled ? connection
+            : WaitAsync(connection, cancellationToken);
+    }
 
     public ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
         string cacheName,
@@ -94,6 +105,7 @@ public class IgniteManager : IIgniteManager, IDisposable
             {
                 igniteClient?.Dispose();
                 igniteClient = null;
+                connecting = null;
             }
 
             disposed = true;
@@ -101,9 +113,12 @@ public class IgniteManager : IIgniteManager, IDisposable
     }
 
     /// <summary>
-    ///     Connects on first use (not during DI resolution) and keeps retrying on later calls if connecting failed.
+    ///     Connects on first use (not during DI resolution); concurrent callers share one connection attempt, and a failed
+    ///     attempt is retried by the next call.
     /// </summary>
-    private IIgniteClient GetIgniteClient()
+    private IIgniteClient GetIgniteClient() => GetOrStartConnecting().GetAwaiter().GetResult();
+
+    private Task<IIgniteClient> GetOrStartConnecting()
     {
         lock (syncRoot)
         {
@@ -112,9 +127,50 @@ public class IgniteManager : IIgniteManager, IDisposable
                 throw new ObjectDisposedException(nameof(IgniteManager));
             }
 
-            return igniteClient ??=
-                connectRetryPolicy.Execute(() => CacheFactory.ConnectAsClient(igniteClientConfiguration));
+            if (igniteClient != null)
+            {
+                return Task.FromResult(igniteClient);
+            }
+
+            if (connecting is not { IsFaulted: false, IsCanceled: false, })
+            {
+                // one background thread runs the connection retries, however many callers wait for them
+                connecting = Task.Run(Connect);
+            }
+
+            return connecting;
         }
+    }
+
+    private IIgniteClient Connect()
+    {
+        var client = connectRetryPolicy.Execute(() => CacheFactory.ConnectAsClient(igniteClientConfiguration));
+        lock (syncRoot)
+        {
+            if (disposed)
+            {
+                client.Dispose();
+                throw new ObjectDisposedException(nameof(IgniteManager));
+            }
+
+            igniteClient = client;
+        }
+
+        return client;
+    }
+
+    private static async Task<IIgniteClient> WaitAsync(Task<IIgniteClient> connection, CancellationToken cancellationToken)
+    {
+        TaskCompletionSource<bool> cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        using (cancellationToken.Register(() => cancelled.TrySetResult(true)))
+        {
+            if (await Task.WhenAny(connection, cancelled.Task).ConfigureAwait(false) != connection)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+        }
+
+        return await connection.ConfigureAwait(false);
     }
 
     private static IgniteClientOptions CreateOptions(IConfiguration configuration)

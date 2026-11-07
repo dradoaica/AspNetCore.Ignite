@@ -1,5 +1,7 @@
 using Apache.Ignite.Core.Discovery.Tcp;
 using Apache.Ignite.Core.Discovery.Tcp.Static;
+using Apache.Ignite.Core.Communication.Tcp;
+using Apache.Ignite.Core.Deployment;
 using AspNetCore.IgniteServer;
 using Xunit;
 
@@ -82,6 +84,41 @@ public sealed class IgniteServerRunnerTests
     public void BuildAlterUserPasswordSql_EscapesQuotes() =>
         Assert.Equal(
             "ALTER USER \"ig\"\"nite\" WITH PASSWORD 'it''s; DROP';",
-            IgniteServerRunner.BuildAlterUserPasswordSql("ig\"nite", "it's; DROP")
+            IgniteUserPasswordManager.BuildAlterUserPasswordSql("ig\"nite", "it's; DROP")
         );
+
+    [Fact]
+    public void PeerAssemblyLoading_IsOptIn()
+    {
+        using IgniteServerRunner byDefault = new(new IgniteServerRunnerOptions());
+        using IgniteServerRunner optedIn = new(new IgniteServerRunnerOptions { PeerAssemblyLoading = true, });
+
+        Assert.Equal(PeerAssemblyLoadingMode.Disabled, byDefault.Configuration.PeerAssemblyLoadingMode);
+        Assert.Equal(PeerAssemblyLoadingMode.CurrentAppDomain, optedIn.Configuration.PeerAssemblyLoadingMode);
+    }
+
+    [Fact]
+    public void PageEviction_OnlyForInMemoryRegions()
+    {
+        using IgniteServerRunner runner = new(new IgniteServerRunnerOptions());
+        runner.SetOffHeapMemoryLimit(256);
+
+        IgniteConfigurationFactory.SetPageEvictionMode(runner.Configuration);
+        var region = runner.Configuration.DataStorageConfiguration.DefaultDataRegionConfiguration;
+        Assert.Equal(Apache.Ignite.Core.Configuration.DataPageEvictionMode.Random2Lru, region.PageEvictionMode);
+
+        runner.SetPersistence(true);
+        IgniteConfigurationFactory.SetPageEvictionMode(runner.Configuration);
+        Assert.Equal(Apache.Ignite.Core.Configuration.DataPageEvictionMode.Disabled, region.PageEvictionMode);
+    }
+
+    [Fact]
+    public void SetServerPort_KeepsAnExistingTcpDiscoverySpi()
+    {
+        using IgniteServerRunner runner = new(new IgniteServerRunnerOptions());
+        runner.Configuration.DiscoverySpi = new Apache.Ignite.Core.Discovery.Tcp.TcpDiscoverySpi();
+        runner.SetServerPort(47600);
+
+        Assert.Equal(47600, Assert.IsType<TcpDiscoverySpi>(runner.Configuration.DiscoverySpi).LocalPort);
+    }
 }

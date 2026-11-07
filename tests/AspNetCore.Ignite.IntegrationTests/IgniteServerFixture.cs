@@ -20,6 +20,8 @@ public sealed class IgniteServerFixture : IAsyncLifetime
     public const string Password = "p'w&d\"<x>";
 
     public const int ThinClientPort = 10800;
+    public const int ManagementPort = 9464;
+    public const int RestPort = 8080;
     public const string RunningMessage = "Ignite server runner is running";
 
     private IFutureDockerImage? image;
@@ -43,11 +45,17 @@ public sealed class IgniteServerFixture : IAsyncLifetime
         _ => "linux/amd64",
     };
 
+    public IContainer Node => container!;
+
     public static string GetEndpoint(IContainer node) => $"{node.Hostname}:{node.GetMappedPublicPort(ThinClientPort)}";
+
+    public static Uri GetManagementUri(IContainer node, string path) =>
+        new($"http://{node.Hostname}:{node.GetMappedPublicPort(ManagementPort)}{path}");
 
     /// <summary>A node of the server image with small memory settings and the thin client port published.</summary>
     public ContainerBuilder CreateNodeBuilder() => new ContainerBuilder(image!)
         .WithPortBinding(ThinClientPort, true)
+        .WithPortBinding(ManagementPort, true)
         .WithEnvironment("DEFAULT_ON_HEAP_MEMORY", "512")
         .WithEnvironment("DEFAULT_OFF_HEAP_MEMORY", "256")
         .WithEnvironment("IGNITE_USER_PASSWORD", Password);

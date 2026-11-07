@@ -24,6 +24,7 @@
             http://www.springframework.org/schema/beans/spring-beans.xsd">
     <bean class="org.apache.ignite.configuration.IgniteConfiguration">
         <property name="shutdownPolicy" value="GRACEFUL"/>
+        <!-- CONNECTOR_CONFIGURATION -->
         <property name="clientConnectorConfiguration">
             <bean class="org.apache.ignite.configuration.ClientConnectorConfiguration">
                 <property name="sslEnabled" value="true"/>
@@ -49,14 +50,6 @@
                     </bean>
                 </property>
             </bean>
-        </property>
-        <property name="metricsUpdateFrequency" value="5000"/>
-        <property name="metricExporterSpi">
-            <list>
-                <bean class="org.apache.ignite.spi.metric.opencensus.OpenCensusMetricExporterSpi">
-                    <property name="period" value="OPEN_CENSUS_METRIC_EXPORTER_SPI_PERIOD"/>
-                </bean>
-            </list>
         </property>
     </bean>
 </beans>

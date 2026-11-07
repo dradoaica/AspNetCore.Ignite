@@ -1,7 +1,7 @@
 name: Tests
 
-# build, unit tests, dependency scan and the integration tests (which build the server image and run it with Docker);
-# the release workflows call this workflow, so nothing is published without passing it
+# build, unit tests (with coverage), dependency scan and the integration tests (which build the server image and run
+# it with Docker); the release workflow calls this workflow, so nothing is published without passing it
 on:
   pull_request:
   push:
@@ -9,6 +9,11 @@ on:
       - main
       - 'release/**'
   workflow_call:
+
+# a newer push supersedes a running check of the same branch
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' }}
 
 env:
   DOTNET_NOLOGO: true
@@ -30,11 +35,37 @@ jobs:
         with:
           global-json-file: global.json
 
+      # the Java modules of JavaLibs.props (verified by their SHA-256 on every build)
+      - name: Cache Java Modules
+        uses: actions/cache@v4
+        with:
+          path: src/AspNetCore.IgniteServer/obj/javalibs
+          key: javalibs-${{ hashFiles('src/AspNetCore.IgniteServer/JavaLibs.props', 'Directory.Packages.props') }}
+
       - name: Build
         run: dotnet build AspNetCore.Ignite.slnx -c Release
 
       - name: Unit Tests
-        run: dotnet test tests/AspNetCore.Ignite.UnitTests -c Release --no-build
+        run: >-
+          dotnet test tests/AspNetCore.Ignite.UnitTests -c Release --no-build
+          --collect "XPlat Code Coverage" --results-directory coverage
+
+      - name: Coverage Report
+        uses: danielpalme/ReportGenerator-GitHub-Action@5
+        with:
+          reports: coverage/**/coverage.cobertura.xml
+          targetdir: coverage-report
+          reporttypes: MarkdownSummaryGithub;Cobertura
+          assemblyfilters: +AspNetCore.Ignite;+AspNetCore.IgniteServer
+
+      - name: Coverage Summary
+        run: cat coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage-report
 
       - name: Dependency Scan
         run: ./scripts/check-vulnerable-packages.sh AspNetCore.Ignite.slnx

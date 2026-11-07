@@ -23,12 +23,6 @@
 
     <ItemGroup>
         <PackageReference Include="Apache.Ignite"/>
-        <PackageReference Include="Apache.Ignite.Linq"/>
-        <PackageReference Include="ConfigureAwait.Fody" PrivateAssets="all"/>
-        <PackageReference Include="Fody">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
         <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions"/>
         <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions"/>
         <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks"/>

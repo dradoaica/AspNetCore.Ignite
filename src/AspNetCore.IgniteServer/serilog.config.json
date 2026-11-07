@@ -1,19 +1,15 @@
 {
   "Serilog": {
-    "MinimumLevel": "Debug",
+    "MinimumLevel": {
+      "Default": "Information",
+      "Override": {
+        "Microsoft": "Warning",
+        "Microsoft.Hosting.Lifetime": "Information"
+      }
+    },
     "WriteTo": [
       {
         "Name": "Console"
-      },
-      {
-        "Name": "File",
-        "Args": {
-          "path": "App_Data/Logs/log-%DEFAULT_CONSISTENT_ID%-.log",
-          "rollingInterval": "Day",
-          "outputTemplate": "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level}] {Message} {Properties:j}{NewLine}{Exception}",
-          "formatter": "Serilog.Formatting.Compact.CompactJsonFormatter, Serilog.Formatting.Compact",
-          "fileSizeLimitBytes": 104857600
-        }
       }
     ],
     "Enrich": [

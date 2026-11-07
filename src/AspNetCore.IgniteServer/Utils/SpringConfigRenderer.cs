@@ -9,10 +9,22 @@ namespace AspNetCore.IgniteServer.Utils;
 
 internal static class SpringConfigRenderer
 {
-    /// <summary>Replaces each placeholder in <paramref name="template" /> with its XML-escaped value.</summary>
-    internal static string Render(string template, IReadOnlyDictionary<string, string?> placeholders)
+    /// <summary>
+    ///     Replaces each placeholder in <paramref name="template" /> with its XML-escaped value, and each of
+    ///     <paramref name="xmlPlaceholders" /> with its value as is (XML elements).
+    /// </summary>
+    internal static string Render(
+        string template,
+        IReadOnlyDictionary<string, string?> placeholders,
+        IReadOnlyDictionary<string, string?>? xmlPlaceholders = null
+    )
     {
         StringBuilder sb = new(template);
+        foreach (var (placeholder, xml) in xmlPlaceholders ?? new Dictionary<string, string?>())
+        {
+            sb.Replace(placeholder, xml ?? string.Empty);
+        }
+
         foreach (var (placeholder, value) in placeholders)
         {
             sb.Replace(placeholder, SecurityElement.Escape(value ?? string.Empty));
@@ -28,6 +40,7 @@ internal static class SpringConfigRenderer
     internal static async Task<string> RenderToFileAsync(
         string templatePath,
         IReadOnlyDictionary<string, string?> placeholders,
+        IReadOnlyDictionary<string, string?>? xmlPlaceholders = null,
         string? outputDirectory = null
     )
     {
@@ -59,7 +72,7 @@ internal static class SpringConfigRenderer
         }
 
         await using StreamWriter writer = new(outputPath, Encoding.UTF8, options);
-        await writer.WriteAsync(Render(template, placeholders)).ConfigureAwait(false);
+        await writer.WriteAsync(Render(template, placeholders, xmlPlaceholders)).ConfigureAwait(false);
 
         return outputPath;
     }

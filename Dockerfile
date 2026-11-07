@@ -1,5 +1,5 @@
-# The build stage runs on the build platform (the output is framework-dependent and portable), the runtime stage on
-# the target platform (linux/amd64, linux/arm64). BuildKit sets BUILDPLATFORM; the legacy builder needs
+# The build stage runs on the build platform (the output is framework-dependent and portable), the other stages on the
+# target platform (linux/amd64, linux/arm64). BuildKit sets BUILDPLATFORM; the legacy builder needs
 # --build-arg BUILDPLATFORM=linux/amd64 (or linux/arm64).
 ARG BUILDPLATFORM
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-noble AS build
@@ -9,23 +9,33 @@ COPY ["src/Directory.Build.props", "src/"]
 COPY ["src/AspNetCore.Ignite/AspNetCore.Ignite.csproj", "src/AspNetCore.Ignite/"]
 COPY ["src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj", "src/AspNetCore.IgniteServer/JavaLibs.props", "src/AspNetCore.IgniteServer/"]
 RUN dotnet restore "src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj"
+# the Java modules of JavaLibs.props (SHA-256 verified), in their own layer: downloaded again only when it changes
+RUN dotnet msbuild "src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj" -t:RestoreJavaLibs -p:Configuration=Release -nologo -v:minimal
 COPY . .
-# also downloads the Java modules of JavaLibs.props (SHA-256 verified)
-RUN dotnet publish "src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj" -c Release -o /app/publish --no-restore
+# the release workflow passes the tag (e.g., 2.18.1); otherwise the version of src/Directory.Build.props
+ARG VERSION=
+RUN dotnet publish "src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj" -c Release -o /app/publish --no-restore \
+    ${VERSION:+-p:Version=$VERSION}
 
-# Build runtime image: .NET runtime + Java 17 (signed Ubuntu packages); the Ignite jars come with the application
-FROM mcr.microsoft.com/dotnet/runtime:10.0-noble AS runtime
+# A Java 17 runtime with just the modules Ignite needs (jlink): the standard java.* modules (java.se) and the JDK
+# modules for Unsafe (jdk.unsupported), management/metrics, TLS (jdk.crypto.ec) and DNS (Kubernetes discovery)
+FROM eclipse-temurin:17-jdk-noble AS jre
+RUN jlink \
+        --add-modules java.se,jdk.unsupported,jdk.management,jdk.management.agent,jdk.internal.jvmstat,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.naming.dns,jdk.zipfs,jdk.httpserver,jdk.jfr \
+        --strip-debug --no-man-pages --no-header-files --compress=2 \
+        --output /jre
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends openjdk-17-jre-headless \
-    && rm -rf /var/lib/apt/lists/* \
-    # an architecture-independent JAVA_HOME (java-17-openjdk-amd64, java-17-openjdk-arm64, ...)
-    && ln -s "$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")" /usr/lib/jvm/java-17
+# Runtime image: ASP.NET Core runtime (Kestrel for the management endpoints) + the Java runtime above; the Ignite jars
+# come with the application (/app/libs)
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS runtime
 
+COPY --from=jre /jre /usr/lib/jvm/java-17
 ENV JAVA_HOME=/usr/lib/jvm/java-17
 # fix for 'Stack smashing detected: dotnet terminated' (read by the runtime at startup, so it must be set here;
 # the legacy COMPlus_ name is the one Ignite.NET checks)
 ENV COMPlus_EnableAlternateStackCheck=1
+# logs as JSON lines (with the rendered message) for log collectors
+ENV Serilog__WriteTo__0__Args__formatter="Serilog.Formatting.Compact.RenderedCompactJsonFormatter, Serilog.Formatting.Compact"
 
 WORKDIR /app
 COPY --from=build /app/publish .
@@ -37,4 +47,6 @@ USER 1001
 
 ENTRYPOINT ["dotnet", "AspNetCore.IgniteServer.dll"]
 
-EXPOSE 11211 47100 47500 49112 10800 8080 10900
+# thin clients, communication, discovery, management (/health/*, /metrics); REST (8080) and the TCP binary protocol
+# (11211) only with REST_ENABLED
+EXPOSE 10800 47100 47500 9464

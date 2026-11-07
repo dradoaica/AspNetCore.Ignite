@@ -22,6 +22,17 @@ public sealed class SpringConfigRendererTests
     }
 
     [Fact]
+    public void Render_InsertsXmlPlaceholdersVerbatim() =>
+        Assert.Equal(
+            "<bean><property name=\"x\"><null/></property></bean>",
+            SpringConfigRenderer.Render(
+                "<bean><!-- X --></bean>",
+                new Dictionary<string, string?>(),
+                new Dictionary<string, string?> { ["<!-- X -->"] = "<property name=\"x\"><null/></property>", }
+            )
+        );
+
+    [Fact]
     public async Task RenderToFileAsync_LeavesTemplateUntouched()
     {
         var directory = Path.Combine(Path.GetTempPath(), "spring-config-renderer-tests", Guid.NewGuid().ToString("N"));
@@ -36,12 +47,12 @@ public sealed class SpringConfigRendererTests
             var first = await SpringConfigRenderer.RenderToFileAsync(
                 templatePath,
                 new Dictionary<string, string?> { ["K8S_NAMESPACE"] = "first", },
-                outputDirectory
+                outputDirectory: outputDirectory
             );
             var second = await SpringConfigRenderer.RenderToFileAsync(
                 templatePath,
                 new Dictionary<string, string?> { ["K8S_NAMESPACE"] = "second", },
-                outputDirectory
+                outputDirectory: outputDirectory
             );
 
             Assert.Equal(template, await File.ReadAllTextAsync(templatePath));

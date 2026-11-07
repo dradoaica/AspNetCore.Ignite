@@ -7,19 +7,16 @@
         <ErrorOnDuplicatePublishOutputFiles>false</ErrorOnDuplicatePublishOutputFiles>
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
         <DockerfileContext>..\..</DockerfileContext>
+        <!-- Ignite is throughput-oriented; dynamic adaptation (DATAS, the .NET 9+ default) keeps the heap small -->
+        <ServerGarbageCollection>true</ServerGarbageCollection>
     </PropertyGroup>
 
     <Import Project="JavaLibs.props"/>
 
     <ItemGroup>
         <PackageReference Include="Apache.Ignite"/>
-        <PackageReference Include="ConfigureAwait.Fody" PrivateAssets="all"/>
-        <PackageReference Include="Fody">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
-        <PackageReference Include="Microsoft.Extensions.FileProviders.Physical"/>
-        <PackageReference Include="Microsoft.Extensions.Hosting"/>
+        <PackageReference Include="prometheus-net.AspNetCore"/>
+        <PackageReference Include="prometheus-net.AspNetCore.HealthChecks"/>
         <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets"/>
         <PackageReference Include="Serilog"/>
         <PackageReference Include="Serilog.Enrichers.Environment"/>
@@ -30,6 +27,11 @@
         <PackageReference Include="Serilog.Sinks.Console"/>
         <PackageReference Include="Serilog.Sinks.File"/>
         <PackageReference Include="System.CommandLine"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Kestrel for the management endpoints (/health/*, /metrics) -->
+        <FrameworkReference Include="Microsoft.AspNetCore.App"/>
     </ItemGroup>
 
     <ItemGroup>

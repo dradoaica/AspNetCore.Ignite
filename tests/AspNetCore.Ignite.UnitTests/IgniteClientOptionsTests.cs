@@ -95,46 +95,64 @@ public sealed class IgniteClientOptionsTests
     [Fact]
     public async Task HealthCheck_UnreachableCluster_ReportsFailureStatus()
     {
-        IgniteHealthCheck healthCheck = new(new ThrowingIgniteManager(), TimeSpan.FromSeconds(5));
-        HealthCheckContext context = new()
-        {
-            Registration = new HealthCheckRegistration("ignite", healthCheck, HealthStatus.Degraded, null),
-        };
+        IgniteHealthCheck healthCheck = new(new FakeIgniteManager(Task.FromException<IIgniteClient>(new IgniteClientException("unreachable"))), TimeSpan.FromSeconds(5));
 
-        var result = await healthCheck.CheckHealthAsync(context);
+        var result = await healthCheck.CheckHealthAsync(Context(healthCheck, HealthStatus.Degraded));
 
         Assert.Equal(HealthStatus.Degraded, result.Status);
         Assert.IsType<IgniteClientException>(result.Exception);
     }
 
     [Fact]
-    public async Task HealthCheck_SlowCluster_TimesOut()
+    public async Task HealthCheck_SlowConnection_TimesOut_AndChecksShareTheAttempt()
     {
-        IgniteHealthCheck healthCheck = new(new ThrowingIgniteManager(TimeSpan.FromSeconds(5)), TimeSpan.FromMilliseconds(50));
-        HealthCheckContext context = new()
-        {
-            Registration = new HealthCheckRegistration("ignite", healthCheck, HealthStatus.Unhealthy, null),
-        };
+        TaskCompletionSource<IIgniteClient> connecting = new();
+        FakeIgniteManager igniteManager = new(connecting.Task);
+        IgniteHealthCheck healthCheck = new(igniteManager, TimeSpan.FromMilliseconds(100));
 
-        var result = await healthCheck.CheckHealthAsync(context);
+        var results = await Task.WhenAll(
+            Enumerable.Range(0, 20).Select(_ => healthCheck.CheckHealthAsync(Context(healthCheck, HealthStatus.Unhealthy)))
+        );
 
-        Assert.Equal(HealthStatus.Unhealthy, result.Status);
-        Assert.IsType<TimeoutException>(result.Exception);
+        Assert.All(results, result => Assert.IsType<TimeoutException>(result.Exception));
+        // every check waited for the same (still running) connection attempt, none blocked a thread
+        Assert.Equal(20, igniteManager.GetClientCalls);
+        Assert.False(connecting.Task.IsCompleted);
     }
 
-    private sealed class ThrowingIgniteManager(TimeSpan? delay = null) : IIgniteManager
+    [Fact]
+    public async Task IgniteManager_ConcurrentCallers_ShareOneConnectionAttempt()
     {
-        public IIgniteClient Client
-        {
-            get
-            {
-                if (delay.HasValue)
-                {
-                    Thread.Sleep(delay.Value);
-                }
+        // nothing listens on port 1: each attempt fails fast, and no retries are configured
+        using IgniteManager igniteManager = new(new IgniteClientOptions { Endpoints = ["127.0.0.1:1",], ConnectRetryCount = 0, SocketTimeout = TimeSpan.FromSeconds(1), });
 
-                throw new IgniteClientException("unreachable");
-            }
+        var attempts = Enumerable.Range(0, 10).Select(_ => igniteManager.GetClientAsync()).ToList();
+
+        _ = Assert.Single(attempts.Distinct());
+        await Assert.ThrowsAnyAsync<Exception>(() => attempts[0]);
+        // a failed attempt is not cached: the next call starts a new one
+        var nextAttempt = igniteManager.GetClientAsync();
+        Assert.NotSame(attempts[0], nextAttempt);
+        await Assert.ThrowsAnyAsync<Exception>(() => nextAttempt);
+    }
+
+    private static HealthCheckContext Context(IHealthCheck healthCheck, HealthStatus failureStatus) => new()
+    {
+        Registration = new HealthCheckRegistration("ignite", healthCheck, failureStatus, null),
+    };
+
+    private sealed class FakeIgniteManager(Task<IIgniteClient> connection) : IIgniteManager
+    {
+        private int getClientCalls;
+
+        public int GetClientCalls => getClientCalls;
+
+        public IIgniteClient Client => connection.GetAwaiter().GetResult();
+
+        public async Task<IIgniteClient> GetClientAsync(CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref getClientCalls);
+            return await connection.WaitAsync(cancellationToken);
         }
 
         public Apache.Ignite.Core.Client.Cache.ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
