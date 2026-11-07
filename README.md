@@ -28,8 +28,11 @@ Options:
 Option names are case-sensitive. Every option has a [setting](#configuration) of the same meaning, so it can also be
 given as an environment variable.
 
-The default configuration uses the default parameters of the Ignite environment.
-There are two predefined configuration files available in `config` folder:
+The default configuration uses the default parameters of the Ignite environment. A configuration file
+(`-ConfigFile`, Ignite.NET XML) is applied over it: the properties the file sets override the defaults, the others
+(JVM options, timeouts, event types, ...) stay; a nested element (e.g., `dataStorageConfiguration`) replaces the default
+one as a whole. Use it for caches, binary, SQL or transaction configuration, etc. `PEER_ASSEMBLY_LOADING` always decides
+peer assembly loading. There are two predefined configuration files available in `config` folder:
 
 * `default-config.xml` - this is minimal configuration for running memory only Ignite server.
 * `persistent-config.xml` - this is minimal configuration for running persistent Ignite server.
@@ -72,11 +75,29 @@ command line options.
 | `SSL_PROTOCOL` | | `TLS` | Java SSL protocol; `TLS` negotiates the highest version both sides support (TLS 1.3 on Java 17). |
 | `RESTART_ON_SSL_FILE_CHANGE` | | `true` | Restart the node when its SSL files change (see [Certificate rotation](#certificate-rotation)). |
 | `SSL_RESTART_MAX_JITTER_IN_SECONDS` | | `60` | Random delay (per node) added to SSL restarts. |
+| `SSL_KEY_STORE_TYPE` / `SSL_TRUST_STORE_TYPE` | | `JKS` | Store types, e.g., `PKCS12` (as cert-manager creates). |
+| `SSL_KEY_ALGORITHM` | | `SunX509` | Key manager algorithm. |
+| `SSL_CLIENT_AUTH` | | `true` | Thin clients must present a trusted certificate (`USE_CLIENT_SSL`); without it, `SSL_CLIENT_CERTIFICATE_*` is optional. |
 | `GRACEFUL_STOP_TIMEOUT_IN_SECONDS` | | `20` | Time the node may take to stop gracefully; less than `SHUTDOWN_TIMEOUT_IN_SECONDS`. |
 | `SHUTDOWN_TIMEOUT_IN_SECONDS` | | `30` | Time the whole stop may take; keep it below the pod's `terminationGracePeriodSeconds`. |
 | `MANAGEMENT_ENABLED` / `MANAGEMENT_PORT` | | `true` / `9464` | Health and metrics endpoints (see [Management](#management-health-and-metrics)). |
 | `ENABLE_OFF_HEAP_METRICS` | | `true` | Data region metrics. |
 | `METRICS_*` | | see `appsettings.json` | Ignite metrics update and log frequency. |
+
+These settings apply only when set (otherwise the default configuration, or `-ConfigFile`, decides), as in the
+[Ignite chart](https://github.com/dradoaica/helm-charts/tree/main/charts/ignite):
+
+| Setting | Description |
+|---|---|
+| `JVM_MAX_METASPACE_MB` / `JVM_RESERVED_CODE_CACHE_MB` | JVM metaspace and code cache (defaults 256 / 240). |
+| `JVM_MAX_DIRECT_MEMORY_MB` | `-XX:MaxDirectMemorySize` (e.g., off-heap + checkpoint buffer + system regions, see [Configuring Memory](#configuring-memory)). |
+| `JVM_G1_HEAP_REGION_MB` | G1 heap region size (power of 2, 1-32). |
+| `EXTRA_JVM_OPTS` | Extra JVM options, separated by spaces. |
+| `EXTRA_CLASSPATH` | Extra Java classpath entries separated by `:` (a directory adds its jars), e.g., extra Ignite modules on a volume. |
+| `FAILURE_DETECTION_TIMEOUT_MS` / `CLIENT_FAILURE_DETECTION_TIMEOUT_MS` / `NETWORK_TIMEOUT_MS` | Timeouts (defaults 30000 / 60000 / 10000); the client one must not be less than `METRICS_UPDATE_FREQUENCY_IN_SECONDS`. |
+| `PUBLIC_THREAD_POOL_SIZE`, `SYSTEM_THREAD_POOL_SIZE`, `QUERY_THREAD_POOL_SIZE`, `SERVICE_THREAD_POOL_SIZE`, `STRIPED_THREAD_POOL_SIZE`, `DATA_STREAMER_THREAD_POOL_SIZE` | Thread pool sizes. |
+| `STORAGE_PATH` / `WAL_PATH` / `WAL_ARCHIVE_PATH` | Data and indexes, WAL and WAL archive directories (dedicated volumes recommended); default under `/app/work`. |
+| `WAL_COMPACTION_ENABLED` / `WAL_MODE` | WAL archive compaction; WAL mode (`Fsync`, `LogOnly`, `Background`, `None`). |
 
 Invalid settings are reported at startup (exit code `1`).
 
@@ -92,6 +113,7 @@ With `MANAGEMENT_ENABLED` (the default), the server listens on `MANAGEMENT_PORT`
 | Endpoint | |
 |---|---|
 | `/health/live` | `200` while the process runs (liveness probe). |
+| `/health/started` | `200` once the node runs, also while it waits for activation (startup probe). |
 | `/health/ready` | `200` when the node is running and its cluster is active, `503` while starting, restarting or stopping (readiness probe). |
 | `/metrics` | Prometheus metrics: `ignite_node_*` (heap, CPU, threads, jobs, traffic), `ignite_cluster_*` (active, server and baseline nodes), `ignite_data_region_*` (off-heap, RAM, checkpoint buffer, dirty pages, fill factor, evictions; by `region`), the health checks, and the .NET runtime. |
 
@@ -222,8 +244,12 @@ dotnet test tests/AspNetCore.Ignite.IntegrationTests
 
 The integration tests build the server image from the `Dockerfile` and run it with Docker (via Testcontainers):
 authentication, the client library and its health check, SSL with client certificates and certificate rotation, a
-two-node cluster activation, the management endpoints, REST, and the exit codes. They are skipped when Docker is not
-available. CI reports the unit test coverage in the job summary.
+two-node cluster activation, the management endpoints, REST, the shipped configuration files, and the exit codes. They are skipped when
+Docker is not available. CI reports the unit test coverage in the job summary, and tests the image with its
+[Helm chart](https://github.com/dradoaica/helm-charts/tree/main/charts/aspnetcore-ignite-server): a two-node persistent
+cluster in kind, checked by the chart's probes and `helm test` (the `helm-charts-ref` input selects the chart revision).
+A release opens a pull request on the chart repository that moves it to the released image (with a
+`HELM_CHARTS_TOKEN` secret).
 
 ## Build aspnetcore.ignite-server
 
@@ -257,7 +283,9 @@ docker rmi dradoaica/aspnetcore.ignite-server:2.18.1
 The [Helm chart](https://github.com/dradoaica/helm-charts/tree/main/charts/aspnetcore-ignite-server) runs the server as
 a StatefulSet. A deployment should:
 
-* probe `/health/live` and `/health/ready` on port 9464 (and scrape `/metrics`),
+* probe `/health/started` (startup), `/health/live` and `/health/ready` on port 9464 (and scrape `/metrics`),
+* start the pods in parallel (`podManagementPolicy: Parallel`) when `ACTIVATION_MIN_SERVER_NODES` is above 1: with
+  `OrderedReady`, the first pod is never ready (its cluster waits for the others) and the others never start,
 * set `terminationGracePeriodSeconds` above `SHUTDOWN_TIMEOUT_IN_SECONDS`,
 * give each pod a unique, stable `DEFAULT_CONSISTENT_ID` (e.g., the pod name) and, with persistence, a volume at
   `/app/work`,

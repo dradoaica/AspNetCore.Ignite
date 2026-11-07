@@ -10,6 +10,9 @@ internal sealed class IgniteNodeState
     /// <summary>The running node, or null while it is starting, restarting or stopped.</summary>
     public IIgnite? Node => runner?.Node;
 
+    /// <summary>True while the node is running (joined the topology), also before its cluster is activated.</summary>
+    public bool IsStarted => runner?.Node != null;
+
     /// <summary>True once the node is running and its cluster is active.</summary>
     public bool IsReady => runner?.IsReady == true;
 

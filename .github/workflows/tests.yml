@@ -9,6 +9,17 @@ on:
       - main
       - 'release/**'
   workflow_call:
+    inputs:
+      helm-charts-ref:
+        description: Branch, tag or commit of dradoaica/helm-charts whose aspnetcore-ignite-server chart is tested
+        type: string
+        default: main
+  workflow_dispatch:
+    inputs:
+      helm-charts-ref:
+        description: Branch, tag or commit of dradoaica/helm-charts whose aspnetcore-ignite-server chart is tested
+        type: string
+        default: main
 
 # a newer push supersedes a running check of the same branch
 concurrency:
@@ -75,3 +86,58 @@ jobs:
         run: >-
           dotnet test tests/AspNetCore.Ignite.IntegrationTests -c Release --no-build
           --logger "console;verbosity=normal"
+
+  # the server image with its Helm chart: a 2-node persistent cluster in kind, checked by the chart's probes and helm test
+  chart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      IMAGE: ghcr.io/dradoaica/aspnetcore.ignite-server
+      RELEASE: ignite
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Checkout Helm Chart
+        uses: actions/checkout@v6
+        with:
+          repository: dradoaica/helm-charts
+          ref: ${{ inputs.helm-charts-ref || 'main' }}
+          path: helm-charts
+
+      - name: Build Image
+        run: docker build -t "$IMAGE:e2e" .
+
+      - name: Create kind Cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: e2e
+
+      - name: Load Image
+        run: kind load docker-image "$IMAGE:e2e" --name e2e
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Install Chart
+        run: >-
+          helm install "$RELEASE" helm-charts/charts/aspnetcore-ignite-server
+          --set image.tag=e2e --set image.pullPolicy=Never
+          --set replicaCount=2 --set env.ACTIVATION_MIN_SERVER_NODES=2
+          --set secrets.igniteUserPassword=e2e-secret
+          --set resources.requests.cpu=500m --set resources.limits.cpu=1
+          --set resources.requests.memory=2Gi --set resources.limits.memory=2Gi
+          --set env.DEFAULT_ON_HEAP_MEMORY=512 --set env.DEFAULT_OFF_HEAP_MEMORY=256
+          --set persistence.size=1Gi
+          --wait --timeout 10m
+
+      - name: Helm Test
+        run: helm test "$RELEASE" --logs
+
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl get pods,pvc,svc -o wide
+          kubectl describe pods
+          kubectl logs -l app.kubernetes.io/name=aspnetcore-ignite-server --all-containers --tail=200
+

@@ -1,3 +1,4 @@
+using Apache.Ignite.Core.Configuration;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
@@ -71,6 +72,19 @@ internal sealed class IgniteServerSettings
     [ConfigurationKeyName("SSL_PROTOCOL")]
     public string SslProtocol { get; set; } = "TLS";
 
+    [ConfigurationKeyName("SSL_KEY_STORE_TYPE")]
+    public string SslKeyStoreType { get; set; } = "JKS";
+
+    [ConfigurationKeyName("SSL_TRUST_STORE_TYPE")]
+    public string SslTrustStoreType { get; set; } = "JKS";
+
+    [ConfigurationKeyName("SSL_KEY_ALGORITHM")]
+    public string SslKeyAlgorithm { get; set; } = "SunX509";
+
+    /// <summary>Thin clients must present a certificate the trust store trusts (USE_CLIENT_SSL).</summary>
+    [ConfigurationKeyName("SSL_CLIENT_AUTH")]
+    public bool SslClientAuth { get; set; } = true;
+
     [ConfigurationKeyName("SSL_KEY_STORE_FILE_PATH")]
     public string? SslKeyStoreFilePath { get; set; }
 
@@ -121,6 +135,73 @@ internal sealed class IgniteServerSettings
 
     [ConfigurationKeyName("SHUTDOWN_TIMEOUT_IN_SECONDS")]
     public int ShutdownTimeoutInSeconds { get; set; } = 30;
+
+    // the settings below apply only when set: their defaults are those of the default configuration (or of -ConfigFile)
+
+    [ConfigurationKeyName("JVM_MAX_METASPACE_MB")]
+    public int? JvmMaxMetaspaceMb { get; set; }
+
+    [ConfigurationKeyName("JVM_RESERVED_CODE_CACHE_MB")]
+    public int? JvmReservedCodeCacheMb { get; set; }
+
+    [ConfigurationKeyName("JVM_MAX_DIRECT_MEMORY_MB")]
+    public int? JvmMaxDirectMemoryMb { get; set; }
+
+    [ConfigurationKeyName("JVM_G1_HEAP_REGION_MB")]
+    public int? JvmG1HeapRegionMb { get; set; }
+
+    /// <summary>Extra JVM options, separated by spaces.</summary>
+    [ConfigurationKeyName("EXTRA_JVM_OPTS")]
+    public string? ExtraJvmOpts { get; set; }
+
+    /// <summary>Extra Java classpath entries separated by ':' (a directory adds its *.jar files), e.g., extra modules.</summary>
+    [ConfigurationKeyName("EXTRA_CLASSPATH")]
+    public string? ExtraClasspath { get; set; }
+
+    [ConfigurationKeyName("FAILURE_DETECTION_TIMEOUT_MS")]
+    public int? FailureDetectionTimeoutMs { get; set; }
+
+    [ConfigurationKeyName("CLIENT_FAILURE_DETECTION_TIMEOUT_MS")]
+    public int? ClientFailureDetectionTimeoutMs { get; set; }
+
+    [ConfigurationKeyName("NETWORK_TIMEOUT_MS")]
+    public int? NetworkTimeoutMs { get; set; }
+
+    [ConfigurationKeyName("PUBLIC_THREAD_POOL_SIZE")]
+    public int? PublicThreadPoolSize { get; set; }
+
+    [ConfigurationKeyName("SYSTEM_THREAD_POOL_SIZE")]
+    public int? SystemThreadPoolSize { get; set; }
+
+    [ConfigurationKeyName("QUERY_THREAD_POOL_SIZE")]
+    public int? QueryThreadPoolSize { get; set; }
+
+    [ConfigurationKeyName("SERVICE_THREAD_POOL_SIZE")]
+    public int? ServiceThreadPoolSize { get; set; }
+
+    [ConfigurationKeyName("STRIPED_THREAD_POOL_SIZE")]
+    public int? StripedThreadPoolSize { get; set; }
+
+    [ConfigurationKeyName("DATA_STREAMER_THREAD_POOL_SIZE")]
+    public int? DataStreamerThreadPoolSize { get; set; }
+
+    /// <summary>Data and indexes (persistence); a dedicated volume is recommended.</summary>
+    [ConfigurationKeyName("STORAGE_PATH")]
+    public string? StoragePath { get; set; }
+
+    /// <summary>The write-ahead log; a dedicated volume (disk) is recommended.</summary>
+    [ConfigurationKeyName("WAL_PATH")]
+    public string? WalPath { get; set; }
+
+    [ConfigurationKeyName("WAL_ARCHIVE_PATH")]
+    public string? WalArchivePath { get; set; }
+
+    [ConfigurationKeyName("WAL_COMPACTION_ENABLED")]
+    public bool? WalCompactionEnabled { get; set; }
+
+    /// <summary>Fsync, LogOnly (Ignite's default), Background or None (LOG_ONLY style names work too).</summary>
+    [ConfigurationKeyName("WAL_MODE")]
+    public string? WalMode { get; set; }
 
     /// <summary>
     ///     Binds the settings; CLUSTER_ENDPOINTS is a list (CLUSTER_ENDPOINTS__0, ...) or a comma-separated value.
@@ -191,13 +272,49 @@ internal sealed class IgniteServerSettings
             errors.Add("MANAGEMENT_PORT must be a valid port.");
         }
 
+        foreach (var (key, value) in new (string, int?)[]
+                 {
+                     ("JVM_MAX_METASPACE_MB", JvmMaxMetaspaceMb), ("JVM_RESERVED_CODE_CACHE_MB", JvmReservedCodeCacheMb),
+                     ("JVM_MAX_DIRECT_MEMORY_MB", JvmMaxDirectMemoryMb), ("JVM_G1_HEAP_REGION_MB", JvmG1HeapRegionMb),
+                     ("FAILURE_DETECTION_TIMEOUT_MS", FailureDetectionTimeoutMs),
+                     ("CLIENT_FAILURE_DETECTION_TIMEOUT_MS", ClientFailureDetectionTimeoutMs),
+                     ("NETWORK_TIMEOUT_MS", NetworkTimeoutMs), ("PUBLIC_THREAD_POOL_SIZE", PublicThreadPoolSize),
+                     ("SYSTEM_THREAD_POOL_SIZE", SystemThreadPoolSize), ("QUERY_THREAD_POOL_SIZE", QueryThreadPoolSize),
+                     ("SERVICE_THREAD_POOL_SIZE", ServiceThreadPoolSize), ("STRIPED_THREAD_POOL_SIZE", StripedThreadPoolSize),
+                     ("DATA_STREAMER_THREAD_POOL_SIZE", DataStreamerThreadPoolSize),
+                 })
+        {
+            if (value <= 0)
+            {
+                errors.Add($"{key} must be positive.");
+            }
+        }
+
+        if (JvmG1HeapRegionMb is { } regionMb && (regionMb > 32 || (regionMb & (regionMb - 1)) != 0))
+        {
+            errors.Add("JVM_G1_HEAP_REGION_MB must be a power of 2 from 1 to 32.");
+        }
+
+        if (WalMode != null && ParseWalMode(WalMode) == null)
+        {
+            errors.Add("WAL_MODE must be one of Fsync, LogOnly, Background, None.");
+        }
+
+        if (ClientFailureDetectionTimeoutMs is { } clientTimeout && clientTimeout < MetricsUpdateFrequencyInSeconds * 1000L)
+        {
+            errors.Add(
+                "CLIENT_FAILURE_DETECTION_TIMEOUT_MS must not be less than METRICS_UPDATE_FREQUENCY_IN_SECONDS (Ignite requires it)."
+            );
+        }
+
         if (UseSsl || UseClientSsl)
         {
             RequireValue(errors, "SSL_KEY_STORE_FILE_PATH", SslKeyStoreFilePath);
             RequireValue(errors, "SSL_TRUST_STORE_FILE_PATH", SslTrustStoreFilePath);
         }
 
-        if (UseClientSsl)
+        // the server's own loopback client (password change) needs a certificate when client authentication is on
+        if (UseClientSsl && SslClientAuth)
         {
             RequireValue(errors, "SSL_CLIENT_CERTIFICATE_PATH", SslClientCertificatePath);
         }
@@ -222,6 +339,29 @@ internal sealed class IgniteServerSettings
         AutoResetLostPartitions = AutoResetLostPartitions,
         UseSsl = UseSsl,
         SslProtocol = SslProtocol,
+        SslKeyStoreType = SslKeyStoreType,
+        SslTrustStoreType = SslTrustStoreType,
+        SslKeyAlgorithm = SslKeyAlgorithm,
+        JvmMaxMetaspaceMb = JvmMaxMetaspaceMb,
+        JvmReservedCodeCacheMb = JvmReservedCodeCacheMb,
+        JvmMaxDirectMemoryMb = JvmMaxDirectMemoryMb,
+        JvmG1HeapRegionMb = JvmG1HeapRegionMb,
+        ExtraJvmOptions = SplitOptions(ExtraJvmOpts),
+        ExtraClasspath = ExtraClasspath,
+        FailureDetectionTimeout = Milliseconds(FailureDetectionTimeoutMs),
+        ClientFailureDetectionTimeout = Milliseconds(ClientFailureDetectionTimeoutMs),
+        NetworkTimeout = Milliseconds(NetworkTimeoutMs),
+        PublicThreadPoolSize = PublicThreadPoolSize,
+        SystemThreadPoolSize = SystemThreadPoolSize,
+        QueryThreadPoolSize = QueryThreadPoolSize,
+        ServiceThreadPoolSize = ServiceThreadPoolSize,
+        StripedThreadPoolSize = StripedThreadPoolSize,
+        DataStreamerThreadPoolSize = DataStreamerThreadPoolSize,
+        StoragePath = Blank(StoragePath),
+        WalPath = Blank(WalPath),
+        WalArchivePath = Blank(WalArchivePath),
+        WalCompactionEnabled = WalCompactionEnabled,
+        WalMode = WalMode == null ? null : ParseWalMode(WalMode),
         SslKeyStoreFilePath = SslKeyStoreFilePath,
         SslKeyStorePassword = SslKeyStorePassword,
         SslTrustStoreFilePath = SslTrustStoreFilePath,
@@ -241,6 +381,10 @@ internal sealed class IgniteServerSettings
         ["SSL_KEY_STORE_PASSWORD"] = SslKeyStorePassword,
         ["SSL_TRUST_STORE_FILE_PATH"] = SslTrustStoreFilePath,
         ["SSL_TRUST_STORE_PASSWORD"] = SslTrustStorePassword,
+        ["SSL_KEY_STORE_TYPE"] = SslKeyStoreType,
+        ["SSL_TRUST_STORE_TYPE"] = SslTrustStoreType,
+        ["SSL_KEY_ALGORITHM"] = SslKeyAlgorithm,
+        ["SSL_CLIENT_AUTH"] = SslClientAuth ? "true" : "false",
     };
 
     /// <summary>XML elements inserted verbatim (not escaped) at the placeholders of the Spring configuration templates.</summary>
@@ -252,6 +396,17 @@ internal sealed class IgniteServerSettings
     };
 
     internal const string ConnectorConfigurationPlaceholder = "<!-- CONNECTOR_CONFIGURATION -->";
+
+    internal static WalMode? ParseWalMode(string value) =>
+        Enum.TryParse<WalMode>(value.Replace("_", string.Empty, StringComparison.Ordinal), true, out var walMode) &&
+        Enum.IsDefined(walMode) ? walMode : null;
+
+    private static string[] SplitOptions(string? value) =>
+        value?.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
+
+    private static TimeSpan? Milliseconds(int? value) => value.HasValue ? TimeSpan.FromMilliseconds(value.Value) : null;
+
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     private static void RequireValue(List<string> errors, string key, string? value)
     {

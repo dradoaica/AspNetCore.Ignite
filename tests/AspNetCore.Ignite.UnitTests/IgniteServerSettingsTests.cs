@@ -170,4 +170,63 @@ public sealed class IgniteServerSettingsTests
         );
         Assert.True(withStaticIpFinder.Configuration.DataStorageConfiguration.DefaultDataRegionConfiguration.PersistenceEnabled);
     }
+
+    [Theory]
+    [InlineData("LOG_ONLY", Apache.Ignite.Core.Configuration.WalMode.LogOnly)]
+    [InlineData("logonly", Apache.Ignite.Core.Configuration.WalMode.LogOnly)]
+    [InlineData("Fsync", Apache.Ignite.Core.Configuration.WalMode.Fsync)]
+    public void WalMode_AcceptsBothNamingStyles(string value, Apache.Ignite.Core.Configuration.WalMode expected) =>
+        Assert.Equal(expected, IgniteServerSettings.ParseWalMode(value));
+
+    [Fact]
+    public void Validate_JavaChartSettings()
+    {
+        var errors = Load(
+                new Dictionary<string, string?>
+                {
+                    ["WAL_MODE"] = "sometimes",
+                    ["JVM_G1_HEAP_REGION_MB"] = "3",
+                    ["PUBLIC_THREAD_POOL_SIZE"] = "0",
+                    ["CLIENT_FAILURE_DETECTION_TIMEOUT_MS"] = "30000",
+                    ["METRICS_UPDATE_FREQUENCY_IN_SECONDS"] = "60",
+                }
+            )
+            .Validate();
+
+        Assert.Contains(errors, error => error.StartsWith("WAL_MODE", StringComparison.Ordinal));
+        Assert.Contains(errors, error => error.StartsWith("JVM_G1_HEAP_REGION_MB", StringComparison.Ordinal));
+        Assert.Contains(errors, error => error.StartsWith("PUBLIC_THREAD_POOL_SIZE", StringComparison.Ordinal));
+        Assert.Contains(errors, error => error.StartsWith("CLIENT_FAILURE_DETECTION_TIMEOUT_MS", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ClientSsl_WithoutClientAuth_NeedsNoClientCertificate()
+    {
+        var settings = Load(
+            new Dictionary<string, string?>
+            {
+                ["USE_CLIENT_SSL"] = "true",
+                ["SSL_CLIENT_AUTH"] = "false",
+                ["SSL_KEY_STORE_FILE_PATH"] = "/certs/server.p12",
+                ["SSL_TRUST_STORE_FILE_PATH"] = "/certs/trust.p12",
+                ["SSL_KEY_STORE_TYPE"] = "PKCS12",
+            }
+        );
+
+        Assert.Empty(settings.Validate());
+        Assert.Equal("false", settings.ToSpringConfigPlaceholders()["SSL_CLIENT_AUTH"]);
+        Assert.Equal("PKCS12", settings.ToRunnerOptions("spring.xml").SslKeyStoreType);
+    }
+
+    [Fact]
+    public void UnsetJavaChartSettings_KeepTheDefaults()
+    {
+        var options = Load([]).ToRunnerOptions("spring.xml");
+
+        Assert.Null(options.NetworkTimeout);
+        Assert.Null(options.PublicThreadPoolSize);
+        Assert.Null(options.WalPath);
+        Assert.Null(options.WalMode);
+        Assert.Empty(options.ExtraJvmOptions);
+    }
 }

@@ -137,16 +137,20 @@ internal sealed class IgniteServerRunner : IDisposable
             return;
         }
 
+        // a cluster that was never activated has no baseline: its users still have their default passwords
+        var newCluster = persistenceEnabled && GetBaselineTopology(cluster) == null;
         if (!cluster.IsActive())
         {
             cluster.SetActive(true);
+            logger.Information("The cluster was activated ({ServerNodes} server nodes).", cluster.ForServers().GetNodes().Count);
         }
 
         cluster.SetBaselineAutoAdjustEnabledFlag(true);
         cluster.SetBaselineAutoAdjustTimeout((long)options.BaselineAutoAdjustTimeout.TotalMilliseconds);
-        if (persistenceEnabled && !string.IsNullOrWhiteSpace(options.IgniteUserPassword))
+        // users exist only with authentication (which implies persistence); without it there is no password to set
+        if (igniteConfiguration.AuthenticationEnabled && !string.IsNullOrWhiteSpace(options.IgniteUserPassword))
         {
-            new IgniteUserPasswordManager(options, logger).Apply(current, options.IgniteUserPassword);
+            new IgniteUserPasswordManager(options, logger).Apply(current, options.IgniteUserPassword, newCluster);
         }
 
         current.GetEvents()
@@ -159,7 +163,8 @@ internal sealed class IgniteServerRunner : IDisposable
                 new DiscoveryEventListener(logger),
                 EventType.NodeJoined,
                 EventType.NodeLeft,
-                EventType.NodeFailed
+                EventType.NodeFailed,
+                EventType.NodeSegmented
             );
 
         ready = !tcs.Task.IsCompleted;
@@ -230,6 +235,22 @@ internal sealed class IgniteServerRunner : IDisposable
                 serverNodes
             );
             await Task.WhenAny(stopped, Task.Delay(ActivationPollInterval)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    ///     The baseline topology, or null when none was set yet (Ignite.NET documents null but throws a Java
+    ///     NullPointerException instead).
+    /// </summary>
+    internal static ICollection<IBaselineNode>? GetBaselineTopology(ICluster cluster)
+    {
+        try
+        {
+            return cluster.GetBaselineTopology();
+        }
+        catch (Apache.Ignite.Core.Common.IgniteException ex) when (ex.Message.Contains("NullPointerException", StringComparison.Ordinal))
+        {
+            return null;
         }
     }
 

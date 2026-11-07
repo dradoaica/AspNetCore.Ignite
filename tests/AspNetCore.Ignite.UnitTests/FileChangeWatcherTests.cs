@@ -84,4 +84,47 @@ public sealed class FileChangeWatcherTests
             directory.Delete(true);
         }
     }
+
+    /// <summary>Kubernetes updates a mounted secret by swapping the ..data symlink; the file symlinks never change.</summary>
+    [Fact]
+    public async Task KubernetesSecretUpdate_IsSeen()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var directory = Directory.CreateTempSubdirectory("k8s-secret");
+        try
+        {
+            var first = Directory.CreateDirectory(Path.Combine(directory.FullName, "..2026_01"));
+            await File.WriteAllTextAsync(Path.Combine(first.FullName, "server.jks"), "1");
+            File.CreateSymbolicLink(Path.Combine(directory.FullName, "..data"), first.Name);
+            File.CreateSymbolicLink(Path.Combine(directory.FullName, "server.jks"), Path.Combine("..data", "server.jks"));
+            TaskCompletionSource changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            using FileChangeWatcher watcher = new(
+                [Path.Combine(directory.FullName, "server.jks"),],
+                () => changed.TrySetResult(),
+                TimeSpan.Zero,
+                TimeSpan.Zero
+            );
+            await Task.Delay(TimeSpan.FromSeconds(1));
+
+            var second = Directory.CreateDirectory(Path.Combine(directory.FullName, "..2026_02"));
+            await File.WriteAllTextAsync(Path.Combine(second.FullName, "server.jks"), "2");
+            File.CreateSymbolicLink(Path.Combine(directory.FullName, "..data_tmp"), second.Name);
+            // an atomic rename(2) of the new symlink over ..data, as the kubelet does
+            using (var mv = System.Diagnostics.Process.Start("mv", ["-Tf", Path.Combine(directory.FullName, "..data_tmp"), Path.Combine(directory.FullName, "..data"),])!)
+            {
+                await mv.WaitForExitAsync();
+                Assert.Equal(0, mv.ExitCode);
+            }
+
+            await changed.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        }
+        finally
+        {
+            directory.Delete(true);
+        }
+    }
 }

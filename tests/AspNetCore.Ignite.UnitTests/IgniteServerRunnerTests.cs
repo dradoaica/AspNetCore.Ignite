@@ -121,4 +121,33 @@ public sealed class IgniteServerRunnerTests
 
         Assert.Equal(47600, Assert.IsType<TcpDiscoverySpi>(runner.Configuration.DiscoverySpi).LocalPort);
     }
+
+    [Theory]
+    [InlineData(true, "ignite", "old")]
+    [InlineData(false, "old", "ignite")]
+    public void PasswordCandidates_MostLikelyFirst(bool newCluster, string first, string second)
+    {
+        IgniteUserPasswordManager manager = new(new IgniteServerRunnerOptions { IgniteUserPreviousPassword = "old", }, Serilog.Core.Logger.None);
+
+        Assert.Equal([first, second,], manager.GetCurrentPasswordCandidates("new", newCluster));
+    }
+
+    [Fact]
+    public void PasswordCandidates_NeverTheConfiguredPassword()
+    {
+        IgniteUserPasswordManager manager = new(new IgniteServerRunnerOptions(), Serilog.Core.Logger.None);
+
+        Assert.Empty(manager.GetCurrentPasswordCandidates("ignite", true));
+    }
+
+    [Fact]
+    public async Task StartedCheck_IsUnhealthyWithoutNode()
+    {
+        AspNetCore.IgniteServer.Management.IgniteNodeStartedHealthCheck check = new(new IgniteNodeState());
+        var registration = new Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckRegistration("started", check, null, null);
+
+        var result = await check.CheckHealthAsync(new Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckContext { Registration = registration, });
+
+        Assert.Equal(Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy, result.Status);
+    }
 }

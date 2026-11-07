@@ -17,10 +17,12 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
         Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
 
         var live = await Http.GetAsync(IgniteServerFixture.GetManagementUri(fixture.Node, "/health/live"));
+        var started = await Http.GetAsync(IgniteServerFixture.GetManagementUri(fixture.Node, "/health/started"));
         var ready = await Http.GetAsync(IgniteServerFixture.GetManagementUri(fixture.Node, "/health/ready"));
         var metrics = await Http.GetStringAsync(IgniteServerFixture.GetManagementUri(fixture.Node, "/metrics"));
 
         Assert.Equal(HttpStatusCode.OK, live.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, started.StatusCode);
         Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
         Assert.Contains("ignite_node_ready 1", metrics);
         Assert.Contains("ignite_cluster_active 1", metrics);
@@ -50,6 +52,24 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
         // ...and nothing listens on its port by default
         var (exitCode, _, _) = await ExecAsync(fixture.Node, "bash", "-c", $"exec 3<>/dev/tcp/127.0.0.1/{IgniteServerFixture.RestPort}");
         Assert.NotEqual(0, exitCode);
+    }
+
+    [SkippableTheory]
+    [InlineData("config/default-config.xml")]
+    [InlineData("config/persistent-config.xml")]
+    public async Task ShippedConfigurationFiles_Start(string configFile)
+    {
+        Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
+        await using var node = fixture.CreateNodeBuilder()
+            .WithEnvironment("CONFIG_FILE", configFile)
+            .WithEnvironment("ENABLE_AUTHENTICATION", "false")
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
+            .Build();
+
+        await node.StartAsync();
+
+        var ready = await Http.GetAsync(IgniteServerFixture.GetManagementUri(node, "/health/ready"));
+        Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
     }
 
     [SkippableFact]

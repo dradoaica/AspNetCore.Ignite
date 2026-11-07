@@ -1,4 +1,6 @@
+using Apache.Ignite.Core.Configuration;
 using System;
+using System.Collections.Generic;
 
 namespace AspNetCore.IgniteServer;
 
@@ -31,6 +33,9 @@ internal sealed record IgniteServerRunnerOptions
 
     /// <summary>The Java SSL protocol; "TLS" negotiates the highest version both sides support (TLS 1.3 on Java 17).</summary>
     public string SslProtocol { get; init; } = "TLS";
+    public string SslKeyStoreType { get; init; } = "JKS";
+    public string SslTrustStoreType { get; init; } = "JKS";
+    public string SslKeyAlgorithm { get; init; } = "SunX509";
     public string? SslKeyStoreFilePath { get; init; }
     public string? SslKeyStorePassword { get; init; }
     public string? SslTrustStoreFilePath { get; init; }
@@ -38,4 +43,26 @@ internal sealed record IgniteServerRunnerOptions
     public bool UseClientSsl { get; init; }
     public string? SslClientCertificatePath { get; init; }
     public string? SslClientCertificatePassword { get; init; }
+
+    // null: keep the value of the default configuration (or of -ConfigFile)
+    public int? JvmMaxMetaspaceMb { get; init; }
+    public int? JvmReservedCodeCacheMb { get; init; }
+    public int? JvmMaxDirectMemoryMb { get; init; }
+    public int? JvmG1HeapRegionMb { get; init; }
+    public IReadOnlyList<string> ExtraJvmOptions { get; init; } = [];
+    public string? ExtraClasspath { get; init; }
+    public TimeSpan? FailureDetectionTimeout { get; init; }
+    public TimeSpan? ClientFailureDetectionTimeout { get; init; }
+    public TimeSpan? NetworkTimeout { get; init; }
+    public int? PublicThreadPoolSize { get; init; }
+    public int? SystemThreadPoolSize { get; init; }
+    public int? QueryThreadPoolSize { get; init; }
+    public int? ServiceThreadPoolSize { get; init; }
+    public int? StripedThreadPoolSize { get; init; }
+    public int? DataStreamerThreadPoolSize { get; init; }
+    public string? StoragePath { get; init; }
+    public string? WalPath { get; init; }
+    public string? WalArchivePath { get; init; }
+    public bool? WalCompactionEnabled { get; init; }
+    public WalMode? WalMode { get; init; }
 }

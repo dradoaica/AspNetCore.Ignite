@@ -178,3 +178,46 @@ jobs:
 
       - name: Inspect
         run: docker buildx imagetools inspect "${{ needs.version.outputs.image }}:${{ needs.version.outputs.version }}"
+
+  # opens a pull request on dradoaica/helm-charts that moves the chart to the released image; needs a HELM_CHARTS_TOKEN
+  # secret (a token that can push branches and open pull requests there), and is skipped without it
+  chart:
+    needs: [image-manifest, version]
+    runs-on: ubuntu-latest
+    env:
+      HELM_CHARTS_TOKEN: ${{ secrets.HELM_CHARTS_TOKEN }}
+    steps:
+      - name: Skip without HELM_CHARTS_TOKEN
+        if: env.HELM_CHARTS_TOKEN == ''
+        run: echo "::notice::HELM_CHARTS_TOKEN is not set; update appVersion of the aspnetcore-ignite-server chart by hand."
+
+      - name: Checkout Helm Chart
+        if: env.HELM_CHARTS_TOKEN != ''
+        uses: actions/checkout@v6
+        with:
+          repository: dradoaica/helm-charts
+          token: ${{ secrets.HELM_CHARTS_TOKEN }}
+          path: helm-charts
+
+      - name: Open Pull Request
+        if: env.HELM_CHARTS_TOKEN != ''
+        working-directory: helm-charts
+        env:
+          GH_TOKEN: ${{ secrets.HELM_CHARTS_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          chart=charts/aspnetcore-ignite-server/Chart.yaml
+          branch="aspnetcore-ignite-server-${VERSION}"
+          # appVersion follows the image; the chart version gets a patch bump
+          sed -i -E "s/^appVersion: .*/appVersion: \"${VERSION}\"/" "$chart"
+          current="$(sed -n -E 's/^version: (.*)/\1/p' "$chart")"
+          sed -i -E "s/^version: .*/version: ${current%.*}.$(( ${current##*.} + 1 ))/" "$chart"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git commit -am "aspnetcore-ignite-server: appVersion ${VERSION}"
+          git push origin "$branch"
+          gh pr create --title "aspnetcore-ignite-server: appVersion ${VERSION}" \
+            --body "Moves the chart to the ${VERSION} image released by ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${{ github.event.release.tag_name }}."
+

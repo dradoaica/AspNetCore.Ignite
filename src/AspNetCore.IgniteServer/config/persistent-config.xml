@@ -1,4 +1,4 @@
-﻿<igniteConfiguration peerAssemblyLoadingMode='CurrentAppDomain'>
+﻿<igniteConfiguration>
     <dataStorageConfiguration>
         <defaultDataRegionConfiguration persistenceEnabled="true" name="default"/>
     </dataStorageConfiguration>

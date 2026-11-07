@@ -14,6 +14,8 @@ internal sealed class DiscoveryEventListener(ILogger logger) : IEventListener<Di
         LogEventLevel? level = evt.Type == EventType.NodeJoined ? LogEventLevel.Information
             : evt.Type == EventType.NodeLeft ? LogEventLevel.Warning
             : evt.Type == EventType.NodeFailed ? LogEventLevel.Error
+            // the local node was cut off from the cluster: it stops, and so does the server (exit code 1)
+            : evt.Type == EventType.NodeSegmented ? LogEventLevel.Error
             : null;
         if (level.HasValue)
         {

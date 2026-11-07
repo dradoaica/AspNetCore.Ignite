@@ -4,6 +4,8 @@ using Apache.Ignite.Core.Client;
 using AspNetCore.Ignite;
 using Serilog;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace AspNetCore.IgniteServer;
 
@@ -19,17 +21,19 @@ internal sealed class IgniteUserPasswordManager(IgniteServerRunnerOptions option
     ///     Nothing to do when <paramref name="password" /> is already accepted; otherwise it replaces the previous
     ///     password (rotation) or the default one (first start). Logs an error when none of them is accepted.
     /// </summary>
-    public void Apply(IIgnite node, string password)
+    public void Apply(IIgnite node, string password, bool newCluster = false)
     {
         var endpoint = GetThinClientEndpoint(node);
-        if (CanAuthenticate(endpoint, password))
+        // every failed login is logged by the node as an error, so try the likely password first: the default one on
+        // a new cluster, the configured one otherwise
+        if (!newCluster && CanAuthenticate(endpoint, password))
         {
             return;
         }
 
-        foreach (var currentPassword in new[] { options.IgniteUserPreviousPassword, DefaultPassword, })
+        foreach (var currentPassword in GetCurrentPasswordCandidates(password, newCluster))
         {
-            if (string.IsNullOrWhiteSpace(currentPassword) || !CanAuthenticate(endpoint, currentPassword))
+            if (!CanAuthenticate(endpoint, currentPassword))
             {
                 continue;
             }
@@ -39,17 +43,32 @@ internal sealed class IgniteUserPasswordManager(IgniteServerRunnerOptions option
             ddlCache.Query(new SqlFieldsQuery(BuildAlterUserPasswordSql(DefaultUserName, password))).GetAll();
             igniteClient.DestroyCache(DdlCacheName);
             logger.Information(
-                "The password of the '{UserName}' user was changed (from the {PasswordKind} password).",
+                "The password of the '{UserName:l}' user was changed (from the {PasswordKind:l} password).",
                 DefaultUserName,
-                ReferenceEquals(currentPassword, DefaultPassword) ? "default" : "previous"
+                currentPassword == DefaultPassword ? "default" : "previous"
             );
             return;
         }
 
+        if (newCluster && CanAuthenticate(endpoint, password))
+        {
+            return;
+        }
+
         logger.Error(
-            "IGNITE_USER_PASSWORD was not applied: neither it, IGNITE_USER_PREVIOUS_PASSWORD nor the default password is accepted for the '{UserName}' user.",
+            "IGNITE_USER_PASSWORD was not applied: neither it, IGNITE_USER_PREVIOUS_PASSWORD nor the default password is accepted for the '{UserName:l}' user.",
             DefaultUserName
         );
+    }
+
+    /// <summary>The passwords that may be the current one, most likely first.</summary>
+    internal IEnumerable<string> GetCurrentPasswordCandidates(string password, bool newCluster)
+    {
+        string?[] candidates = newCluster ? [DefaultPassword, options.IgniteUserPreviousPassword,]
+            : [options.IgniteUserPreviousPassword, DefaultPassword,];
+        return candidates.Where(candidate => !string.IsNullOrWhiteSpace(candidate) && candidate != password)
+            .Select(candidate => candidate!)
+            .Distinct();
     }
 
     internal static string BuildAlterUserPasswordSql(string userName, string password) =>

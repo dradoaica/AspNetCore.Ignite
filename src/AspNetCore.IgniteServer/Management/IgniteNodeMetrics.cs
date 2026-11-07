@@ -26,7 +26,7 @@ internal sealed class IgniteNodeMetrics : IDisposable
         meter.CreateObservableGauge("node_ready", () => nodeState.IsReady ? 1 : 0, description: "1 when the node is running and its cluster is active.");
         Cluster("cluster_active", cluster => cluster.IsActive() ? 1 : 0, "1 when the cluster is active.");
         Cluster("cluster_server_nodes", cluster => cluster.ForServers().GetNodes().Count, "Server nodes in the topology.");
-        Cluster("cluster_baseline_nodes", cluster => cluster.GetBaselineTopology()?.Count ?? 0, "Nodes of the baseline topology.");
+        Cluster("cluster_baseline_nodes", cluster => IgniteServerRunner.GetBaselineTopology(cluster)?.Count ?? 0, "Nodes of the baseline topology.");
 
         LocalNode("node_heap_used_bytes", metrics => metrics.HeapMemoryUsed, "bytes", "JVM heap in use.");
         LocalNode("node_heap_committed_bytes", metrics => metrics.HeapMemoryCommitted, "bytes", "JVM heap committed.");
