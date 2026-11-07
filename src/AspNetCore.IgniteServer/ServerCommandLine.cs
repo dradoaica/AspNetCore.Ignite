@@ -17,28 +17,31 @@ internal sealed class ServerCommandLine
     private readonly Option<string[]> clusterOption = new("-Cluster")
     {
         Description = "Specifies IP address and port of a cluster node. Multiple nodes can be specified.",
-        Arity = ArgumentArity.ZeroOrMore,
+        Arity = ArgumentArity.ZeroOrMore
     };
 
     private readonly Option<string> configFileOption = new("-ConfigFile")
     {
-        Description = "XML configuration file. If no file is specified then the default configuration is used.",
+        Description = "XML configuration file. If no file is specified then the default configuration is used."
     };
 
     private readonly Option<string> consistentIdOption = new("-ConsistentId")
     {
-        Description = "Specifies as a consistent id of the node. This value is used in topology.",
+        Description = "Specifies as a consistent id of the node. This value is used in topology."
     };
 
-    private readonly Option<int?> offHeapOption = new("-OffHeap") { Description = "Size of off-heap memory given in megabytes.", };
-    private readonly Option<int?> onHeapOption = new("-OnHeap") { Description = "Size of on-heap memory given in megabytes.", };
+    private readonly Option<int?> offHeapOption = new("-OffHeap")
+        { Description = "Size of off-heap memory given in megabytes." };
+
+    private readonly Option<int?> onHeapOption = new("-OnHeap")
+        { Description = "Size of on-heap memory given in megabytes." };
 
     private readonly Option<bool> persistenceEnabledOption = new("-PersistenceEnabled")
     {
-        Description = "If set, it enables persistence mode.",
+        Description = "If set, it enables persistence mode."
     };
 
-    private readonly Option<int?> spiPortOption = new("-SpiPort") { Description = "Specifies port for Discovery Spi.", };
+    private readonly Option<int?> spiPortOption = new("-SpiPort") { Description = "Specifies port for Discovery Spi." };
 
     public ServerCommandLine(Func<IReadOnlyDictionary<string, string?>, Task<int>> run)
     {
@@ -50,7 +53,7 @@ internal sealed class ServerCommandLine
             spiPortOption,
             clusterOption,
             consistentIdOption,
-            persistenceEnabledOption,
+            persistenceEnabledOption
         };
         RootCommand.Options.OfType<HelpOption>().Single().Aliases.Add("-Help");
         RootCommand.SetAction((parseResult, _) => run(GetOverrides(parseResult)));
@@ -67,29 +70,23 @@ internal sealed class ServerCommandLine
         AddOverride(overrides, "DEFAULT_ON_HEAP_MEMORY", parseResult.GetValue(onHeapOption));
         AddOverride(overrides, "SPI_PORT", parseResult.GetValue(spiPortOption));
         AddOverride(overrides, "DEFAULT_CONSISTENT_ID", parseResult.GetValue(consistentIdOption));
-        if (parseResult.GetValue(persistenceEnabledOption))
-        {
-            overrides["PERSISTENCE_ENABLED"] = "true";
-        }
+        if (parseResult.GetValue(persistenceEnabledOption)) overrides["PERSISTENCE_ENABLED"] = "true";
 
         var clusterEndpoints = parseResult.GetValue(clusterOption) ?? [];
-        for (var i = 0; i < clusterEndpoints.Length; i++)
-        {
-            overrides[$"CLUSTER_ENDPOINTS:{i}"] = clusterEndpoints[i];
-        }
+        for (var i = 0; i < clusterEndpoints.Length; i++) overrides[$"CLUSTER_ENDPOINTS:{i}"] = clusterEndpoints[i];
 
         return overrides;
     }
 
     /// <summary>Runs the command line; the host handles SIGTERM/CTRL+C (graceful shutdown), not the parser.</summary>
-    public Task<int> InvokeAsync(string[] args) =>
-        RootCommand.Parse(args).InvokeAsync(new InvocationConfiguration { ProcessTerminationTimeout = null, });
+    public Task<int> InvokeAsync(string[] args)
+    {
+        return RootCommand.Parse(args).InvokeAsync(new InvocationConfiguration { ProcessTerminationTimeout = null });
+    }
 
     private static void AddOverride<T>(Dictionary<string, string?> overrides, string key, T? value)
     {
         if (value is not null && (value is not string text || !string.IsNullOrWhiteSpace(text)))
-        {
             overrides[key] = Convert.ToString(value, CultureInfo.InvariantCulture);
-        }
     }
 }

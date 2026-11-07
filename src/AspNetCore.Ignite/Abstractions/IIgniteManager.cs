@@ -1,8 +1,8 @@
-﻿using Apache.Ignite.Core.Client;
-using Apache.Ignite.Core.Client.Cache;
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Apache.Ignite.Core.Client;
+using Apache.Ignite.Core.Client.Cache;
 
 namespace AspNetCore.Ignite.Abstractions;
 
@@ -19,7 +19,8 @@ public interface IIgniteManager
     Task<IIgniteClient> GetClientAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Gets the cache, creating it (partitioned, with the defaults of <c>IgniteClientOptions.Cache</c>) when it does not exist;
+    ///     Gets the cache, creating it (partitioned, with the defaults of <c>IgniteClientOptions.Cache</c>) when it does not
+    ///     exist;
     ///     transient failures are retried.
     /// </summary>
     /// <param name="cacheName">The cache name.</param>

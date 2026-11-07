@@ -1,9 +1,9 @@
-using Apache.Ignite.Core.Client;
-using AspNetCore.Ignite.Abstractions;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Apache.Ignite.Core.Client;
+using AspNetCore.Ignite.Abstractions;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace AspNetCore.Ignite.HealthChecks;
 
@@ -42,7 +42,8 @@ public sealed class IgniteHealthCheck(IIgniteManager igniteManager, TimeSpan tim
 
             // bounded by the client's socket timeout
             var active = client.GetCluster().IsActive();
-            return active ? HealthCheckResult.Healthy("The Ignite cluster is active.")
+            return active
+                ? HealthCheckResult.Healthy("The Ignite cluster is active.")
                 : new HealthCheckResult(context.Registration.FailureStatus, "The Ignite cluster is not active.");
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)

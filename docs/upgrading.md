@@ -19,7 +19,8 @@ Apache Ignite 2.19.0 and is built on Apache Ignite 2.18.0 until 2.19.0 is releas
 * SSL restarts are graceful and jittered; the process exits with `1` on failures (it always exited with `0`).
 * With the Helm chart, the StatefulSet has to be recreated (its pod management policy and volume claims change). Stop
   the cluster cleanly (so the WAL is checkpointed), delete the StatefulSet, and upgrade with
-  `persistence.storageVolume.claimName=persistence`, so the existing data volumes are reused (only the WAL volume is new):
+  `persistence.storageVolume.claimName=persistence`, so the existing data volumes are reused (only the WAL volume is
+  new):
 
   ```
   kubectl scale statefulset <fullname>-cluster --replicas=0

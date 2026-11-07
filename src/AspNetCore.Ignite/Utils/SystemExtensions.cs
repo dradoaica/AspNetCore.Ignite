@@ -11,9 +11,11 @@ public static class SystemExtensions
     /// </summary>
     /// <param name="type">Type to get the full name for.</param>
     /// <returns>Full name of the specified type without additional info of the assembly.</returns>
-    public static string FullNameWithoutAssemblyInfo(this Type type) =>
-        type.FullName is not { } fullName ? type.Name
+    public static string FullNameWithoutAssemblyInfo(this Type type)
+    {
+        return type.FullName is not { } fullName ? type.Name
             : !type.IsGenericType ? fullName : RemoveAssemblyInfo(fullName);
+    }
 
     /// <summary>Removes all assembly info from the specified type name.</summary>
     /// <param name="typeName">Type name to remove assembly info from.</param>

@@ -4,7 +4,7 @@ name: Release
 # by the tag
 on:
   release:
-    types: [published]
+    types: [ published ]
 
 env:
   DOTNET_NOLOGO: true
@@ -37,7 +37,7 @@ jobs:
           echo "image=ghcr.io/${owner,,}/${repo,,}-server" >> "$GITHUB_OUTPUT"
 
   packages:
-    needs: [tests, version]
+    needs: [ tests, version ]
     permissions:
       contents: read # to checkout codebase
       packages: write # to push NuGet packages to GitHub Packages
@@ -71,7 +71,7 @@ jobs:
 
   # each platform is built natively (no emulation) and pushed by digest; the manifest job tags the multi-platform image
   image:
-    needs: [tests, version]
+    needs: [ tests, version ]
     strategy:
       matrix:
         include:
@@ -135,7 +135,7 @@ jobs:
           if-no-files-found: error
 
   image-manifest:
-    needs: [image, version]
+    needs: [ image, version ]
     permissions:
       contents: read
       packages: write # to push the image index to GHCR
@@ -182,7 +182,7 @@ jobs:
   # opens a pull request on dradoaica/helm-charts that moves the chart to the released image; needs a HELM_CHARTS_TOKEN
   # secret (a token that can push branches and open pull requests there), and is skipped without it
   chart:
-    needs: [image-manifest, version]
+    needs: [ image-manifest, version ]
     runs-on: ubuntu-latest
     env:
       HELM_CHARTS_TOKEN: ${{ secrets.HELM_CHARTS_TOKEN }}

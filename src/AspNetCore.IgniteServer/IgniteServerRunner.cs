@@ -1,15 +1,17 @@
-using Apache.Ignite.Core;
-using Apache.Ignite.Core.Cluster;
-using Apache.Ignite.Core.Discovery.Tcp;
-using Apache.Ignite.Core.Discovery.Tcp.Static;
-using Apache.Ignite.Core.Events;
-using AspNetCore.IgniteServer.Listeners;
-using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Apache.Ignite.Core;
+using Apache.Ignite.Core.Cluster;
+using Apache.Ignite.Core.Common;
+using Apache.Ignite.Core.Discovery.Tcp;
+using Apache.Ignite.Core.Discovery.Tcp.Static;
+using Apache.Ignite.Core.Events;
+using AspNetCore.IgniteServer.Listeners;
+using Serilog;
+using Serilog.Core;
 
 namespace AspNetCore.IgniteServer;
 
@@ -18,7 +20,6 @@ internal sealed class IgniteServerRunner : IDisposable
 {
     private static readonly TimeSpan ActivationPollInterval = TimeSpan.FromSeconds(5);
 
-    private readonly IgniteConfiguration igniteConfiguration;
     private readonly ILogger logger;
     private readonly IgniteServerRunnerOptions options;
     private volatile bool disposed;
@@ -29,25 +30,25 @@ internal sealed class IgniteServerRunner : IDisposable
     public IgniteServerRunner(IgniteServerRunnerOptions options, ILogger? logger = null)
     {
         this.options = options;
-        this.logger = logger ?? Serilog.Core.Logger.None;
-        igniteConfiguration = IgniteConfigurationFactory.Create(options, this.logger);
+        this.logger = logger ?? Logger.None;
+        Configuration = IgniteConfigurationFactory.Create(options, this.logger);
         RebalanceTracker = new RebalanceTracker(this.logger);
         // in the configuration (not LocalListen after the start): rebalancing may start while the node joins
-        igniteConfiguration.LocalEventListeners =
+        Configuration.LocalEventListeners =
         [
-            ..igniteConfiguration.LocalEventListeners ?? [],
+            .. Configuration.LocalEventListeners ?? [],
             new LocalEventListener<CacheRebalancingEvent>
             {
-                EventTypes = [EventType.CacheRebalanceStarted, EventType.CacheRebalanceStopped,],
-                Listener = RebalanceTracker,
-            },
+                EventTypes = [EventType.CacheRebalanceStarted, EventType.CacheRebalanceStopped],
+                Listener = RebalanceTracker
+            }
         ];
     }
 
     /// <summary>The caches this node is rebalancing.</summary>
     public RebalanceTracker RebalanceTracker { get; }
 
-    internal IgniteConfiguration Configuration => igniteConfiguration;
+    internal IgniteConfiguration Configuration { get; }
 
     /// <summary>The running node, or null while it is (re)starting or stopped.</summary>
     public IIgnite? Node => Volatile.Read(ref ignite);
@@ -57,14 +58,12 @@ internal sealed class IgniteServerRunner : IDisposable
     ///     until it stops.
     /// </summary>
     public bool IsReady => ready && Node != null &&
-                           !(options.ReadyWhenRebalanced && RebalanceTracker.IsRebalancing(options.RebalanceReadinessMaxWait));
+                           !(options.ReadyWhenRebalanced &&
+                             RebalanceTracker.IsRebalancing(options.RebalanceReadinessMaxWait));
 
     public void Dispose()
     {
-        if (disposed)
-        {
-            return;
-        }
+        if (disposed) return;
 
         stopRequested = true;
         StopNode(true);
@@ -76,7 +75,7 @@ internal sealed class IgniteServerRunner : IDisposable
         EnsureNotRunning();
         GetOrCreateDiscoverySpi().IpFinder = new TcpDiscoveryStaticIpFinder
         {
-            Endpoints = values,
+            Endpoints = values
         };
     }
 
@@ -91,42 +90,39 @@ internal sealed class IgniteServerRunner : IDisposable
         EnsureNotRunning();
         // the whole heap from the start (as the Ignite chart): with AlwaysPreTouch and guaranteed container memory, it
         // never grows at run time
-        igniteConfiguration.JvmInitialMemoryMb = value;
-        igniteConfiguration.JvmMaxMemoryMb = value;
+        Configuration.JvmInitialMemoryMb = value;
+        Configuration.JvmMaxMemoryMb = value;
     }
 
     public void SetOffHeapMemoryLimit(int value)
     {
         EnsureNotRunning();
-        IgniteConfigurationFactory.SetOffHeapMemoryLimit(igniteConfiguration, value, options.EnableOffHeapMetrics);
+        IgniteConfigurationFactory.SetOffHeapMemoryLimit(Configuration, value, options.EnableOffHeapMetrics);
     }
 
     public void SetPersistence(bool value)
     {
         EnsureNotRunning();
-        IgniteConfigurationFactory.SetPersistence(igniteConfiguration, value);
+        IgniteConfigurationFactory.SetPersistence(Configuration, value);
     }
 
     public void SetConsistentId(string cid)
     {
         EnsureNotRunning();
-        igniteConfiguration.ConsistentId = cid;
+        Configuration.ConsistentId = cid;
     }
 
     public async Task Run()
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         TaskCompletionSource<string?> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (stopRequested)
-        {
-            return;
-        }
+        if (stopRequested) return;
 
         logger.Information("Starting Ignite server runner...");
         RebalanceTracker.Reset();
         // persistence may have been enabled after the memory limits were set
-        IgniteConfigurationFactory.SetPageEvictionMode(igniteConfiguration, options.PageEvictionMode);
-        var current = Ignition.Start(igniteConfiguration);
+        IgniteConfigurationFactory.SetPageEvictionMode(Configuration, options.PageEvictionMode);
+        var current = Ignition.Start(Configuration);
         ignite = current;
         current.Stopped += (s, _) =>
         {
@@ -134,24 +130,17 @@ internal sealed class IgniteServerRunner : IDisposable
             tcs.TrySetResult(s?.ToString());
         };
         if (stopRequested)
-        {
             // Stop() ran while starting, before this node could be stopped
             StopNode(false);
-        }
 
         if (!ReferenceEquals(Volatile.Read(ref ignite), current))
-        {
             // stopped before the handler was attached
             tcs.TrySetResult(current.Name);
-        }
 
         var cluster = current.GetCluster();
-        var persistenceEnabled = igniteConfiguration.DataStorageConfiguration?.DefaultDataRegionConfiguration
+        var persistenceEnabled = Configuration.DataStorageConfiguration?.DefaultDataRegionConfiguration
             ?.PersistenceEnabled == true;
-        if (persistenceEnabled)
-        {
-            await WaitForServerNodes(cluster, tcs.Task).ConfigureAwait(false);
-        }
+        if (persistenceEnabled) await WaitForServerNodes(cluster, tcs.Task).ConfigureAwait(false);
 
         if (tcs.Task.IsCompleted)
         {
@@ -164,16 +153,15 @@ internal sealed class IgniteServerRunner : IDisposable
         if (!cluster.IsActive())
         {
             cluster.SetActive(true);
-            logger.Information("The cluster was activated ({ServerNodes} server nodes).", cluster.ForServers().GetNodes().Count);
+            logger.Information("The cluster was activated ({ServerNodes} server nodes).",
+                cluster.ForServers().GetNodes().Count);
         }
 
         cluster.SetBaselineAutoAdjustEnabledFlag(true);
         cluster.SetBaselineAutoAdjustTimeout((long)options.BaselineAutoAdjustTimeout.TotalMilliseconds);
         // users exist only with authentication (which implies persistence); without it there is no password to set
-        if (igniteConfiguration.AuthenticationEnabled && !string.IsNullOrWhiteSpace(options.IgniteUserPassword))
-        {
+        if (Configuration.AuthenticationEnabled && !string.IsNullOrWhiteSpace(options.IgniteUserPassword))
             new IgniteUserPasswordManager(options, logger).Apply(current, options.IgniteUserPassword, newCluster);
-        }
 
         current.GetEvents()
             .LocalListen(
@@ -217,10 +205,7 @@ internal sealed class IgniteServerRunner : IDisposable
         stopRequested = true;
         logger.Information("Stopping Ignite server runner...");
         var current = Interlocked.Exchange(ref ignite, null);
-        if (current == null)
-        {
-            return true;
-        }
+        if (current == null) return true;
 
         ready = false;
         var stopping = Task.Run(() => Ignition.Stop(current.Name, false));
@@ -246,10 +231,7 @@ internal sealed class IgniteServerRunner : IDisposable
         while (!stopped.IsCompleted && !cluster.IsActive())
         {
             var serverNodes = cluster.ForServers().GetNodes();
-            if (serverNodes.Count >= options.ActivationMinServerNodes)
-            {
-                return;
-            }
+            if (serverNodes.Count >= options.ActivationMinServerNodes) return;
 
             logger.Information(
                 "Waiting for {ActivationMinServerNodes} server nodes before activating the cluster ({ServerNodes} joined: {JoinedNodes})...",
@@ -271,7 +253,7 @@ internal sealed class IgniteServerRunner : IDisposable
         {
             return cluster.GetBaselineTopology();
         }
-        catch (Apache.Ignite.Core.Common.IgniteException ex) when (ex.Message.Contains("NullPointerException", StringComparison.Ordinal))
+        catch (IgniteException ex) when (ex.Message.Contains("NullPointerException", StringComparison.Ordinal))
         {
             return null;
         }
@@ -281,10 +263,7 @@ internal sealed class IgniteServerRunner : IDisposable
     {
         ready = false;
         var current = Interlocked.Exchange(ref ignite, null);
-        if (current == null)
-        {
-            return false;
-        }
+        if (current == null) return false;
 
         Ignition.Stop(current.Name, cancel);
         return true;
@@ -292,7 +271,7 @@ internal sealed class IgniteServerRunner : IDisposable
 
     private TcpDiscoverySpi GetOrCreateDiscoverySpi()
     {
-        switch (igniteConfiguration.DiscoverySpi)
+        switch (Configuration.DiscoverySpi)
         {
             case TcpDiscoverySpi tcpDiscoverySpi:
                 return tcpDiscoverySpi;
@@ -303,15 +282,12 @@ internal sealed class IgniteServerRunner : IDisposable
         }
 
         TcpDiscoverySpi created = new();
-        igniteConfiguration.DiscoverySpi = created;
+        Configuration.DiscoverySpi = created;
         return created;
     }
 
     private void EnsureNotRunning()
     {
-        if (ignite != null)
-        {
-            throw new InvalidOperationException("Cannot configure running instances.");
-        }
+        if (ignite != null) throw new InvalidOperationException("Cannot configure running instances.");
     }
 }

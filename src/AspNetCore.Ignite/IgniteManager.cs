@@ -1,3 +1,9 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
 using Apache.Ignite.Core.Client;
 using Apache.Ignite.Core.Client.Cache;
 using AspNetCore.Ignite.Abstractions;
@@ -8,12 +14,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
-using System;
-using System.IO;
-using System.Linq;
-using System.Net.Sockets;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace AspNetCore.Ignite;
 
@@ -58,6 +58,13 @@ public class IgniteManager : IIgniteManager, IDisposable
         operationRetryPolicy = CreateRetryPolicy(options.OperationRetryCount);
     }
 
+    /// <summary>Closes the connection.</summary>
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
     /// <inheritdoc />
     public IIgniteClient Client => GetIgniteClient();
 
@@ -72,14 +79,17 @@ public class IgniteManager : IIgniteManager, IDisposable
     public ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
         string cacheName,
         Action<CacheClientConfiguration>? extendConfigurationAction = null
-    ) => operationRetryPolicy.Execute(() =>
-        CacheFactory.GetOrCreateCacheClient<TKey, TData>(
-            GetIgniteClient(),
-            cacheName,
-            extendConfigurationAction,
-            options.Cache
-        )
-    );
+    )
+    {
+        return operationRetryPolicy.Execute(() =>
+            CacheFactory.GetOrCreateCacheClient<TKey, TData>(
+                GetIgniteClient(),
+                cacheName,
+                extendConfigurationAction,
+                options.Cache
+            )
+        );
+    }
 
     /// <inheritdoc />
     public void DestroyCache(string cacheName)
@@ -94,23 +104,13 @@ public class IgniteManager : IIgniteManager, IDisposable
         }
     }
 
-    /// <summary>Closes the connection.</summary>
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
     /// <summary>Closes the connection (when <paramref name="disposing" />).</summary>
     /// <param name="disposing">True when called by <see cref="Dispose()" />.</param>
     protected virtual void Dispose(bool disposing)
     {
         lock (syncRoot)
         {
-            if (disposed)
-            {
-                return;
-            }
+            if (disposed) return;
 
             if (disposing)
             {
@@ -127,7 +127,10 @@ public class IgniteManager : IIgniteManager, IDisposable
     ///     Connects on first use (not during DI resolution); concurrent callers share one connection attempt, and a failed
     ///     attempt is retried by the next call.
     /// </summary>
-    private IIgniteClient GetIgniteClient() => GetOrStartConnecting().GetAwaiter().GetResult();
+    private IIgniteClient GetIgniteClient()
+    {
+        return GetOrStartConnecting().GetAwaiter().GetResult();
+    }
 
     private Task<IIgniteClient> GetOrStartConnecting()
     {
@@ -135,16 +138,11 @@ public class IgniteManager : IIgniteManager, IDisposable
         {
             ObjectDisposedException.ThrowIf(disposed, this);
 
-            if (igniteClient != null)
-            {
-                return Task.FromResult(igniteClient);
-            }
+            if (igniteClient != null) return Task.FromResult(igniteClient);
 
-            if (connecting is not { IsFaulted: false, IsCanceled: false, })
-            {
+            if (connecting is not { IsFaulted: false, IsCanceled: false })
                 // one background thread runs the connection retries, however many callers wait for them
                 connecting = Task.Run(Connect);
-            }
 
             return connecting;
         }
@@ -174,15 +172,21 @@ public class IgniteManager : IIgniteManager, IDisposable
         return options;
     }
 
-    private static RetryPolicy CreateRetryPolicy(int retryCount) => Policy.Handle<Exception>(IsTransient)
-        .WaitAndRetry(Math.Max(0, retryCount), retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
-
-    internal static bool IsTransient(Exception ex) => ex switch
+    private static RetryPolicy CreateRetryPolicy(int retryCount)
     {
-        IgniteClientException icex => icex.StatusCode is not (ClientStatusCode.AuthenticationFailed
-            or ClientStatusCode.SecurityViolation),
-        AggregateException aex => aex.InnerExceptions.Count > 0 && aex.InnerExceptions.All(IsTransient),
-        SocketException or IOException or TimeoutException => true,
-        _ => false,
-    };
+        return Policy.Handle<Exception>(IsTransient)
+            .WaitAndRetry(Math.Max(0, retryCount), retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+    }
+
+    internal static bool IsTransient(Exception ex)
+    {
+        return ex switch
+        {
+            IgniteClientException icex => icex.StatusCode is not (ClientStatusCode.AuthenticationFailed
+                or ClientStatusCode.SecurityViolation),
+            AggregateException aex => aex.InnerExceptions.Count > 0 && aex.InnerExceptions.All(IsTransient),
+            SocketException or IOException or TimeoutException => true,
+            _ => false
+        };
+    }
 }

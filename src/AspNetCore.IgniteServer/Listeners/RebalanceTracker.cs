@@ -1,9 +1,9 @@
-using Apache.Ignite.Core.Events;
-using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using Apache.Ignite.Core.Events;
+using Serilog;
 
 namespace AspNetCore.IgniteServer.Listeners;
 
@@ -23,13 +23,8 @@ internal sealed class RebalanceTracker(ILogger logger, TimeProvider? timeProvide
     public bool Invoke(CacheRebalancingEvent evt)
     {
         if (evt.Type == EventType.CacheRebalanceStarted)
-        {
             OnStarted(evt.CacheName ?? string.Empty);
-        }
-        else if (evt.Type == EventType.CacheRebalanceStopped)
-        {
-            OnStopped(evt.CacheName ?? string.Empty);
-        }
+        else if (evt.Type == EventType.CacheRebalanceStopped) OnStopped(evt.CacheName ?? string.Empty);
 
         return true;
     }
@@ -38,21 +33,17 @@ internal sealed class RebalanceTracker(ILogger logger, TimeProvider? timeProvide
     {
         // the first start counts: Ignite restarts a rebalance on every topology change, which must not extend the wait
         if (rebalancing.TryAdd(cacheName, timeProvider.GetUtcNow()))
-        {
             logger.Information("Rebalancing of cache {CacheName} started.", cacheName);
-        }
     }
 
     internal void OnStopped(string cacheName)
     {
         if (rebalancing.TryRemove(cacheName, out var started))
-        {
             logger.Information(
                 "Rebalancing of cache {CacheName} finished in {Duration}.",
                 cacheName,
                 timeProvider.GetUtcNow() - started
             );
-        }
     }
 
     /// <summary>
@@ -66,5 +57,8 @@ internal sealed class RebalanceTracker(ILogger logger, TimeProvider? timeProvide
     }
 
     /// <summary>Forgets the previous run (the node restarts).</summary>
-    public void Reset() => rebalancing.Clear();
+    public void Reset()
+    {
+        rebalancing.Clear();
+    }
 }

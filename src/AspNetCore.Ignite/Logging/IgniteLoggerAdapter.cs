@@ -1,5 +1,5 @@
-using Microsoft.Extensions.Logging;
 using System;
+using Microsoft.Extensions.Logging;
 using IgniteLogLevel = Apache.Ignite.Core.Log.LogLevel;
 using IIgniteLogger = Apache.Ignite.Core.Log.ILogger;
 
@@ -29,28 +29,26 @@ public sealed class IgniteLoggerAdapter(ILogger logger) : IIgniteLogger
     )
     {
         var logLevel = ConvertLevel(level);
-        if (!logger.IsEnabled(logLevel))
-        {
-            return;
-        }
+        if (!logger.IsEnabled(logLevel)) return;
 
         var text = Format(message, args, formatProvider);
-        if (!string.IsNullOrEmpty(nativeErrorInfo))
-        {
-            text += Environment.NewLine + nativeErrorInfo;
-        }
+        if (!string.IsNullOrEmpty(nativeErrorInfo)) text += Environment.NewLine + nativeErrorInfo;
 
         // the message is passed as state, not as a template: Ignite messages may contain braces
-        logger.Log(logLevel, default, (text, category), ex, static (state, _) => state.category is null ? state.text
+        logger.Log(logLevel, default, (text, category), ex, static (state, _) => state.category is null
+            ? state.text
             : $"[{state.category}] {state.text}");
+    }
+
+    /// <inheritdoc />
+    public bool IsEnabled(IgniteLogLevel level)
+    {
+        return logger.IsEnabled(ConvertLevel(level));
     }
 
     internal static string Format(string message, object[]? args, IFormatProvider? formatProvider)
     {
-        if (args is not { Length: > 0, })
-        {
-            return message;
-        }
+        if (args is not { Length: > 0 }) return message;
 
         try
         {
@@ -63,16 +61,16 @@ public sealed class IgniteLoggerAdapter(ILogger logger) : IIgniteLogger
         }
     }
 
-    /// <inheritdoc />
-    public bool IsEnabled(IgniteLogLevel level) => logger.IsEnabled(ConvertLevel(level));
-
-    internal static LogLevel ConvertLevel(IgniteLogLevel level) => level switch
+    internal static LogLevel ConvertLevel(IgniteLogLevel level)
     {
-        IgniteLogLevel.Trace => LogLevel.Trace,
-        IgniteLogLevel.Debug => LogLevel.Debug,
-        IgniteLogLevel.Info => LogLevel.Information,
-        IgniteLogLevel.Warn => LogLevel.Warning,
-        IgniteLogLevel.Error => LogLevel.Error,
-        _ => LogLevel.Critical,
-    };
+        return level switch
+        {
+            IgniteLogLevel.Trace => LogLevel.Trace,
+            IgniteLogLevel.Debug => LogLevel.Debug,
+            IgniteLogLevel.Info => LogLevel.Information,
+            IgniteLogLevel.Warn => LogLevel.Warning,
+            IgniteLogLevel.Error => LogLevel.Error,
+            _ => LogLevel.Critical
+        };
+    }
 }

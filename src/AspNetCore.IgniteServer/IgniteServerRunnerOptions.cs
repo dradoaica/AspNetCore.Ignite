@@ -1,6 +1,6 @@
-using Apache.Ignite.Core.Configuration;
 using System;
 using System.Collections.Generic;
+using Apache.Ignite.Core.Configuration;
 
 namespace AspNetCore.IgniteServer;
 
@@ -15,6 +15,7 @@ internal sealed record IgniteServerRunnerOptions
 
     /// <summary>The password to replace with <see cref="IgniteUserPassword" /> when rotating it on an existing cluster.</summary>
     public string? IgniteUserPreviousPassword { get; init; }
+
     public string? ConfigurationFile { get; init; }
 
     /// <summary>Loads .NET assemblies sent by other nodes (and so runs their code): off unless the cluster is trusted.</summary>
@@ -22,6 +23,7 @@ internal sealed record IgniteServerRunnerOptions
 
     /// <summary>SQL schemas created on start; none: those of the configuration.</summary>
     public IReadOnlyList<string> SqlSchemas { get; init; } = [];
+
     public string? SpringConfigPath { get; init; }
 
     /// <summary>Persistent clusters are activated only once this many server nodes have joined.</summary>
@@ -44,6 +46,7 @@ internal sealed record IgniteServerRunnerOptions
 
     /// <summary>The Java SSL protocol; "TLS" negotiates the highest version both sides support (TLS 1.3 on Java 17).</summary>
     public string SslProtocol { get; init; } = "TLS";
+
     public string SslKeyStoreType { get; init; } = "JKS";
     public string SslTrustStoreType { get; init; } = "JKS";
     public string SslKeyAlgorithm { get; init; } = "SunX509";

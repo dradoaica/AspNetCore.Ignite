@@ -1,4 +1,6 @@
-﻿using AspNetCore.Ignite.Abstractions;
+﻿using System;
+using System.Collections.Generic;
+using AspNetCore.Ignite.Abstractions;
 using AspNetCore.Ignite.HealthChecks;
 using AspNetCore.Ignite.Options;
 using Microsoft.Extensions.Configuration;
@@ -7,8 +9,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System;
-using System.Collections.Generic;
 
 namespace AspNetCore.Ignite;
 
@@ -28,10 +28,7 @@ public static class IgniteExtensions
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IConfigureOptions<IgniteClientOptions>, ConfigurationKeysSetup>()
         );
-        if (configure != null)
-        {
-            services.Configure(configure);
-        }
+        if (configure != null) services.Configure(configure);
 
         services.TryAddSingleton(sp => new IgniteManager(
                 sp.GetRequiredService<IOptions<IgniteClientOptions>>(),
@@ -62,17 +59,20 @@ public static class IgniteExtensions
         HealthStatus? failureStatus = null,
         IEnumerable<string>? tags = null,
         TimeSpan? timeout = null
-    ) => builder.Add(
-        new HealthCheckRegistration(
-            name,
-            sp => new IgniteHealthCheck(
-                sp.GetRequiredService<IIgniteManager>(),
-                timeout ?? IgniteHealthCheck.DefaultTimeout
-            ),
-            failureStatus,
-            tags
-        )
-    );
+    )
+    {
+        return builder.Add(
+            new HealthCheckRegistration(
+                name,
+                sp => new IgniteHealthCheck(
+                    sp.GetRequiredService<IIgniteManager>(),
+                    timeout ?? IgniteHealthCheck.DefaultTimeout
+                ),
+                failureStatus,
+                tags
+            )
+        );
+    }
 
     private sealed class ConfigurationKeysSetup(IServiceProvider serviceProvider)
         : IConfigureOptions<IgniteClientOptions>
@@ -80,9 +80,7 @@ public static class IgniteExtensions
         public void Configure(IgniteClientOptions options)
         {
             if (serviceProvider.GetService<IConfiguration>() is { } configuration)
-            {
                 options.ApplyConfigurationKeys(configuration);
-            }
         }
     }
 }

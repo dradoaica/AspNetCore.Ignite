@@ -1,5 +1,7 @@
-using DotNet.Testcontainers.Builders;
 using System.Net;
+using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Containers;
+using DotNet.Testcontainers.Networks;
 using Xunit;
 
 namespace AspNetCore.Ignite.IntegrationTests;
@@ -34,7 +36,8 @@ public sealed class ClusterActivationTests(IgniteServerFixture fixture)
         // alone, the first node waits instead of activating a one-node baseline
         await node1.StartAsync();
         await node2.StartAsync();
-        await TestContainerLogs.WaitForMessageAsync(node1, IgniteServerFixture.RunningMessage, 1, TimeSpan.FromSeconds(60));
+        await TestContainerLogs.WaitForMessageAsync(node1, IgniteServerFixture.RunningMessage, 1,
+            TimeSpan.FromSeconds(60));
 
         using var igniteClient = CacheFactory.ConnectAsClient(
             CacheFactory.GetIgniteClientConfiguration(
@@ -57,10 +60,13 @@ public sealed class ClusterActivationTests(IgniteServerFixture fixture)
         const string clusterEndpoints = "ignite-a:47500,ignite-b:47500";
         await using var nodeA = InMemoryNode(network, "ignite-a", clusterEndpoints);
         await nodeA.StartAsync();
-        using (var igniteClient = CacheFactory.ConnectAsClient(CacheFactory.GetIgniteClientConfiguration(IgniteServerFixture.GetEndpoint(nodeA))))
+        using (var igniteClient =
+               CacheFactory.ConnectAsClient(
+                   CacheFactory.GetIgniteClientConfiguration(IgniteServerFixture.GetEndpoint(nodeA))))
         {
             var cache = CacheFactory.GetOrCreateCacheClient<int, string>(igniteClient, "rebalanced");
-            cache.PutAll(Enumerable.Range(0, 20_000).Select(i => new KeyValuePair<int, string>(i, new string('x', 100))));
+            cache.PutAll(
+                Enumerable.Range(0, 20_000).Select(i => new KeyValuePair<int, string>(i, new string('x', 100))));
         }
 
         await using var nodeB = InMemoryNode(network, "ignite-b", clusterEndpoints);
@@ -89,16 +95,19 @@ public sealed class ClusterActivationTests(IgniteServerFixture fixture)
         return true;
     }
 
-    private DotNet.Testcontainers.Containers.IContainer InMemoryNode(
-        DotNet.Testcontainers.Networks.INetwork network,
+    private IContainer InMemoryNode(
+        INetwork network,
         string alias,
         string clusterEndpoints
-    ) => fixture.CreateNodeBuilder()
-        .WithNetwork(network)
-        .WithNetworkAliases(alias)
-        .WithEnvironment("ENABLE_AUTHENTICATION", "false")
-        .WithEnvironment("DEFAULT_CONSISTENT_ID", alias)
-        .WithEnvironment("CLUSTER_ENDPOINTS", clusterEndpoints)
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
-        .Build();
+    )
+    {
+        return fixture.CreateNodeBuilder()
+            .WithNetwork(network)
+            .WithNetworkAliases(alias)
+            .WithEnvironment("ENABLE_AUTHENTICATION", "false")
+            .WithEnvironment("DEFAULT_CONSISTENT_ID", alias)
+            .WithEnvironment("CLUSTER_ENDPOINTS", clusterEndpoints)
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
+            .Build();
+    }
 }

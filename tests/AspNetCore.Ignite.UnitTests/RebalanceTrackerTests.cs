@@ -18,10 +18,10 @@ public sealed class RebalanceTrackerTests
         tracker.OnStarted("a");
         tracker.OnStarted("b");
         Assert.True(tracker.IsRebalancing(MaxWait));
-        Assert.Equal(["a", "b",], tracker.RebalancingCaches.Order());
+        Assert.Equal(["a", "b"], tracker.RebalancingCaches.Order());
 
         tracker.OnStopped("a");
-        Assert.Equal(["b",], tracker.RebalancingCaches);
+        Assert.Equal(["b"], tracker.RebalancingCaches);
         tracker.OnStopped("b");
 
         Assert.False(tracker.IsRebalancing(MaxWait));

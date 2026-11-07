@@ -30,8 +30,7 @@ public sealed class SslScenarioTests(IgniteServerFixture fixture)
             .WithEnvironment("SSL_CLIENT_CERTIFICATE_PASSWORD", SamplePassword)
             .WithEnvironment("SSL_RESTART_MAX_JITTER_IN_SECONDS", "0")
             .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage));
-        foreach (var file in new[] { "server.jks", "trust.jks", "thin-client-cert.pfx", })
-        {
+        foreach (var file in new[] { "server.jks", "trust.jks", "thin-client-cert.pfx" })
             builder = builder.WithResourceMapping(
                 new FileInfo(Path.Combine(IgniteServerFixture.SampleCertificatesDirectory, file)),
                 new FileInfo($"{CertificatesDirectory}/{file}"),
@@ -39,7 +38,6 @@ public sealed class SslScenarioTests(IgniteServerFixture fixture)
                 0,
                 ownerReadWrite
             );
-        }
 
         await using var node = builder.Build();
         await node.StartAsync();
@@ -59,15 +57,18 @@ public sealed class SslScenarioTests(IgniteServerFixture fixture)
         var (exitCode, _, stderr) = await ExecAsync(node, "touch", $"{CertificatesDirectory}/server.jks");
         Assert.True(exitCode == 0, stderr);
         await TestContainerLogs.WaitForMessageAsync(node, "SSL files changed", 1, TimeSpan.FromSeconds(60));
-        await TestContainerLogs.WaitForMessageAsync(node, IgniteServerFixture.RunningMessage, 2, TimeSpan.FromSeconds(120));
+        await TestContainerLogs.WaitForMessageAsync(node, IgniteServerFixture.RunningMessage, 2,
+            TimeSpan.FromSeconds(120));
         using (var igniteClient = Connect(endpoint, clientCertificate, true))
         {
             Assert.True(igniteClient.GetCluster().IsActive());
         }
     }
 
-    private static IIgniteClient Connect(string endpoint, string? clientCertificate, bool skipServerCertificateValidation) =>
-        CacheFactory.ConnectAsClient(
+    private static IIgniteClient Connect(string endpoint, string? clientCertificate,
+        bool skipServerCertificateValidation)
+    {
+        return CacheFactory.ConnectAsClient(
             CacheFactory.GetIgniteClientConfiguration(
                 endpoint,
                 IgniteServerFixture.UserName,
@@ -80,8 +81,10 @@ public sealed class SslScenarioTests(IgniteServerFixture fixture)
                 false
             )
         );
+    }
 
-    private static async Task<(long ExitCode, string Stdout, string Stderr)> ExecAsync(IContainer node, params string[] command)
+    private static async Task<(long ExitCode, string Stdout, string Stderr)> ExecAsync(IContainer node,
+        params string[] command)
     {
         var result = await node.ExecAsync(command);
         return (result.ExitCode ?? -1, result.Stdout, result.Stderr);

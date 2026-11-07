@@ -21,14 +21,10 @@ internal static class SpringConfigRenderer
     {
         StringBuilder sb = new(template);
         foreach (var (placeholder, xml) in xmlPlaceholders ?? new Dictionary<string, string?>())
-        {
             sb.Replace(placeholder, xml ?? string.Empty);
-        }
 
         foreach (var (placeholder, value) in placeholders)
-        {
             sb.Replace(placeholder, SecurityElement.Escape(value ?? string.Empty));
-        }
 
         return sb.ToString();
     }
@@ -54,22 +50,17 @@ internal static class SpringConfigRenderer
         else
         {
             // the rendered file may contain keystore passwords
-            Directory.CreateDirectory(outputDirectory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            if (File.Exists(outputPath))
-            {
-                File.Delete(outputPath);
-            }
+            Directory.CreateDirectory(outputDirectory,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            if (File.Exists(outputPath)) File.Delete(outputPath);
         }
 
         FileStreamOptions options = new()
         {
             Mode = FileMode.Create,
-            Access = FileAccess.Write,
+            Access = FileAccess.Write
         };
-        if (!OperatingSystem.IsWindows())
-        {
-            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        }
+        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
 
         await using StreamWriter writer = new(outputPath, Encoding.UTF8, options);
         await writer.WriteAsync(Render(template, placeholders, xmlPlaceholders)).ConfigureAwait(false);

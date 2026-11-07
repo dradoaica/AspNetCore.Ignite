@@ -1,7 +1,7 @@
-using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Extensions.Configuration;
 
 namespace AspNetCore.Ignite.Options;
 
@@ -13,12 +13,16 @@ public sealed class IgniteClientOptions
 
     /// <summary>The user name (authentication).</summary>
     public string? UserName { get; set; }
+
     /// <summary>The password (authentication).</summary>
     public string? Password { get; set; }
+
     /// <summary>Connects with SSL (the OS chooses the protocol, TLS 1.3 included).</summary>
     public bool UseSsl { get; set; }
+
     /// <summary>The client certificate (PKCS12), when the server requires one.</summary>
     public string? SslCertificatePath { get; set; }
+
     /// <summary>The password of the client certificate.</summary>
     public string? SslCertificatePassword { get; set; }
 
@@ -50,12 +54,10 @@ public sealed class IgniteClientOptions
     public void ApplyConfigurationKeys(IConfiguration configuration)
     {
         if (configuration["ASPNETCORE_IGNITE_ENDPOINT"] is { } endpoints && !string.IsNullOrWhiteSpace(endpoints))
-        {
             Endpoints = endpoints.Split(',')
                 .Select(endpoint => endpoint.Trim())
                 .Where(endpoint => endpoint.Length > 0)
                 .ToList();
-        }
 
         UserName = configuration["ASPNETCORE_IGNITE_USER_NAME"] ?? UserName;
         Password = configuration["ASPNETCORE_IGNITE_PASSWORD"] ?? Password;
@@ -69,6 +71,8 @@ public sealed class IgniteClientOptions
                                         SslCheckCertificateRevocation;
     }
 
-    private static bool? GetBool(IConfiguration configuration, string key) =>
-        bool.TryParse(configuration[key], out var value) ? value : null;
+    private static bool? GetBool(IConfiguration configuration, string key)
+    {
+        return bool.TryParse(configuration[key], out var value) ? value : null;
+    }
 }

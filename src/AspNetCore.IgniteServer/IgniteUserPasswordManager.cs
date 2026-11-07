@@ -1,11 +1,11 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Apache.Ignite.Core;
 using Apache.Ignite.Core.Cache.Query;
 using Apache.Ignite.Core.Client;
 using AspNetCore.Ignite;
 using Serilog;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace AspNetCore.IgniteServer;
 
@@ -26,17 +26,11 @@ internal sealed class IgniteUserPasswordManager(IgniteServerRunnerOptions option
         var endpoint = GetThinClientEndpoint(node);
         // every failed login is logged by the node as an error, so try the likely password first: the default one on
         // a new cluster, the configured one otherwise
-        if (!newCluster && CanAuthenticate(endpoint, password))
-        {
-            return;
-        }
+        if (!newCluster && CanAuthenticate(endpoint, password)) return;
 
         foreach (var currentPassword in GetCurrentPasswordCandidates(password, newCluster))
         {
-            if (!CanAuthenticate(endpoint, currentPassword))
-            {
-                continue;
-            }
+            if (!CanAuthenticate(endpoint, currentPassword)) continue;
 
             using var igniteClient = Connect(endpoint, currentPassword);
             var ddlCache = CacheFactory.GetOrCreateCacheClient<string, string>(igniteClient, DdlCacheName);
@@ -50,10 +44,7 @@ internal sealed class IgniteUserPasswordManager(IgniteServerRunnerOptions option
             return;
         }
 
-        if (newCluster && CanAuthenticate(endpoint, password))
-        {
-            return;
-        }
+        if (newCluster && CanAuthenticate(endpoint, password)) return;
 
         logger.Error(
             "IGNITE_USER_PASSWORD was not applied: neither it, IGNITE_USER_PREVIOUS_PASSWORD nor the default password is accepted for the '{UserName:l}' user.",
@@ -64,15 +55,19 @@ internal sealed class IgniteUserPasswordManager(IgniteServerRunnerOptions option
     /// <summary>The passwords that may be the current one, most likely first.</summary>
     internal IEnumerable<string> GetCurrentPasswordCandidates(string password, bool newCluster)
     {
-        string?[] candidates = newCluster ? [DefaultPassword, options.IgniteUserPreviousPassword,]
-            : [options.IgniteUserPreviousPassword, DefaultPassword,];
+        string?[] candidates = newCluster
+            ? [DefaultPassword, options.IgniteUserPreviousPassword]
+            : [options.IgniteUserPreviousPassword, DefaultPassword];
         return candidates.Where(candidate => !string.IsNullOrWhiteSpace(candidate) && candidate != password)
             .Select(candidate => candidate!)
             .Distinct();
     }
 
-    internal static string BuildAlterUserPasswordSql(string userName, string password) =>
-        $"ALTER USER \"{userName.Replace("\"", "\"\"", StringComparison.Ordinal)}\" WITH PASSWORD '{password.Replace("'", "''", StringComparison.Ordinal)}';";
+    internal static string BuildAlterUserPasswordSql(string userName, string password)
+    {
+        return
+            $"ALTER USER \"{userName.Replace("\"", "\"\"", StringComparison.Ordinal)}\" WITH PASSWORD '{password.Replace("'", "''", StringComparison.Ordinal)}';";
+    }
 
     /// <summary>The loopback endpoint of the node's thin client connector (as configured, e.g., by -ConfigFile).</summary>
     private static string GetThinClientEndpoint(IIgnite node)
@@ -94,16 +89,19 @@ internal sealed class IgniteUserPasswordManager(IgniteServerRunnerOptions option
         }
     }
 
-    private IIgniteClient Connect(string endpoint, string password) => CacheFactory.ConnectAsClient(
-        CacheFactory.GetIgniteClientConfiguration(
-            endpoint,
-            DefaultUserName,
-            password,
-            options.UseClientSsl,
-            options.SslClientCertificatePath,
-            options.SslClientCertificatePassword,
-            // loopback connection to this very node, whose certificate is not issued for 127.0.0.1
-            skipServerCertificateValidation: true
-        )
-    );
+    private IIgniteClient Connect(string endpoint, string password)
+    {
+        return CacheFactory.ConnectAsClient(
+            CacheFactory.GetIgniteClientConfiguration(
+                endpoint,
+                DefaultUserName,
+                password,
+                options.UseClientSsl,
+                options.SslClientCertificatePath,
+                options.SslClientCertificatePassword,
+                // loopback connection to this very node, whose certificate is not issued for 127.0.0.1
+                true
+            )
+        );
+    }
 }

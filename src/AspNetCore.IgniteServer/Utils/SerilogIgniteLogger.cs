@@ -1,8 +1,8 @@
+using System;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
 using Serilog.Parsing;
-using System;
 using IgniteLogLevel = Apache.Ignite.Core.Log.LogLevel;
 using IIgniteLogger = Apache.Ignite.Core.Log.ILogger;
 
@@ -21,31 +21,29 @@ internal sealed class SerilogIgniteLogger(ILogger logger) : IIgniteLogger
         Exception? ex
     )
     {
-        if (!IsEnabled(level))
-        {
-            return;
-        }
+        if (!IsEnabled(level)) return;
 
         var text = Format(message, args, formatProvider);
-        if (!string.IsNullOrEmpty(nativeErrorInfo))
-        {
-            text += Environment.NewLine + nativeErrorInfo;
-        }
+        if (!string.IsNullOrEmpty(nativeErrorInfo)) text += Environment.NewLine + nativeErrorInfo;
 
-        var log = string.IsNullOrEmpty(category) ? logger : logger.ForContext(Constants.SourceContextPropertyName, category);
+        var log = string.IsNullOrEmpty(category)
+            ? logger
+            : logger.ForContext(Constants.SourceContextPropertyName, category);
         // a text token keeps the message verbatim: Ignite messages are not Serilog message templates
         log.Write(
-            new LogEvent(DateTimeOffset.Now, ConvertLevel(level), ex, new MessageTemplate([new TextToken(text),]), [])
+            new LogEvent(DateTimeOffset.Now, ConvertLevel(level), ex, new MessageTemplate([new TextToken(text)]), [])
         );
+    }
+
+    public bool IsEnabled(IgniteLogLevel level)
+    {
+        return level >= IgniteLogLevel.Info && logger.IsEnabled(ConvertLevel(level));
     }
 
     // Debug and Trace are not forwarded: enabling them makes the Java side log at that level, which is very verbose
     internal static string Format(string message, object[]? args, IFormatProvider? formatProvider)
     {
-        if (args is not { Length: > 0, })
-        {
-            return message;
-        }
+        if (args is not { Length: > 0 }) return message;
 
         try
         {
@@ -58,15 +56,16 @@ internal sealed class SerilogIgniteLogger(ILogger logger) : IIgniteLogger
         }
     }
 
-    public bool IsEnabled(IgniteLogLevel level) => level >= IgniteLogLevel.Info && logger.IsEnabled(ConvertLevel(level));
-
-    internal static LogEventLevel ConvertLevel(IgniteLogLevel level) => level switch
+    internal static LogEventLevel ConvertLevel(IgniteLogLevel level)
     {
-        IgniteLogLevel.Trace => LogEventLevel.Verbose,
-        IgniteLogLevel.Debug => LogEventLevel.Debug,
-        IgniteLogLevel.Info => LogEventLevel.Information,
-        IgniteLogLevel.Warn => LogEventLevel.Warning,
-        IgniteLogLevel.Error => LogEventLevel.Error,
-        _ => LogEventLevel.Fatal,
-    };
+        return level switch
+        {
+            IgniteLogLevel.Trace => LogEventLevel.Verbose,
+            IgniteLogLevel.Debug => LogEventLevel.Debug,
+            IgniteLogLevel.Info => LogEventLevel.Information,
+            IgniteLogLevel.Warn => LogEventLevel.Warning,
+            IgniteLogLevel.Error => LogEventLevel.Error,
+            _ => LogEventLevel.Fatal
+        };
+    }
 }

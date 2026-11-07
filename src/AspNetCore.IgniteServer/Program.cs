@@ -1,3 +1,8 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using AspNetCore.IgniteServer;
 using AspNetCore.IgniteServer.Management;
 using Microsoft.AspNetCore.Builder;
@@ -8,11 +13,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Prometheus;
 using Serilog;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Runtime.InteropServices;
-using System.Threading.Tasks;
 
 Directory.SetCurrentDirectory(AppContext.BaseDirectory);
 
@@ -52,7 +52,8 @@ static async Task<int> RunServerAsync(IReadOnlyDictionary<string, string?> overr
             return 1;
         }
 
-        using var host = settings.ManagementEnabled ? BuildWithManagement(configuration, settings)
+        using var host = settings.ManagementEnabled
+            ? BuildWithManagement(configuration, settings)
             : BuildWithoutManagement(configuration, settings);
         Log.Information("Starting Ignite server...");
         await host.RunAsync().ConfigureAwait(false);
@@ -76,7 +77,7 @@ static IHost BuildWithoutManagement(IConfiguration configuration, IgniteServerSe
         new HostApplicationBuilderSettings
         {
             DisableDefaults = true,
-            ContentRootPath = AppContext.BaseDirectory,
+            ContentRootPath = AppContext.BaseDirectory
         }
     );
     builder.Configuration.AddConfiguration(configuration);
@@ -88,24 +89,27 @@ static IHost BuildWithoutManagement(IConfiguration configuration, IgniteServerSe
 static IHost BuildWithManagement(IConfiguration configuration, IgniteServerSettings settings)
 {
     var builder = WebApplication.CreateEmptyBuilder(
-        new WebApplicationOptions { ContentRootPath = AppContext.BaseDirectory, }
+        new WebApplicationOptions { ContentRootPath = AppContext.BaseDirectory }
     );
     builder.Configuration.AddConfiguration(configuration);
     builder.WebHost.UseKestrelCore().ConfigureKestrel(kestrel => kestrel.ListenAnyIP(settings.ManagementPort));
     builder.Services.AddRoutingCore();
     AddServerServices(builder.Services, settings);
-    builder.Services.AddSingleton(sp => new IgniteNodeMetrics(sp.GetRequiredService<IgniteNodeState>(), settings.MetricsPerCache));
+    builder.Services.AddSingleton(sp =>
+        new IgniteNodeMetrics(sp.GetRequiredService<IgniteNodeState>(), settings.MetricsPerCache));
     builder.Services.AddHealthChecks()
-        .AddCheck<IgniteNodeHealthCheck>("ignite-node", tags: ["ready",])
-        .AddCheck<IgniteNodeStartedHealthCheck>("ignite-node-started", tags: ["started",])
+        .AddCheck<IgniteNodeHealthCheck>("ignite-node", tags: ["ready"])
+        .AddCheck<IgniteNodeStartedHealthCheck>("ignite-node-started", tags: ["started"])
         .ForwardToPrometheus();
     var app = builder.Build();
     // created eagerly, so its instruments exist before the first scrape
     app.Services.GetRequiredService<IgniteNodeMetrics>();
-    app.MapHealthChecks("/health/liveness", new HealthCheckOptions { Predicate = _ => false, });
-    app.MapHealthChecks("/health/startup", new HealthCheckOptions { Predicate = check => check.Tags.Contains("started"), });
-    app.MapHealthChecks("/health/readiness", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready"), });
-    app.MapMetrics("/metrics");
+    app.MapHealthChecks("/health/liveness", new HealthCheckOptions { Predicate = _ => false });
+    app.MapHealthChecks("/health/startup",
+        new HealthCheckOptions { Predicate = check => check.Tags.Contains("started") });
+    app.MapHealthChecks("/health/readiness",
+        new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
+    app.MapMetrics();
     return app;
 }
 

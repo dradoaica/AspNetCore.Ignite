@@ -1,12 +1,13 @@
+using System;
 using Apache.Ignite.Core;
 using Apache.Ignite.Core.Events;
 using Serilog;
-using System;
 
 namespace AspNetCore.IgniteServer.Listeners;
 
 /// <summary>
-///     Logs partition data loss and, when <paramref name="autoResetLostPartitions" /> is set, resets the lost partitions so
+///     Logs partition data loss and, when <paramref name="autoResetLostPartitions" /> is set, resets the lost partitions
+///     so
 ///     the cache becomes usable again. Resetting does NOT recover the lost data.
 /// </summary>
 internal sealed class CacheRebalancingEventListener(IIgnite ignite, ILogger logger, bool autoResetLostPartitions)
@@ -17,10 +18,7 @@ internal sealed class CacheRebalancingEventListener(IIgnite ignite, ILogger logg
 
     public bool Invoke(CacheRebalancingEvent evt)
     {
-        if (evt.Type != EventType.CacheRebalancePartDataLost)
-        {
-            return true;
-        }
+        if (evt.Type != EventType.CacheRebalancePartDataLost) return true;
 
         logger.Error(
             MessageTemplate,
@@ -30,10 +28,7 @@ internal sealed class CacheRebalancingEventListener(IIgnite ignite, ILogger logg
             string.Join(",", evt.DiscoveryNode.Addresses),
             string.Join(",", evt.DiscoveryNode.HostNames)
         );
-        if (!autoResetLostPartitions)
-        {
-            return true;
-        }
+        if (!autoResetLostPartitions) return true;
 
         try
         {

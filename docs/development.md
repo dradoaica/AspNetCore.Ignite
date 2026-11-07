@@ -23,7 +23,8 @@ dotnet test tests/AspNetCore.Ignite.IntegrationTests
 
 The integration tests build the server image from the `Dockerfile` and run it with Docker (via Testcontainers):
 authentication, the client library and its health check, SSL with client certificates and certificate rotation, a
-two-node cluster activation, the management endpoints, REST, the shipped configuration files, and the exit codes. They are skipped when
+two-node cluster activation, the management endpoints, REST, the shipped configuration files, and the exit codes. They
+are skipped when
 Docker is not available. CI reports the unit test coverage in the job summary, and tests the image with its
 [Helm chart](https://github.com/dradoaica/helm-charts/tree/main/charts/aspnetcore-ignite-server): a two-node persistent
 cluster in kind, checked by the chart's probes and `helm test` (the `helm-charts-ref` input selects the chart revision).
@@ -49,7 +50,8 @@ docker push ghcr.io/dradoaica/aspnetcore.ignite-server:2.19.0
 
 ## Run aspnetcore.ignite-server container
 
-docker run -p 0.0.0.0:10800:10800/tcp --name aspnetcore.ignite-server -d ghcr.io/dradoaica/aspnetcore.ignite-server:2.19.0
+docker run -p 0.0.0.0:10800:10800/tcp --name aspnetcore.ignite-server -d ghcr.io/dradoaica/aspnetcore.ignite-server:
+2.19.0
 
 ## Remove aspnetcore.ignite-server container
 

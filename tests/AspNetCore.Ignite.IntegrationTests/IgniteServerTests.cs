@@ -48,7 +48,7 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
                 {
                     ["ASPNETCORE_IGNITE_ENDPOINT"] = fixture.Endpoint,
                     ["ASPNETCORE_IGNITE_USER_NAME"] = IgniteServerFixture.UserName,
-                    ["ASPNETCORE_IGNITE_PASSWORD"] = IgniteServerFixture.Password,
+                    ["ASPNETCORE_IGNITE_PASSWORD"] = IgniteServerFixture.Password
                 }
             )
             .Build();
@@ -73,7 +73,7 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
         services.AddLogging();
         services.AddIgnite(options =>
             {
-                options.Endpoints = [fixture.Endpoint,];
+                options.Endpoints = [fixture.Endpoint];
                 options.UserName = IgniteServerFixture.UserName;
                 options.Password = IgniteServerFixture.Password;
             }

@@ -1,7 +1,7 @@
+using System.Runtime.InteropServices;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Images;
-using System.Runtime.InteropServices;
 using Xunit;
 
 namespace AspNetCore.Ignite.IntegrationTests;
@@ -23,10 +23,10 @@ public sealed class IgniteServerFixture : IAsyncLifetime
     public const int ManagementPort = 9464;
     public const int RestPort = 8080;
     public const string RunningMessage = "Ignite server runner is running";
+    private IContainer? container;
 
     private IFutureDockerImage? image;
     private IImage? imageName;
-    private IContainer? container;
 
     public bool IsDockerAvailable { get; private set; }
 
@@ -43,36 +43,21 @@ public sealed class IgniteServerFixture : IAsyncLifetime
     private static string BuildPlatform => RuntimeInformation.OSArchitecture switch
     {
         Architecture.Arm64 => "linux/arm64",
-        _ => "linux/amd64",
+        _ => "linux/amd64"
     };
 
     public IContainer Node => container!;
 
-    public static string GetEndpoint(IContainer node) => $"{node.Hostname}:{node.GetMappedPublicPort(ThinClientPort)}";
-
-    public static Uri GetManagementUri(IContainer node, string path) =>
-        new($"http://{node.Hostname}:{node.GetMappedPublicPort(ManagementPort)}{path}");
-
-    /// <summary>A node of the server image with small memory settings and the thin client port published.</summary>
-    public ContainerBuilder CreateNodeBuilder() => new ContainerBuilder(imageName ?? image!)
-        .WithPortBinding(ThinClientPort, true)
-        .WithPortBinding(ManagementPort, true)
-        .WithEnvironment("DEFAULT_ON_HEAP_MEMORY", "512")
-        .WithEnvironment("DEFAULT_OFF_HEAP_MEMORY", "256")
-        .WithEnvironment("IGNITE_USER_PASSWORD", Password);
-
     /// <summary>A prebuilt server image to test (e.g., built once by CI); otherwise the Dockerfile is built.</summary>
-    public static string? PrebuiltImage => Environment.GetEnvironmentVariable("IGNITE_SERVER_IMAGE") is { Length: > 0, } name
+    public static string? PrebuiltImage => Environment.GetEnvironmentVariable("IGNITE_SERVER_IMAGE") is
+        { Length: > 0 } name
         ? name
         : null;
 
     public async Task InitializeAsync()
     {
         IsDockerAvailable = await DockerSupport.IsDockerAvailableAsync();
-        if (!IsDockerAvailable)
-        {
-            return;
-        }
+        if (!IsDockerAvailable) return;
 
         if (PrebuiltImage is { } prebuiltImage)
         {
@@ -102,10 +87,7 @@ public sealed class IgniteServerFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (container != null)
-        {
-            await container.DisposeAsync();
-        }
+        if (container != null) await container.DisposeAsync();
 
         if (image != null)
         {
@@ -113,6 +95,27 @@ public sealed class IgniteServerFixture : IAsyncLifetime
             await image.DeleteAsync();
             await image.DisposeAsync();
         }
+    }
+
+    public static string GetEndpoint(IContainer node)
+    {
+        return $"{node.Hostname}:{node.GetMappedPublicPort(ThinClientPort)}";
+    }
+
+    public static Uri GetManagementUri(IContainer node, string path)
+    {
+        return new Uri($"http://{node.Hostname}:{node.GetMappedPublicPort(ManagementPort)}{path}");
+    }
+
+    /// <summary>A node of the server image with small memory settings and the thin client port published.</summary>
+    public ContainerBuilder CreateNodeBuilder()
+    {
+        return new ContainerBuilder(imageName ?? image!)
+            .WithPortBinding(ThinClientPort, true)
+            .WithPortBinding(ManagementPort, true)
+            .WithEnvironment("DEFAULT_ON_HEAP_MEMORY", "512")
+            .WithEnvironment("DEFAULT_OFF_HEAP_MEMORY", "256")
+            .WithEnvironment("IGNITE_USER_PASSWORD", Password);
     }
 }
 

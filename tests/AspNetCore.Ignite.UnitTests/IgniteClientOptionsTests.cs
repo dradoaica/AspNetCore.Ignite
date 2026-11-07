@@ -1,4 +1,5 @@
 using Apache.Ignite.Core.Client;
+using Apache.Ignite.Core.Client.Cache;
 using AspNetCore.Ignite.Abstractions;
 using AspNetCore.Ignite.HealthChecks;
 using AspNetCore.Ignite.Options;
@@ -12,8 +13,10 @@ namespace AspNetCore.Ignite.UnitTests;
 
 public sealed class IgniteClientOptionsTests
 {
-    private static IConfiguration Configuration(Dictionary<string, string?> values) =>
-        new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+    private static IConfiguration Configuration(Dictionary<string, string?> values)
+    {
+        return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+    }
 
     [Fact]
     public void ApplyConfigurationKeys_ReadsFlatKeys()
@@ -28,12 +31,12 @@ public sealed class IgniteClientOptionsTests
                     ["ASPNETCORE_IGNITE_USER_NAME"] = "user",
                     ["ASPNETCORE_IGNITE_PASSWORD"] = "secret",
                     ["ASPNETCORE_IGNITE_USE_SSL"] = "True",
-                    ["ASPNETCORE_IGNITE_SSL_CHECK_CERTIFICATE_REVOCATION"] = "false",
+                    ["ASPNETCORE_IGNITE_SSL_CHECK_CERTIFICATE_REVOCATION"] = "false"
                 }
             )
         );
 
-        Assert.Equal(["a:10800", "b:10800",], options.Endpoints);
+        Assert.Equal(["a:10800", "b:10800"], options.Endpoints);
         Assert.Equal("user", options.UserName);
         Assert.Equal("secret", options.Password);
         Assert.True(options.UseSsl);
@@ -44,11 +47,11 @@ public sealed class IgniteClientOptionsTests
     [Fact]
     public void ApplyConfigurationKeys_KeepsValuesOfMissingKeys()
     {
-        IgniteClientOptions options = new() { Endpoints = ["x:1",], UserName = "kept", };
+        IgniteClientOptions options = new() { Endpoints = ["x:1"], UserName = "kept" };
 
         options.ApplyConfigurationKeys(Configuration([]));
 
-        Assert.Equal(["x:1",], options.Endpoints);
+        Assert.Equal(["x:1"], options.Endpoints);
         Assert.Equal("kept", options.UserName);
         Assert.True(options.SslCheckCertificateRevocation);
     }
@@ -57,14 +60,15 @@ public sealed class IgniteClientOptionsTests
     public void AddIgnite_ConfiguresFromFlatKeysThenDelegate_WithoutConnecting()
     {
         ServiceCollection services = new();
-        services.AddSingleton(Configuration(new Dictionary<string, string?> { ["ASPNETCORE_IGNITE_ENDPOINT"] = "a:1", ["ASPNETCORE_IGNITE_USER_NAME"] = "user", }));
+        services.AddSingleton(Configuration(new Dictionary<string, string?>
+            { ["ASPNETCORE_IGNITE_ENDPOINT"] = "a:1", ["ASPNETCORE_IGNITE_USER_NAME"] = "user" }));
         services.AddIgnite(options => options.UserName = "override");
         using var provider = services.BuildServiceProvider();
 
         var options = provider.GetRequiredService<IOptions<IgniteClientOptions>>().Value;
         var igniteManager = provider.GetRequiredService<IIgniteManager>();
 
-        Assert.Equal(["a:1",], options.Endpoints);
+        Assert.Equal(["a:1"], options.Endpoints);
         Assert.Equal("override", options.UserName);
         Assert.Same(provider.GetRequiredService<IgniteManager>(), igniteManager);
     }
@@ -78,7 +82,7 @@ public sealed class IgniteClientOptionsTests
                 {
                     ["Ignite:Endpoints:0"] = "ignite:10800",
                     ["Ignite:Cache:Backups"] = "2",
-                    ["Ignite:Cache:EnablePlatformCache"] = "true",
+                    ["Ignite:Cache:EnablePlatformCache"] = "true"
                 }
             )
             .GetSection("Ignite");
@@ -87,7 +91,7 @@ public sealed class IgniteClientOptionsTests
 
         var options = provider.GetRequiredService<IOptions<IgniteClientOptions>>().Value;
 
-        Assert.Equal(["ignite:10800",], options.Endpoints);
+        Assert.Equal(["ignite:10800"], options.Endpoints);
         Assert.Equal(2, options.Cache.Backups);
         Assert.True(options.Cache.EnablePlatformCache);
     }
@@ -95,7 +99,9 @@ public sealed class IgniteClientOptionsTests
     [Fact]
     public async Task HealthCheck_UnreachableCluster_ReportsFailureStatus()
     {
-        IgniteHealthCheck healthCheck = new(new FakeIgniteManager(Task.FromException<IIgniteClient>(new IgniteClientException("unreachable"))), TimeSpan.FromSeconds(5));
+        IgniteHealthCheck healthCheck =
+            new(new FakeIgniteManager(Task.FromException<IIgniteClient>(new IgniteClientException("unreachable"))),
+                TimeSpan.FromSeconds(5));
 
         var result = await healthCheck.CheckHealthAsync(Context(healthCheck, HealthStatus.Degraded));
 
@@ -111,7 +117,8 @@ public sealed class IgniteClientOptionsTests
         IgniteHealthCheck healthCheck = new(igniteManager, TimeSpan.FromMilliseconds(100));
 
         var results = await Task.WhenAll(
-            Enumerable.Range(0, 20).Select(_ => healthCheck.CheckHealthAsync(Context(healthCheck, HealthStatus.Unhealthy)))
+            Enumerable.Range(0, 20)
+                .Select(_ => healthCheck.CheckHealthAsync(Context(healthCheck, HealthStatus.Unhealthy)))
         );
 
         Assert.All(results, result => Assert.IsType<TimeoutException>(result.Exception));
@@ -124,7 +131,8 @@ public sealed class IgniteClientOptionsTests
     public async Task IgniteManager_ConcurrentCallers_ShareOneConnectionAttempt()
     {
         // nothing listens on port 1: each attempt fails fast, and no retries are configured
-        using IgniteManager igniteManager = new(new IgniteClientOptions { Endpoints = ["127.0.0.1:1",], ConnectRetryCount = 0, SocketTimeout = TimeSpan.FromSeconds(1), });
+        using IgniteManager igniteManager = new(new IgniteClientOptions
+            { Endpoints = ["127.0.0.1:1"], ConnectRetryCount = 0, SocketTimeout = TimeSpan.FromSeconds(1) });
 
         var attempts = Enumerable.Range(0, 10).Select(_ => igniteManager.GetClientAsync()).ToList();
 
@@ -136,10 +144,13 @@ public sealed class IgniteClientOptionsTests
         await Assert.ThrowsAnyAsync<Exception>(() => nextAttempt);
     }
 
-    private static HealthCheckContext Context(IHealthCheck healthCheck, HealthStatus failureStatus) => new()
+    private static HealthCheckContext Context(IHealthCheck healthCheck, HealthStatus failureStatus)
     {
-        Registration = new HealthCheckRegistration("ignite", healthCheck, failureStatus, null),
-    };
+        return new HealthCheckContext
+        {
+            Registration = new HealthCheckRegistration("ignite", healthCheck, failureStatus, null)
+        };
+    }
 
     private sealed class FakeIgniteManager(Task<IIgniteClient> connection) : IIgniteManager
     {
@@ -155,11 +166,17 @@ public sealed class IgniteClientOptionsTests
             return await connection.WaitAsync(cancellationToken);
         }
 
-        public Apache.Ignite.Core.Client.Cache.ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
+        public ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
             string cacheName,
-            Action<Apache.Ignite.Core.Client.Cache.CacheClientConfiguration>? extendConfigurationAction = null
-        ) => throw new NotSupportedException();
+            Action<CacheClientConfiguration>? extendConfigurationAction = null
+        )
+        {
+            throw new NotSupportedException();
+        }
 
-        public void DestroyCache(string cacheName) => throw new NotSupportedException();
+        public void DestroyCache(string cacheName)
+        {
+            throw new NotSupportedException();
+        }
     }
 }

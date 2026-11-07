@@ -1,6 +1,6 @@
+using System.Diagnostics.Metrics;
 using AspNetCore.IgniteServer;
 using AspNetCore.IgniteServer.Management;
-using System.Diagnostics.Metrics;
 using Xunit;
 
 namespace AspNetCore.Ignite.UnitTests;
@@ -15,10 +15,7 @@ public sealed class IgniteNodeMetricsTests
         using MeterListener listener = new();
         listener.InstrumentPublished = (instrument, meterListener) =>
         {
-            if (instrument.Meter.Name == IgniteNodeMetrics.MeterName)
-            {
-                meterListener.EnableMeasurementEvents(instrument);
-            }
+            if (instrument.Meter.Name == IgniteNodeMetrics.MeterName) meterListener.EnableMeasurementEvents(instrument);
         };
         listener.SetMeasurementEventCallback<int>((instrument, value, _, _) => Record(instrument, value));
         listener.SetMeasurementEventCallback<long>((instrument, value, _, _) => Record(instrument, value));
@@ -27,16 +24,13 @@ public sealed class IgniteNodeMetricsTests
 
         listener.RecordObservableInstruments();
 
-        Assert.Equal([0d,], measurements["node_ready"]);
-        Assert.Equal([0d,], measurements["node_rebalancing_caches"]);
+        Assert.Equal([0d], measurements["node_ready"]);
+        Assert.Equal([0d], measurements["node_rebalancing_caches"]);
         Assert.Equal(2, measurements.Count);
 
         void Record(Instrument instrument, double value)
         {
-            if (!measurements.TryGetValue(instrument.Name, out var values))
-            {
-                measurements[instrument.Name] = values = [];
-            }
+            if (!measurements.TryGetValue(instrument.Name, out var values)) measurements[instrument.Name] = values = [];
 
             values.Add(value);
         }
@@ -45,15 +39,12 @@ public sealed class IgniteNodeMetricsTests
     [Fact]
     public void PerCacheMetrics_CanBeTurnedOff()
     {
-        using IgniteNodeMetrics metrics = new(new IgniteNodeState(), perCache: false);
+        using IgniteNodeMetrics metrics = new(new IgniteNodeState(), false);
         List<string> instruments = [];
         using MeterListener listener = new();
         listener.InstrumentPublished = (instrument, _) =>
         {
-            if (instrument.Meter.Name == IgniteNodeMetrics.MeterName)
-            {
-                instruments.Add(instrument.Name);
-            }
+            if (instrument.Meter.Name == IgniteNodeMetrics.MeterName) instruments.Add(instrument.Name);
         };
         listener.Start();
 
