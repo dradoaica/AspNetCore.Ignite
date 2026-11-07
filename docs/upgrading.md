@@ -8,6 +8,8 @@ Apache Ignite 2.19.0 and is built on Apache Ignite 2.18.0 until 2.19.0 is releas
   no longer contains the sample keystores: set these explicitly.
 * The client validates the server certificate by default (`ASPNETCORE_IGNITE_SSL_SKIP_SERVER_CERTIFICATE_VALIDATION`
   to opt out), and platform cache is off by default (`Cache.EnablePlatformCache` to opt in).
+* The client library targets .NET 10 (`net10.0`) instead of .NET Standard 2.1: applications on earlier .NET versions
+  keep using 2.18.x.
 * `IIgniteManager` has new `Client` and `GetClientAsync` members (implementations outside this library must add them),
   and the library no longer depends on `Apache.Ignite.Linq` (add it for LINQ queries).
 * The server image no longer contains the Ignite binary distribution (`IGNITE_HOME`): the jars are in `/app/libs`.

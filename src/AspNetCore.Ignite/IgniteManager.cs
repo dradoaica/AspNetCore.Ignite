@@ -57,9 +57,8 @@ public class IgniteManager : IIgniteManager, IDisposable
     /// <inheritdoc />
     public Task<IIgniteClient> GetClientAsync(CancellationToken cancellationToken = default)
     {
-        var connection = GetOrStartConnecting();
-        return connection.IsCompleted || !cancellationToken.CanBeCanceled ? connection
-            : WaitAsync(connection, cancellationToken);
+        // cancelling stops this caller's wait, not the shared connection attempt
+        return GetOrStartConnecting().WaitAsync(cancellationToken);
     }
 
     public ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
@@ -157,20 +156,6 @@ public class IgniteManager : IIgniteManager, IDisposable
         }
 
         return client;
-    }
-
-    private static async Task<IIgniteClient> WaitAsync(Task<IIgniteClient> connection, CancellationToken cancellationToken)
-    {
-        TaskCompletionSource<bool> cancelled = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        using (cancellationToken.Register(() => cancelled.TrySetResult(true)))
-        {
-            if (await Task.WhenAny(connection, cancelled.Task).ConfigureAwait(false) != connection)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-            }
-        }
-
-        return await connection.ConfigureAwait(false);
     }
 
     private static IgniteClientOptions CreateOptions(IConfiguration configuration)

@@ -1,5 +1,7 @@
 # Client library (`AspNetCore.Ignite`)
 
+The package targets .NET 10 (`net10.0`), like the server.
+
 ```csharp
 services.AddIgnite();                                         // the ASPNETCORE_IGNITE_* settings below
 services.AddIgnite(configuration.GetSection("Ignite"));       // or a section bound to IgniteClientOptions
