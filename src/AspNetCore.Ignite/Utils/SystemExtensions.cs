@@ -2,6 +2,7 @@
 
 namespace AspNetCore.Ignite.Utils;
 
+/// <summary>Type name helpers for cache configurations.</summary>
 public static class SystemExtensions
 {
     /// <summary>

@@ -10,12 +10,16 @@ namespace AspNetCore.Ignite.HealthChecks;
 /// <summary>Healthy when the cluster is reachable and active.</summary>
 public sealed class IgniteHealthCheck(IIgniteManager igniteManager, TimeSpan timeout) : IHealthCheck
 {
+    /// <summary>The time a check may take by default.</summary>
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
 
+    /// <summary>A health check with <see cref="DefaultTimeout" />.</summary>
+    /// <param name="igniteManager">The connection to check.</param>
     public IgniteHealthCheck(IIgniteManager igniteManager) : this(igniteManager, DefaultTimeout)
     {
     }
 
+    /// <inheritdoc />
     public async Task<HealthCheckResult> CheckHealthAsync(
         HealthCheckContext context,
         CancellationToken cancellationToken = default

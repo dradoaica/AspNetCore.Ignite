@@ -8,12 +8,16 @@ namespace AspNetCore.Ignite.Logging;
 /// <summary>Writes the logs of the Ignite thin client to Microsoft.Extensions.Logging.</summary>
 public sealed class IgniteLoggerAdapter(ILogger logger) : IIgniteLogger
 {
+    /// <summary>The logger category of the client logs.</summary>
     public const string CategoryName = "Apache.Ignite";
 
+    /// <summary>Logs with the <see cref="CategoryName" /> logger of <paramref name="loggerFactory" />.</summary>
+    /// <param name="loggerFactory">The logger factory.</param>
     public IgniteLoggerAdapter(ILoggerFactory loggerFactory) : this(loggerFactory.CreateLogger(CategoryName))
     {
     }
 
+    /// <inheritdoc />
     public void Log(
         IgniteLogLevel level,
         string message,
@@ -59,6 +63,7 @@ public sealed class IgniteLoggerAdapter(ILogger logger) : IIgniteLogger
         }
     }
 
+    /// <inheritdoc />
     public bool IsEnabled(IgniteLogLevel level) => logger.IsEnabled(ConvertLevel(level));
 
     internal static LogLevel ConvertLevel(IgniteLogLevel level) => level switch

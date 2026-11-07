@@ -1,10 +1,14 @@
 <Project>
 
+    <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))"/>
+
     <!-- One version for every project in src/ (the package and the server image are released together) -->
     <PropertyGroup>
         <Version>2.19.0</Version>
         <LangVersion>default</LangVersion>
         <Nullable>enable</Nullable>
+        <!-- the recommended .NET code analysis rules, for every project in src/ -->
+        <AnalysisLevel>latest-recommended</AnalysisLevel>
     </PropertyGroup>
 
 </Project>

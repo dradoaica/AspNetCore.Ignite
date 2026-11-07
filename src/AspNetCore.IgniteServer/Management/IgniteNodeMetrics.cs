@@ -97,10 +97,10 @@ internal sealed class IgniteNodeMetrics : IDisposable
             description
         );
 
-    private IEnumerable<Measurement<T>> Measure<T>(Func<NodeSnapshot, T> read) where T : struct =>
+    private List<Measurement<T>> Measure<T>(Func<NodeSnapshot, T> read) where T : struct =>
         Read<T>(s => [new Measurement<T>(read(s)),]);
 
-    private IEnumerable<Measurement<T>> Read<T>(Func<NodeSnapshot, IEnumerable<Measurement<T>>> read) where T : struct
+    private List<Measurement<T>> Read<T>(Func<NodeSnapshot, IEnumerable<Measurement<T>>> read) where T : struct
     {
         // the node may stop while it is read: report nothing rather than failing the whole scrape
         try

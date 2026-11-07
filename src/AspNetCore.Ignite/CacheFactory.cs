@@ -12,10 +12,22 @@ using System.Security.Authentication;
 
 namespace AspNetCore.Ignite;
 
+/// <summary>Creates thin client configurations, connections and caches with the defaults of this library.</summary>
 public static class CacheFactory
 {
+    /// <summary>The endpoint used when none is configured.</summary>
     public const string DefaultEndpoint = "127.0.0.1";
 
+    /// <summary>A thin client configuration for one endpoint.</summary>
+    /// <param name="endpoint">The endpoint (host or host:port); <see cref="DefaultEndpoint" /> when empty.</param>
+    /// <param name="userName">The user name (authentication).</param>
+    /// <param name="password">The password (authentication).</param>
+    /// <param name="useSsl">Connects with SSL.</param>
+    /// <param name="certificatePath">The client certificate (PKCS12), when the server requires one.</param>
+    /// <param name="certificatePassword">The password of the client certificate.</param>
+    /// <param name="skipServerCertificateValidation">Skips the server certificate validation: insecure, for testing only.</param>
+    /// <param name="checkCertificateRevocation">Checks the revocation of the server certificate.</param>
+    /// <param name="logger">The Ignite logger of the client (none when null).</param>
     public static IgniteClientConfiguration GetIgniteClientConfiguration(
         string? endpoint = DefaultEndpoint,
         string? userName = null,
@@ -41,6 +53,9 @@ public static class CacheFactory
         logger
     );
 
+    /// <summary>A thin client configuration from <paramref name="options" />.</summary>
+    /// <param name="options">The options.</param>
+    /// <param name="logger">The Ignite logger of the client (none when null).</param>
     public static IgniteClientConfiguration GetIgniteClientConfiguration(IgniteClientOptions options, ILogger? logger = null)
     {
         var endpoints = options.Endpoints.Where(endpoint => !string.IsNullOrWhiteSpace(endpoint)).ToList();
@@ -80,6 +95,8 @@ public static class CacheFactory
         return igniteClientConfiguration;
     }
 
+    /// <summary>Starts a thick client node (in this process) with <paramref name="igniteConfiguration" />, set to client mode.</summary>
+    /// <param name="igniteConfiguration">The node configuration.</param>
     public static IIgnite ConnectAsClient(IgniteConfiguration igniteConfiguration)
     {
         igniteConfiguration.ClientMode = true;
@@ -87,9 +104,18 @@ public static class CacheFactory
         return Ignition.Start(igniteConfiguration);
     }
 
+    /// <summary>Connects a thin client.</summary>
+    /// <param name="igniteClientConfiguration">The thin client configuration.</param>
     public static IIgniteClient ConnectAsClient(IgniteClientConfiguration igniteClientConfiguration) =>
         Ignition.StartClient(igniteClientConfiguration);
 
+    /// <summary>Gets or creates a partitioned cache through a thick client or server node.</summary>
+    /// <param name="ignite">The node.</param>
+    /// <param name="cacheName">The cache name.</param>
+    /// <param name="extendConfigurationAction">Adjusts the configuration of a cache that is created.</param>
+    /// <param name="cacheOptions">The cache defaults (<see cref="IgniteCacheOptions" /> when null).</param>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TData">The value type.</typeparam>
     public static ICache<TKey, TData> GetOrCreateCache<TKey, TData>(
         IIgnite ignite,
         string cacheName,
@@ -119,6 +145,13 @@ public static class CacheFactory
         return ignite.GetOrCreateCache<TKey, TData>(cacheCfg);
     }
 
+    /// <summary>Gets or creates a partitioned cache through a thin client.</summary>
+    /// <param name="ignite">The thin client.</param>
+    /// <param name="cacheName">The cache name.</param>
+    /// <param name="extendConfigurationAction">Adjusts the configuration of a cache that is created.</param>
+    /// <param name="cacheOptions">The cache defaults (<see cref="IgniteCacheOptions" /> when null).</param>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TData">The value type.</typeparam>
     public static ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
         IIgniteClient ignite,
         string cacheName,

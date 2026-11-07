@@ -4,7 +4,7 @@
 ARG BUILDPLATFORM
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-noble AS build
 WORKDIR /src
-COPY ["NuGet.Config", "global.json", "Directory.Packages.props", "./"]
+COPY ["NuGet.Config", "global.json", "Directory.Build.props", "Directory.Packages.props", "./"]
 COPY ["src/Directory.Build.props", "src/"]
 COPY ["src/AspNetCore.Ignite/AspNetCore.Ignite.csproj", "src/AspNetCore.Ignite/"]
 COPY ["src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj", "src/AspNetCore.IgniteServer/JavaLibs.props", "src/AspNetCore.IgniteServer/"]

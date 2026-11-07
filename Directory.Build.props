@@ -1,0 +1,8 @@
+<Project>
+
+    <!-- every project (src/ imports this file): in CI (GitHub Actions sets CI=true), a warning fails the build -->
+    <PropertyGroup Condition="'$(CI)' == 'true'">
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    </PropertyGroup>
+
+</Project>

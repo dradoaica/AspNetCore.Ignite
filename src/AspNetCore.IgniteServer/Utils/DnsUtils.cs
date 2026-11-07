@@ -22,6 +22,6 @@ internal static class DnsUtils
             }
         }
 
-        throw new Exception("Local IP Address Not Found!");
+        throw new InvalidOperationException("Local IP Address Not Found!");
     }
 }

@@ -12,6 +12,7 @@ using System.Collections.Generic;
 
 namespace AspNetCore.Ignite;
 
+/// <summary>Registers the Ignite client (<see cref="IIgniteManager" />) and its health check.</summary>
 public static class IgniteExtensions
 {
     /// <summary>

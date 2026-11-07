@@ -17,6 +17,7 @@ using System.Threading.Tasks;
 
 namespace AspNetCore.Ignite;
 
+/// <summary>The thin client connection (connected on first use, with retries) and its caches.</summary>
 public class IgniteManager : IIgniteManager, IDisposable
 {
     private readonly RetryPolicy connectRetryPolicy;
@@ -33,6 +34,9 @@ public class IgniteManager : IIgniteManager, IDisposable
     {
     }
 
+    /// <summary>Configured by <paramref name="options" />.</summary>
+    /// <param name="options">The options.</param>
+    /// <param name="loggerFactory">Where the client logs (category <c>Apache.Ignite</c>); none when null.</param>
     public IgniteManager(IOptions<IgniteClientOptions> options, ILoggerFactory? loggerFactory = null) : this(
         options.Value,
         loggerFactory
@@ -40,6 +44,9 @@ public class IgniteManager : IIgniteManager, IDisposable
     {
     }
 
+    /// <summary>Configured by <paramref name="options" />.</summary>
+    /// <param name="options">The options.</param>
+    /// <param name="loggerFactory">Where the client logs (category <c>Apache.Ignite</c>); none when null.</param>
     public IgniteManager(IgniteClientOptions options, ILoggerFactory? loggerFactory = null)
     {
         this.options = options;
@@ -61,6 +68,7 @@ public class IgniteManager : IIgniteManager, IDisposable
         return GetOrStartConnecting().WaitAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
         string cacheName,
         Action<CacheClientConfiguration>? extendConfigurationAction = null
@@ -73,6 +81,7 @@ public class IgniteManager : IIgniteManager, IDisposable
         )
     );
 
+    /// <inheritdoc />
     public void DestroyCache(string cacheName)
     {
         try
@@ -85,12 +94,15 @@ public class IgniteManager : IIgniteManager, IDisposable
         }
     }
 
+    /// <summary>Closes the connection.</summary>
     public void Dispose()
     {
         Dispose(true);
         GC.SuppressFinalize(this);
     }
 
+    /// <summary>Closes the connection (when <paramref name="disposing" />).</summary>
+    /// <param name="disposing">True when called by <see cref="Dispose()" />.</param>
     protected virtual void Dispose(bool disposing)
     {
         lock (syncRoot)
@@ -121,10 +133,7 @@ public class IgniteManager : IIgniteManager, IDisposable
     {
         lock (syncRoot)
         {
-            if (disposed)
-            {
-                throw new ObjectDisposedException(nameof(IgniteManager));
-            }
+            ObjectDisposedException.ThrowIf(disposed, this);
 
             if (igniteClient != null)
             {

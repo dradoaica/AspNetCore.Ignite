@@ -11,20 +11,27 @@ public sealed class IgniteClientOptions
     /// <summary>Thin client endpoints (host or host:port); <see cref="CacheFactory.DefaultEndpoint" /> when empty.</summary>
     public List<string> Endpoints { get; set; } = [];
 
+    /// <summary>The user name (authentication).</summary>
     public string? UserName { get; set; }
+    /// <summary>The password (authentication).</summary>
     public string? Password { get; set; }
+    /// <summary>Connects with SSL (the OS chooses the protocol, TLS 1.3 included).</summary>
     public bool UseSsl { get; set; }
+    /// <summary>The client certificate (PKCS12), when the server requires one.</summary>
     public string? SslCertificatePath { get; set; }
+    /// <summary>The password of the client certificate.</summary>
     public string? SslCertificatePassword { get; set; }
 
     /// <summary>Skips the server certificate validation: insecure, for testing only.</summary>
     public bool SslSkipServerCertificateValidation { get; set; }
 
+    /// <summary>Checks the revocation of the server certificate.</summary>
     public bool SslCheckCertificateRevocation { get; set; } = true;
 
     /// <summary>Retries of failed read operations by the thin client itself.</summary>
     public int RetryLimit { get; set; } = 5;
 
+    /// <summary>The socket timeout of the thin client.</summary>
     public TimeSpan SocketTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>Connection attempts (exponential backoff: 2, 4, 8, ... seconds) when the first operation connects.</summary>
