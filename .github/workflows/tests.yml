@@ -13,13 +13,15 @@ on:
       helm-charts-ref:
         description: Branch, tag or commit of dradoaica/helm-charts whose aspnetcore-ignite-server chart is tested
         type: string
-        default: main
+        # the chart branch released together with this one (main once both are merged)
+        default: release/2.19.0
   workflow_dispatch:
     inputs:
       helm-charts-ref:
         description: Branch, tag or commit of dradoaica/helm-charts whose aspnetcore-ignite-server chart is tested
         type: string
-        default: main
+        # the chart branch released together with this one (main once both are merged)
+        default: release/2.19.0
       upgrade-test:
         description: Also test the upgrade from chart 2.18.2 (image 2.18.0) with its data
         type: boolean
@@ -140,7 +142,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: dradoaica/helm-charts
-          ref: ${{ inputs.helm-charts-ref || 'main' }}
+          ref: ${{ inputs.helm-charts-ref || 'release/2.19.0' }}
           path: helm-charts
 
       - name: Load Image
@@ -208,7 +210,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: dradoaica/helm-charts
-          ref: ${{ inputs.helm-charts-ref || 'main' }}
+          ref: ${{ inputs.helm-charts-ref || 'release/2.19.0' }}
           path: helm-charts
 
       - name: Load Image

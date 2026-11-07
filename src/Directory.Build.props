@@ -2,7 +2,7 @@
 
     <!-- One version for every project in src/ (the package and the server image are released together) -->
     <PropertyGroup>
-        <Version>2.18.1</Version>
+        <Version>2.19.0</Version>
         <LangVersion>default</LangVersion>
         <Nullable>enable</Nullable>
     </PropertyGroup>

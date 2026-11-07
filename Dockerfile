@@ -12,7 +12,7 @@ RUN dotnet restore "src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj"
 # the Java modules of JavaLibs.props (SHA-256 verified), in their own layer: downloaded again only when it changes
 RUN dotnet msbuild "src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj" -t:RestoreJavaLibs -p:Configuration=Release -nologo -v:minimal
 COPY . .
-# the release workflow passes the tag (e.g., 2.18.1); otherwise the version of src/Directory.Build.props
+# the release workflow passes the tag (e.g., 2.19.0); otherwise the version of src/Directory.Build.props
 ARG VERSION=
 RUN dotnet publish "src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj" -c Release -o /app/publish --no-restore \
     ${VERSION:+-p:Version=$VERSION}

@@ -32,17 +32,17 @@ The image is based on the ASP.NET Core runtime image with a Java 17 runtime redu
 and provenance attestations. `--build-arg VERSION=...` sets the assembly version (the release workflow passes the tag).
 
 ```
-docker build -t dradoaica/aspnetcore.ignite-server:2.18.1 -f Dockerfile .
-docker buildx build --platform linux/amd64,linux/arm64 -t dradoaica/aspnetcore.ignite-server:2.18.1 -f Dockerfile .
+docker build -t dradoaica/aspnetcore.ignite-server:2.19.0 -f Dockerfile .
+docker buildx build --platform linux/amd64,linux/arm64 -t dradoaica/aspnetcore.ignite-server:2.19.0 -f Dockerfile .
 ```
 
 ## Push aspnetcore.ignite-server
 
-docker push dradoaica/aspnetcore.ignite-server:2.18.1
+docker push dradoaica/aspnetcore.ignite-server:2.19.0
 
 ## Run aspnetcore.ignite-server container
 
-docker run -p 0.0.0.0:10800:10800/tcp --name aspnetcore.ignite-server -d dradoaica/aspnetcore.ignite-server:2.18.1
+docker run -p 0.0.0.0:10800:10800/tcp --name aspnetcore.ignite-server -d dradoaica/aspnetcore.ignite-server:2.19.0
 
 ## Remove aspnetcore.ignite-server container
 
@@ -50,4 +50,4 @@ docker rm -f aspnetcore.ignite-server
 
 ## Remove aspnetcore.ignite-server image
 
-docker rmi dradoaica/aspnetcore.ignite-server:2.18.1
+docker rmi dradoaica/aspnetcore.ignite-server:2.19.0

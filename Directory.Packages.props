@@ -3,7 +3,9 @@
     <!-- One place for every package version (central package management) -->
     <PropertyGroup>
         <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-        <!-- the Apache Ignite version the server, the client library and the Java modules (src/AspNetCore.IgniteServer/libs.json) are built on -->
+        <!-- the Apache Ignite version the server, the client library and the Java modules (src/AspNetCore.IgniteServer/JavaLibs.props)
+             are built on: 2.19.0 of this repository targets Apache Ignite 2.19.0, and uses 2.18.0 until 2.19.0 is released
+             (then set it here and run scripts/update-java-libs.sh) -->
         <IgniteVersion>2.18.0</IgniteVersion>
         <MicrosoftExtensionsVersion>10.0.14</MicrosoftExtensionsVersion>
     </PropertyGroup>

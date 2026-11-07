@@ -1,6 +1,6 @@
 name: Release
 
-# a published GitHub release (tag e.g. 2.18.1): tests once, then the NuGet package and the server image, both versioned
+# a published GitHub release (tag e.g. 2.19.0): tests once, then the NuGet package and the server image, both versioned
 # by the tag
 on:
   release:

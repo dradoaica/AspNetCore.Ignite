@@ -7,11 +7,13 @@ auto-discovery clustering capabilities. Usually, every node runs one or more ins
 The repository also contains `AspNetCore.Ignite`, a thin client library for ASP.NET Core applications (see
 [Client library](docs/client.md)).
 
+This version (2.19.0) runs Apache Ignite 2.18.0 until Apache Ignite 2.19.0 is released.
+
 ## Quick start
 
 ```
 docker run -d --name aspnetcore.ignite-server -p 10800:10800 -p 9464:9464 \
-  -e IGNITE_USER_PASSWORD='<password>' ghcr.io/dradoaica/aspnetcore.ignite-server:2.18.1
+  -e IGNITE_USER_PASSWORD='<password>' ghcr.io/dradoaica/aspnetcore.ignite-server:2.19.0
 curl http://localhost:9464/health/readiness
 ```
 
@@ -25,4 +27,4 @@ Thin clients connect to port 10800 (user `ignite`); `/metrics` on port 9464 serv
 * [Kubernetes](docs/kubernetes.md): deployment guidance and the
   [Helm chart](https://github.com/dradoaica/helm-charts/tree/main/charts/aspnetcore-ignite-server)
 * [Development](docs/development.md): Java modules, tests, building the image
-* [Upgrading to 2.18.1](docs/upgrading.md)
+* [Upgrading to 2.19.0](docs/upgrading.md)

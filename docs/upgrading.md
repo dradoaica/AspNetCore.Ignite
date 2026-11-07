@@ -1,4 +1,8 @@
-# Upgrading to 2.18.1
+# Upgrading to 2.19.0
+
+2.19.0 changes defaults, settings and the image layout (below), so it is a minor version rather than a patch. It targets
+Apache Ignite 2.19.0 and is built on Apache Ignite 2.18.0 until 2.19.0 is released (`IgniteVersion` in
+`Directory.Packages.props`); the data format, the client protocol and the cluster are those of Ignite 2.18.0.
 
 * SSL (`USE_SSL`, `USE_CLIENT_SSL`) is off by default, there are no default passwords or consistent id, and the image
   no longer contains the sample keystores: set these explicitly.
