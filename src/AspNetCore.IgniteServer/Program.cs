@@ -94,7 +94,7 @@ static IHost BuildWithManagement(IConfiguration configuration, IgniteServerSetti
     builder.WebHost.UseKestrelCore().ConfigureKestrel(kestrel => kestrel.ListenAnyIP(settings.ManagementPort));
     builder.Services.AddRoutingCore();
     AddServerServices(builder.Services, settings);
-    builder.Services.AddSingleton<IgniteNodeMetrics>();
+    builder.Services.AddSingleton(sp => new IgniteNodeMetrics(sp.GetRequiredService<IgniteNodeState>(), settings.MetricsPerCache));
     builder.Services.AddHealthChecks()
         .AddCheck<IgniteNodeHealthCheck>("ignite-node", tags: ["ready",])
         .AddCheck<IgniteNodeStartedHealthCheck>("ignite-node-started", tags: ["started",])

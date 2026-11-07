@@ -28,9 +28,12 @@ internal sealed class IgniteNodeMetrics : IDisposable
     private NodeSnapshot? snapshot;
     private DateTimeOffset snapshotTime;
 
-    public IgniteNodeMetrics(IgniteNodeState nodeState, TimeProvider? timeProvider = null)
+    private readonly bool perCache;
+
+    public IgniteNodeMetrics(IgniteNodeState nodeState, bool perCache = true, TimeProvider? timeProvider = null)
     {
         this.nodeState = nodeState;
+        this.perCache = perCache;
         this.timeProvider = timeProvider ?? TimeProvider.System;
         meter.CreateObservableGauge("node_ready", () => nodeState.IsReady ? 1 : 0, description: "1 when the node is running, its cluster is active and it is not rebalancing.");
         meter.CreateObservableGauge("node_rebalancing_caches", () => nodeState.RebalancingCaches.Count, description: "Caches this node is rebalancing (receiving partitions of).");
@@ -61,6 +64,11 @@ internal sealed class IgniteNodeMetrics : IDisposable
         Region("data_region_dirty_pages", region => region.DirtyPages, null, "Pages changed since the last checkpoint.");
         Region("data_region_page_fill_factor_ratio", region => region.PageFillFactor, null, "Fill factor of the allocated pages (0 to 1).");
         Region("data_region_eviction_rate", region => region.EvictionRate, null, "Pages evicted per second.");
+
+        if (!perCache)
+        {
+            return;
+        }
 
         meter.CreateObservableGauge(
             "cache_local_entries",
@@ -112,7 +120,7 @@ internal sealed class IgniteNodeMetrics : IDisposable
             var now = timeProvider.GetUtcNow();
             if (snapshot == null || now - snapshotTime >= SnapshotMaxAge || !ReferenceEquals(snapshot.Node, nodeState.Node))
             {
-                snapshot = nodeState.Node is { } node ? NodeSnapshot.Take(node) : null;
+                snapshot = nodeState.Node is { } node ? NodeSnapshot.Take(node, perCache) : null;
                 snapshotTime = now;
             }
 
@@ -130,11 +138,11 @@ internal sealed class IgniteNodeMetrics : IDisposable
         IReadOnlyDictionary<string, long> CacheEntries
     )
     {
-        public static NodeSnapshot Take(IIgnite node)
+        public static NodeSnapshot Take(IIgnite node, bool perCache)
         {
             var cluster = node.GetCluster();
             Dictionary<string, long> cacheEntries = [];
-            foreach (var cacheName in node.GetCacheNames())
+            foreach (var cacheName in perCache ? node.GetCacheNames() : [])
             {
                 cacheEntries[cacheName] = node.GetCache<object, object>(cacheName)
                     .GetLocalSizeLong(CachePeekMode.Primary, CachePeekMode.Backup);

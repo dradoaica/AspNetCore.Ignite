@@ -23,6 +23,10 @@ internal sealed partial class IgniteServerSettings
     [ConfigurationKeyName("METRICS_UPDATE_FREQUENCY_IN_SECONDS")]
     public int MetricsUpdateFrequencyInSeconds { get; set; } = 60;
 
+    /// <summary>The ignite_cache_* metrics: one series per cache, so they can be turned off with many caches.</summary>
+    [ConfigurationKeyName("METRICS_PER_CACHE")]
+    public bool MetricsPerCache { get; set; } = true;
+
     [ConfigurationKeyName("ENABLE_OFF_HEAP_METRICS")]
     public bool EnableOffHeapMetrics { get; set; } = true;
 

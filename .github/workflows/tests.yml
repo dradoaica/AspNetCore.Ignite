@@ -20,6 +20,10 @@ on:
         description: Branch, tag or commit of dradoaica/helm-charts whose aspnetcore-ignite-server chart is tested
         type: string
         default: main
+      upgrade-test:
+        description: Also test the upgrade from chart 2.18.2 (image 2.18.0) with its data
+        type: boolean
+        default: false
 
 # a newer push supersedes a running check of the same branch
 concurrency:
@@ -34,9 +38,33 @@ permissions:
   contents: read
 
 jobs:
+  # the server image, built once for the integration tests and the chart jobs
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Build Image
+        run: |
+          docker build -t ghcr.io/dradoaica/aspnetcore.ignite-server:e2e .
+          docker save ghcr.io/dradoaica/aspnetcore.ignite-server:e2e -o "${RUNNER_TEMP}/image.tar"
+
+      - name: Upload Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-image
+          path: ${{ runner.temp }}/image.tar
+          retention-days: 1
+
   tests:
+    needs: image
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # the integration tests use this image instead of building the Dockerfile
+      IGNITE_SERVER_IMAGE: ghcr.io/dradoaica/aspnetcore.ignite-server:e2e
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
@@ -52,6 +80,15 @@ jobs:
         with:
           path: src/AspNetCore.IgniteServer/obj/javalibs
           key: javalibs-${{ hashFiles('src/AspNetCore.IgniteServer/JavaLibs.props', 'Directory.Packages.props') }}
+
+      - name: Load Image
+        uses: actions/download-artifact@v4
+        with:
+          name: server-image
+          path: ${{ runner.temp }}
+
+      - name: Import Image
+        run: docker load -i "${RUNNER_TEMP}/image.tar"
 
       - name: Build
         run: dotnet build AspNetCore.Ignite.slnx -c Release
@@ -89,6 +126,7 @@ jobs:
 
   # the server image with its Helm chart: a 2-node persistent cluster in kind, checked by the chart's probes and helm test
   chart:
+    needs: image
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -105,8 +143,14 @@ jobs:
           ref: ${{ inputs.helm-charts-ref || 'main' }}
           path: helm-charts
 
-      - name: Build Image
-        run: docker build -t "$IMAGE:e2e" .
+      - name: Load Image
+        uses: actions/download-artifact@v4
+        with:
+          name: server-image
+          path: ${{ runner.temp }}
+
+      - name: Import Image
+        run: docker load -i "${RUNNER_TEMP}/image.tar"
 
       - name: Create kind Cluster
         uses: helm/kind-action@v1
@@ -133,6 +177,101 @@ jobs:
 
       - name: Helm Test
         run: helm test "$RELEASE" --logs
+
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl get pods,pvc,svc -o wide
+          kubectl describe pods
+          kubectl logs -l app.kubernetes.io/name=aspnetcore-ignite-server --all-containers --tail=200
+
+  # the documented upgrade from chart 2.18.2 (image 2.18.0, REST on, one "persistence" volume): data written before it is
+  # read after it; on demand, as it needs the published 2.18.0 image
+  chart-upgrade:
+    if: ${{ inputs.upgrade-test }}
+    needs: image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      IMAGE: ghcr.io/dradoaica/aspnetcore.ignite-server
+      RELEASE: ignite
+      FULLNAME: ignite-aspnetcore-ignite-server
+    steps:
+      - name: Checkout Old Helm Chart
+        uses: actions/checkout@v6
+        with:
+          repository: dradoaica/helm-charts
+          ref: aspnetcore-ignite-server-2.18.2
+          path: helm-charts-old
+
+      - name: Checkout Helm Chart
+        uses: actions/checkout@v6
+        with:
+          repository: dradoaica/helm-charts
+          ref: ${{ inputs.helm-charts-ref || 'main' }}
+          path: helm-charts
+
+      - name: Load Image
+        uses: actions/download-artifact@v4
+        with:
+          name: server-image
+          path: ${{ runner.temp }}
+
+      - name: Create kind Cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: upgrade
+
+      - name: Import Images
+        run: |
+          docker load -i "${RUNNER_TEMP}/image.tar"
+          docker pull "$IMAGE:2.18.0"
+          kind load docker-image "$IMAGE:e2e" "$IMAGE:2.18.0" --name upgrade
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Install Chart 2.18.2
+        run: >-
+          helm install "$RELEASE" helm-charts-old/charts/aspnetcore-ignite-server
+          --set image.tag=2.18.0 --set image.pullPolicy=Never --set persistence.size=1Gi
+          --set resources.requests.cpu=500m --set resources.limits.cpu=1
+          --set resources.requests.memory=3Gi --set resources.limits.memory=3Gi
+          --wait --timeout 10m
+
+      - name: Write Data (REST of the 2.18.0 image)
+        run: |
+          set -euo pipefail
+          kubectl run rest --image=curlimages/curl:8.17.0 --restart=Never --command -- sleep 3600
+          kubectl wait --for=condition=Ready pod/rest --timeout=120s
+          rest() { kubectl exec rest -- curl -sS -G "http://${FULLNAME}:8080/ignite" --data-urlencode ignite.login=ignite --data-urlencode ignite.password=ignite "$@"; }
+          rest --data-urlencode cmd=getorcreate --data-urlencode cacheName=upgrade
+          rest --data-urlencode cmd=put --data-urlencode cacheName=upgrade --data-urlencode key=k --data-urlencode val=survived | grep -q '"successStatus":0'
+
+      # the documented steps: stop the cluster cleanly (checkpoint), remove the StatefulSet (its spec cannot change), and
+      # upgrade with the old volume claim name, so the data volume is reused
+      - name: Upgrade
+        run: |
+          set -euo pipefail
+          kubectl scale statefulset "${FULLNAME}-cluster" --replicas=0
+          kubectl wait --for=delete pod -l app.kubernetes.io/name=aspnetcore-ignite-server --timeout=300s
+          kubectl delete statefulset "${FULLNAME}-cluster" --cascade=orphan
+          helm upgrade "$RELEASE" helm-charts/charts/aspnetcore-ignite-server \
+            --set image.tag=e2e --set image.pullPolicy=Never \
+            --set persistence.storageVolume.claimName=persistence --set persistence.storageVolume.size=1Gi \
+            --set persistence.walVolume.size=1Gi --set rest.enabled=true \
+            --set resources.requests.cpu=500m --set resources.limits.cpu=1 \
+            --set resources.requests.memory=3Gi --set resources.limits.memory=3Gi \
+            --set memory.onHeapMB=512 --set memory.offHeapMB=256 --set memory.maxDirectMemorySizeMB=1024 \
+            --wait --timeout 10m
+
+      - name: Read Data
+        run: |
+          set -euo pipefail
+          value=$(kubectl exec rest -- curl -sS -G "http://${FULLNAME}:8080/ignite" --data-urlencode ignite.login=ignite \
+            --data-urlencode ignite.password=ignite --data-urlencode cmd=get --data-urlencode cacheName=upgrade --data-urlencode key=k)
+          echo "$value"
+          echo "$value" | grep -q '"response":"survived"'
 
       - name: Diagnostics
         if: failure()

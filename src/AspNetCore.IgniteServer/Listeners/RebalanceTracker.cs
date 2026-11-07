@@ -36,8 +36,11 @@ internal sealed class RebalanceTracker(ILogger logger, TimeProvider? timeProvide
 
     internal void OnStarted(string cacheName)
     {
-        rebalancing[cacheName] = timeProvider.GetUtcNow();
-        logger.Information("Rebalancing of cache {CacheName} started.", cacheName);
+        // the first start counts: Ignite restarts a rebalance on every topology change, which must not extend the wait
+        if (rebalancing.TryAdd(cacheName, timeProvider.GetUtcNow()))
+        {
+            logger.Information("Rebalancing of cache {CacheName} started.", cacheName);
+        }
     }
 
     internal void OnStopped(string cacheName)
@@ -53,13 +56,13 @@ internal sealed class RebalanceTracker(ILogger logger, TimeProvider? timeProvide
     }
 
     /// <summary>
-    ///     True while a cache rebalances and none of them started more than <paramref name="maxWait" /> ago (a rebalance
-    ///     that never reports its end must not keep the node unready forever).
+    ///     True while a cache rebalances that started less than <paramref name="maxWait" /> ago (a rebalance that never
+    ///     reports its end must not keep the node unready forever, but it does not end the wait for the others).
     /// </summary>
     public bool IsRebalancing(TimeSpan maxWait)
     {
         var now = timeProvider.GetUtcNow();
-        return !rebalancing.IsEmpty && rebalancing.Values.All(started => now - started < maxWait);
+        return rebalancing.Values.Any(started => now - started < maxWait);
     }
 
     /// <summary>Forgets the previous run (the node restarts).</summary>

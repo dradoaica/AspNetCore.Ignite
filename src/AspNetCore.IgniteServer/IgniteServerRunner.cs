@@ -7,6 +7,7 @@ using AspNetCore.IgniteServer.Listeners;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -88,7 +89,9 @@ internal sealed class IgniteServerRunner : IDisposable
     public void SetOnHeapMemoryLimit(int value)
     {
         EnsureNotRunning();
-        igniteConfiguration.JvmInitialMemoryMb = value / 2;
+        // the whole heap from the start (as the Ignite chart): with AlwaysPreTouch and guaranteed container memory, it
+        // never grows at run time
+        igniteConfiguration.JvmInitialMemoryMb = value;
         igniteConfiguration.JvmMaxMemoryMb = value;
     }
 
@@ -242,16 +245,17 @@ internal sealed class IgniteServerRunner : IDisposable
     {
         while (!stopped.IsCompleted && !cluster.IsActive())
         {
-            var serverNodes = cluster.ForServers().GetNodes().Count;
-            if (serverNodes >= options.ActivationMinServerNodes)
+            var serverNodes = cluster.ForServers().GetNodes();
+            if (serverNodes.Count >= options.ActivationMinServerNodes)
             {
                 return;
             }
 
             logger.Information(
-                "Waiting for {ActivationMinServerNodes} server nodes before activating the cluster ({ServerNodes} joined)...",
+                "Waiting for {ActivationMinServerNodes} server nodes before activating the cluster ({ServerNodes} joined: {JoinedNodes})...",
                 options.ActivationMinServerNodes,
-                serverNodes
+                serverNodes.Count,
+                string.Join(", ", serverNodes.Select(node => node.ConsistentId))
             );
             await Task.WhenAny(stopped, Task.Delay(ActivationPollInterval)).ConfigureAwait(false);
         }

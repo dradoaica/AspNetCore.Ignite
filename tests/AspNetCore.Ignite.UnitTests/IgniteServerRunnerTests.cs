@@ -58,7 +58,7 @@ public sealed class IgniteServerRunnerTests
 
         runner.SetOnHeapMemoryLimit(1024);
 
-        Assert.Equal(512, runner.Configuration.JvmInitialMemoryMb);
+        Assert.Equal(1024, runner.Configuration.JvmInitialMemoryMb);
         Assert.Equal(1024, runner.Configuration.JvmMaxMemoryMb);
     }
 

@@ -45,6 +45,10 @@ RUN mkdir -p /app/work && chown -R 1001:0 /app && chmod -R g=u /app
 
 USER 1001
 
+# outside Kubernetes (which uses its own probes): /health/liveness on the management port, with bash only (no curl here)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/${MANAGEMENT_PORT:-9464} && printf 'GET /health/liveness HTTP/1.0\\r\\n\\r\\n' >&3 && head -n 1 <&3 | grep -q ' 200 '"]
+
 ENTRYPOINT ["dotnet", "AspNetCore.IgniteServer.dll"]
 
 # thin clients, communication, discovery, management (/health/*, /metrics); REST (8080) and the TCP binary protocol

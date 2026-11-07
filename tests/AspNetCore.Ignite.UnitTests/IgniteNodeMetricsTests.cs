@@ -41,4 +41,23 @@ public sealed class IgniteNodeMetricsTests
             values.Add(value);
         }
     }
+
+    [Fact]
+    public void PerCacheMetrics_CanBeTurnedOff()
+    {
+        using IgniteNodeMetrics metrics = new(new IgniteNodeState(), perCache: false);
+        List<string> instruments = [];
+        using MeterListener listener = new();
+        listener.InstrumentPublished = (instrument, _) =>
+        {
+            if (instrument.Meter.Name == IgniteNodeMetrics.MeterName)
+            {
+                instruments.Add(instrument.Name);
+            }
+        };
+        listener.Start();
+
+        Assert.DoesNotContain(instruments, name => name.StartsWith("cache_", StringComparison.Ordinal));
+        Assert.Contains("node_ready", instruments);
+    }
 }

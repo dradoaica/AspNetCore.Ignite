@@ -25,6 +25,7 @@ public sealed class IgniteServerFixture : IAsyncLifetime
     public const string RunningMessage = "Ignite server runner is running";
 
     private IFutureDockerImage? image;
+    private IImage? imageName;
     private IContainer? container;
 
     public bool IsDockerAvailable { get; private set; }
@@ -53,18 +54,33 @@ public sealed class IgniteServerFixture : IAsyncLifetime
         new($"http://{node.Hostname}:{node.GetMappedPublicPort(ManagementPort)}{path}");
 
     /// <summary>A node of the server image with small memory settings and the thin client port published.</summary>
-    public ContainerBuilder CreateNodeBuilder() => new ContainerBuilder(image!)
+    public ContainerBuilder CreateNodeBuilder() => new ContainerBuilder(imageName ?? image!)
         .WithPortBinding(ThinClientPort, true)
         .WithPortBinding(ManagementPort, true)
         .WithEnvironment("DEFAULT_ON_HEAP_MEMORY", "512")
         .WithEnvironment("DEFAULT_OFF_HEAP_MEMORY", "256")
         .WithEnvironment("IGNITE_USER_PASSWORD", Password);
 
+    /// <summary>A prebuilt server image to test (e.g., built once by CI); otherwise the Dockerfile is built.</summary>
+    public static string? PrebuiltImage => Environment.GetEnvironmentVariable("IGNITE_SERVER_IMAGE") is { Length: > 0, } name
+        ? name
+        : null;
+
     public async Task InitializeAsync()
     {
         IsDockerAvailable = await DockerSupport.IsDockerAvailableAsync();
         if (!IsDockerAvailable)
         {
+            return;
+        }
+
+        if (PrebuiltImage is { } prebuiltImage)
+        {
+            imageName = new DockerImage(prebuiltImage);
+            container = CreateNodeBuilder()
+                .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(RunningMessage))
+                .Build();
+            await container.StartAsync();
             return;
         }
 

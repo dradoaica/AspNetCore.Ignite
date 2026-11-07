@@ -51,4 +51,37 @@ public sealed class RebalanceTrackerTests
         Assert.False(tracker.IsRebalancing(MaxWait));
         Assert.Empty(tracker.RebalancingCaches);
     }
+
+    [Fact]
+    public void AStuckCache_DoesNotEndTheWaitForTheOthers()
+    {
+        FakeTimeProvider time = new();
+        RebalanceTracker tracker = new(Logger.None, time);
+        tracker.OnStarted("stuck");
+        time.Advance(MaxWait);
+
+        tracker.OnStarted("recent");
+
+        // "stuck" exceeded the max wait, "recent" did not: still rebalancing
+        Assert.True(tracker.IsRebalancing(MaxWait));
+        tracker.OnStopped("recent");
+        Assert.False(tracker.IsRebalancing(MaxWait));
+    }
+
+    [Fact]
+    public void RestartedRebalances_DoNotExtendTheMaxWait()
+    {
+        FakeTimeProvider time = new();
+        RebalanceTracker tracker = new(Logger.None, time);
+        tracker.OnStarted("a");
+
+        // topology changes restart the rebalance before it ends
+        for (var i = 0; i < 10; i++)
+        {
+            time.Advance(TimeSpan.FromMinutes(2));
+            tracker.OnStarted("a");
+        }
+
+        Assert.False(tracker.IsRebalancing(MaxWait));
+    }
 }

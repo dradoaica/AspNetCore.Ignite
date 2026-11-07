@@ -89,7 +89,11 @@ internal static class IgniteConfigurationFactory
         [
                 "-Djava.net.preferIPv4Stack=true", "-DIGNITE_QUIET=false", "-DIGNITE_WAL_MMAP=false",
                 "-XX:MaxMetaspaceSize=256m", "-XX:ReservedCodeCacheSize=240m", "-XX:+AlwaysPreTouch",
-                "-XX:+UseG1GC", "-XX:+DisableExplicitGC",
+                "-XX:+UseG1GC", "-XX:MaxGCPauseMillis=200", "-XX:+UseStringDeduplication", "-XX:+ParallelRefProcEnabled",
+                "-XX:+DisableExplicitGC", "-XX:-OmitStackTraceInFastThrow",
+                // as the Ignite chart: an out-of-memory JVM exits (and the pod restarts) instead of running half-dead in
+                // the process, and leaves a heap dump in /tmp
+                "-XX:+ExitOnOutOfMemoryError", "-XX:+HeapDumpOnOutOfMemoryError", "-XX:HeapDumpPath=/tmp/heapdump.hprof",
                 "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
                 "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED", "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
                 "--add-opens=java.base/sun.util.calendar=ALL-UNNAMED",
