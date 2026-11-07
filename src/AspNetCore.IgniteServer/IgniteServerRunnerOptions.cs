@@ -26,6 +26,14 @@ internal sealed record IgniteServerRunnerOptions
 
     public TimeSpan BaselineAutoAdjustTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    ///     The node is ready only once the caches it receives partitions of are rebalanced, so that rolling restarts wait
+    ///     for the data to be back before stopping the next node; at most <see cref="RebalanceReadinessMaxWait" />.
+    /// </summary>
+    public bool ReadyWhenRebalanced { get; init; } = true;
+
+    public TimeSpan RebalanceReadinessMaxWait { get; init; } = TimeSpan.FromMinutes(10);
+
     /// <summary>When set, lost partitions are reset automatically (the lost data is NOT recovered).</summary>
     public bool AutoResetLostPartitions { get; init; } = true;
 

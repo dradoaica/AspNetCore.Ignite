@@ -1,4 +1,5 @@
 using Apache.Ignite.Core;
+using System.Collections.Generic;
 
 namespace AspNetCore.IgniteServer;
 
@@ -15,6 +16,9 @@ internal sealed class IgniteNodeState
 
     /// <summary>True once the node is running and its cluster is active.</summary>
     public bool IsReady => runner?.IsReady == true;
+
+    /// <summary>The caches the node is rebalancing (receiving partitions of).</summary>
+    public IReadOnlyCollection<string> RebalancingCaches => runner?.RebalanceTracker.RebalancingCaches ?? [];
 
     internal void SetRunner(IgniteServerRunner? value) => runner = value;
 }

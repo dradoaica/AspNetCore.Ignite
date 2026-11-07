@@ -229,4 +229,17 @@ public sealed class IgniteServerSettingsTests
         Assert.Null(options.WalMode);
         Assert.Empty(options.ExtraJvmOptions);
     }
+
+    [Fact]
+    public void RebalanceReadiness_DefaultsAndValidation()
+    {
+        var options = Load([]).ToRunnerOptions("spring.xml");
+
+        Assert.True(options.ReadyWhenRebalanced);
+        Assert.Equal(TimeSpan.FromMinutes(10), options.RebalanceReadinessMaxWait);
+        Assert.Contains(
+            Load(new Dictionary<string, string?> { ["REBALANCE_READINESS_MAX_WAIT_IN_SECONDS"] = "0", }).Validate(),
+            error => error.StartsWith("REBALANCE_READINESS_MAX_WAIT_IN_SECONDS", StringComparison.Ordinal)
+        );
+    }
 }

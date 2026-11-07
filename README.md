@@ -69,6 +69,7 @@ command line options.
 | `IGNITE_USER_PREVIOUS_PASSWORD` | | _(empty)_ | The current password, when rotating it to `IGNITE_USER_PASSWORD`. |
 | `ACTIVATION_MIN_SERVER_NODES` | | `1` | Persistent clusters are activated only after this many server nodes joined (see [Persistent Mode](#persistent-mode)). |
 | `BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS` | | `30` | Delay of the baseline auto-adjust after topology changes. |
+| `READY_WHEN_REBALANCED` / `REBALANCE_READINESS_MAX_WAIT_IN_SECONDS` | | `true` / `600` | The node is ready only once it has received the partitions of its caches (at most this long), so rolling restarts wait for the data before stopping the next node. |
 | `AUTO_RESET_LOST_PARTITIONS` | | `true` | Reset lost partitions automatically so caches stay usable. **The lost data is not recovered**; data loss is always logged as an error. |
 | `USE_SSL` | | `false` | Enables SSL between nodes; requires `SSL_KEY_STORE_*` and `SSL_TRUST_STORE_*`. |
 | `USE_CLIENT_SSL` | | `false` | Enables SSL (with client certificates) for thin clients; requires the key/trust stores and `SSL_CLIENT_CERTIFICATE_*`. |
@@ -93,7 +94,7 @@ These settings apply only when set (otherwise the default configuration, or `-Co
 | `JVM_MAX_DIRECT_MEMORY_MB` | `-XX:MaxDirectMemorySize` (e.g., off-heap + checkpoint buffer + system regions, see [Configuring Memory](#configuring-memory)). |
 | `JVM_G1_HEAP_REGION_MB` | G1 heap region size (power of 2, 1-32). |
 | `EXTRA_JVM_OPTS` | Extra JVM options, separated by spaces. |
-| `EXTRA_CLASSPATH` | Extra Java classpath entries separated by `:` (a directory adds its jars), e.g., extra Ignite modules on a volume. |
+| `EXTRA_CLASSPATH` | Extra Java classpath entries separated by `:` (a directory adds its jars), e.g., extra Ignite modules on a volume (Linux paths: `:` and `;` both separate entries). |
 | `FAILURE_DETECTION_TIMEOUT_MS` / `CLIENT_FAILURE_DETECTION_TIMEOUT_MS` / `NETWORK_TIMEOUT_MS` | Timeouts (defaults 30000 / 60000 / 10000); the client one must not be less than `METRICS_UPDATE_FREQUENCY_IN_SECONDS`. |
 | `PUBLIC_THREAD_POOL_SIZE`, `SYSTEM_THREAD_POOL_SIZE`, `QUERY_THREAD_POOL_SIZE`, `SERVICE_THREAD_POOL_SIZE`, `STRIPED_THREAD_POOL_SIZE`, `DATA_STREAMER_THREAD_POOL_SIZE` | Thread pool sizes. |
 | `STORAGE_PATH` / `WAL_PATH` / `WAL_ARCHIVE_PATH` | Data and indexes, WAL and WAL archive directories (dedicated volumes recommended); default under `/app/work`. |
@@ -112,10 +113,10 @@ With `MANAGEMENT_ENABLED` (the default), the server listens on `MANAGEMENT_PORT`
 
 | Endpoint | |
 |---|---|
-| `/health/live` | `200` while the process runs (liveness probe). |
-| `/health/started` | `200` once the node runs, also while it waits for activation (startup probe). |
-| `/health/ready` | `200` when the node is running and its cluster is active, `503` while starting, restarting or stopping (readiness probe). |
-| `/metrics` | Prometheus metrics: `ignite_node_*` (heap, CPU, threads, jobs, traffic), `ignite_cluster_*` (active, server and baseline nodes), `ignite_data_region_*` (off-heap, RAM, checkpoint buffer, dirty pages, fill factor, evictions; by `region`), the health checks, and the .NET runtime. |
+| `/health/liveness` | `200` while the process runs (liveness probe). |
+| `/health/startup` | `200` once the node runs, also while it waits for activation (startup probe). |
+| `/health/readiness` | `200` when the node is running, its cluster is active and it is not rebalancing (`READY_WHEN_REBALANCED`); `503` while starting, waiting for activation, rebalancing, restarting or stopping (readiness probe). |
+| `/metrics` | Prometheus metrics: `ignite_node_*` (heap, CPU, threads, jobs, traffic), `ignite_cluster_*` (active, server and baseline nodes), `ignite_data_region_*` (off-heap, RAM, checkpoint buffer, dirty pages, fill factor, evictions; by `region`), `ignite_cache_local_entries` and `ignite_cache_rebalancing` (by `cache`), `ignite_node_rebalancing_caches`, the health checks, and the .NET runtime. The node is read once per scrape. |
 
 ### Logging
 
@@ -283,13 +284,18 @@ docker rmi dradoaica/aspnetcore.ignite-server:2.18.1
 The [Helm chart](https://github.com/dradoaica/helm-charts/tree/main/charts/aspnetcore-ignite-server) runs the server as
 a StatefulSet. A deployment should:
 
-* probe `/health/started` (startup), `/health/live` and `/health/ready` on port 9464 (and scrape `/metrics`),
+* probe `/health/startup` (startup), `/health/liveness` and `/health/readiness` on port 9464 (and scrape `/metrics`),
 * start the pods in parallel (`podManagementPolicy: Parallel`) when `ACTIVATION_MIN_SERVER_NODES` is above 1: with
   `OrderedReady`, the first pod is never ready (its cluster waits for the others) and the others never start,
-* set `terminationGracePeriodSeconds` above `SHUTDOWN_TIMEOUT_IN_SECONDS`,
+* size the stop for real data: a node's graceful stop waits until its partitions have copies on other nodes, so set
+  `GRACEFUL_STOP_TIMEOUT_IN_SECONDS` (e.g., 240) below `SHUTDOWN_TIMEOUT_IN_SECONDS` (e.g., 270) below
+  `terminationGracePeriodSeconds` (e.g., 300); together with `READY_WHEN_REBALANCED`, a rolling restart moves on only
+  once the restarted node holds its data again,
+* add a PodDisruptionBudget (`maxUnavailable: 1`) so that drains evict one node at a time,
 * give each pod a unique, stable `DEFAULT_CONSISTENT_ID` (e.g., the pod name) and, with persistence, a volume at
   `/app/work`,
-* set `ACTIVATION_MIN_SERVER_NODES` to the initial number of replicas (persistence),
+* set `ACTIVATION_MIN_SERVER_NODES` to the initial number of replicas (persistence); until they joined, no pod is
+  ready, so the Service has no endpoints and thin clients cannot connect yet (by design),
 * enable `USE_SSL` and/or restrict the cluster ports with a NetworkPolicy:
 
 ```yaml

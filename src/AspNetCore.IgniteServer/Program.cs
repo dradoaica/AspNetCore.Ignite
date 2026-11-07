@@ -84,7 +84,7 @@ static IHost BuildWithoutManagement(IConfiguration configuration, IgniteServerSe
     return builder.Build();
 }
 
-// /health/live, /health/started, /health/ready and /metrics (Prometheus) on MANAGEMENT_PORT
+// /health/liveness, /health/startup, /health/readiness and /metrics (Prometheus) on MANAGEMENT_PORT
 static IHost BuildWithManagement(IConfiguration configuration, IgniteServerSettings settings)
 {
     var builder = WebApplication.CreateEmptyBuilder(
@@ -102,9 +102,9 @@ static IHost BuildWithManagement(IConfiguration configuration, IgniteServerSetti
     var app = builder.Build();
     // created eagerly, so its instruments exist before the first scrape
     app.Services.GetRequiredService<IgniteNodeMetrics>();
-    app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false, });
-    app.MapHealthChecks("/health/started", new HealthCheckOptions { Predicate = check => check.Tags.Contains("started"), });
-    app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready"), });
+    app.MapHealthChecks("/health/liveness", new HealthCheckOptions { Predicate = _ => false, });
+    app.MapHealthChecks("/health/startup", new HealthCheckOptions { Predicate = check => check.Tags.Contains("started"), });
+    app.MapHealthChecks("/health/readiness", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready"), });
     app.MapMetrics("/metrics");
     return app;
 }

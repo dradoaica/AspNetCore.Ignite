@@ -10,16 +10,10 @@ namespace AspNetCore.IgniteServer;
 ///     The server settings: appsettings.json, overridden by environment variables of the same name, overridden by the
 ///     command line options.
 /// </summary>
-internal sealed class IgniteServerSettings
+internal sealed partial class IgniteServerSettings
 {
     [ConfigurationKeyName("CONFIG_FILE")]
     public string? ConfigFile { get; set; }
-
-    [ConfigurationKeyName("DEFAULT_ON_HEAP_MEMORY")]
-    public int OnHeapMemory { get; set; } = 1024;
-
-    [ConfigurationKeyName("DEFAULT_OFF_HEAP_MEMORY")]
-    public int OffHeapMemory { get; set; } = 2048;
 
     [ConfigurationKeyName("SPI_PORT")]
     public int? SpiPort { get; set; }
@@ -33,14 +27,8 @@ internal sealed class IgniteServerSettings
     [ConfigurationKeyName("DEFAULT_CONSISTENT_ID")]
     public string? ConsistentId { get; set; }
 
-    [ConfigurationKeyName("PERSISTENCE_ENABLED")]
-    public bool PersistenceEnabled { get; set; }
-
     [ConfigurationKeyName("PEER_ASSEMBLY_LOADING")]
     public bool PeerAssemblyLoading { get; set; }
-
-    [ConfigurationKeyName("REST_ENABLED")]
-    public bool RestEnabled { get; set; }
 
     [ConfigurationKeyName("ENABLE_AUTHENTICATION")]
     public bool EnableAuthentication { get; set; }
@@ -66,142 +54,7 @@ internal sealed class IgniteServerSettings
     [ConfigurationKeyName("AUTO_RESET_LOST_PARTITIONS")]
     public bool AutoResetLostPartitions { get; set; } = true;
 
-    [ConfigurationKeyName("USE_SSL")]
-    public bool UseSsl { get; set; }
-
-    [ConfigurationKeyName("SSL_PROTOCOL")]
-    public string SslProtocol { get; set; } = "TLS";
-
-    [ConfigurationKeyName("SSL_KEY_STORE_TYPE")]
-    public string SslKeyStoreType { get; set; } = "JKS";
-
-    [ConfigurationKeyName("SSL_TRUST_STORE_TYPE")]
-    public string SslTrustStoreType { get; set; } = "JKS";
-
-    [ConfigurationKeyName("SSL_KEY_ALGORITHM")]
-    public string SslKeyAlgorithm { get; set; } = "SunX509";
-
-    /// <summary>Thin clients must present a certificate the trust store trusts (USE_CLIENT_SSL).</summary>
-    [ConfigurationKeyName("SSL_CLIENT_AUTH")]
-    public bool SslClientAuth { get; set; } = true;
-
-    [ConfigurationKeyName("SSL_KEY_STORE_FILE_PATH")]
-    public string? SslKeyStoreFilePath { get; set; }
-
-    [ConfigurationKeyName("SSL_KEY_STORE_PASSWORD")]
-    public string? SslKeyStorePassword { get; set; }
-
-    [ConfigurationKeyName("SSL_TRUST_STORE_FILE_PATH")]
-    public string? SslTrustStoreFilePath { get; set; }
-
-    [ConfigurationKeyName("SSL_TRUST_STORE_PASSWORD")]
-    public string? SslTrustStorePassword { get; set; }
-
-    [ConfigurationKeyName("USE_CLIENT_SSL")]
-    public bool UseClientSsl { get; set; }
-
-    [ConfigurationKeyName("SSL_CLIENT_CERTIFICATE_PATH")]
-    public string? SslClientCertificatePath { get; set; }
-
-    [ConfigurationKeyName("SSL_CLIENT_CERTIFICATE_PASSWORD")]
-    public string? SslClientCertificatePassword { get; set; }
-
-    [ConfigurationKeyName("RESTART_ON_SSL_FILE_CHANGE")]
-    public bool RestartOnSslFileChange { get; set; } = true;
-
-    [ConfigurationKeyName("SSL_RESTART_MAX_JITTER_IN_SECONDS")]
-    public int SslRestartMaxJitterInSeconds { get; set; } = 60;
-
-    [ConfigurationKeyName("METRICS_EXPIRE_TIME_IN_HOURS")]
-    public int MetricsExpireTimeInHours { get; set; } = 24;
-
-    [ConfigurationKeyName("METRICS_LOG_FREQUENCY_IN_MINUTES")]
-    public int MetricsLogFrequencyInMinutes { get; set; } = 5;
-
-    [ConfigurationKeyName("METRICS_UPDATE_FREQUENCY_IN_SECONDS")]
-    public int MetricsUpdateFrequencyInSeconds { get; set; } = 60;
-
-    [ConfigurationKeyName("ENABLE_OFF_HEAP_METRICS")]
-    public bool EnableOffHeapMetrics { get; set; } = true;
-
-    [ConfigurationKeyName("MANAGEMENT_ENABLED")]
-    public bool ManagementEnabled { get; set; } = true;
-
-    [ConfigurationKeyName("MANAGEMENT_PORT")]
-    public int ManagementPort { get; set; } = 9464;
-
-    [ConfigurationKeyName("GRACEFUL_STOP_TIMEOUT_IN_SECONDS")]
-    public int GracefulStopTimeoutInSeconds { get; set; } = 20;
-
-    [ConfigurationKeyName("SHUTDOWN_TIMEOUT_IN_SECONDS")]
-    public int ShutdownTimeoutInSeconds { get; set; } = 30;
-
     // the settings below apply only when set: their defaults are those of the default configuration (or of -ConfigFile)
-
-    [ConfigurationKeyName("JVM_MAX_METASPACE_MB")]
-    public int? JvmMaxMetaspaceMb { get; set; }
-
-    [ConfigurationKeyName("JVM_RESERVED_CODE_CACHE_MB")]
-    public int? JvmReservedCodeCacheMb { get; set; }
-
-    [ConfigurationKeyName("JVM_MAX_DIRECT_MEMORY_MB")]
-    public int? JvmMaxDirectMemoryMb { get; set; }
-
-    [ConfigurationKeyName("JVM_G1_HEAP_REGION_MB")]
-    public int? JvmG1HeapRegionMb { get; set; }
-
-    /// <summary>Extra JVM options, separated by spaces.</summary>
-    [ConfigurationKeyName("EXTRA_JVM_OPTS")]
-    public string? ExtraJvmOpts { get; set; }
-
-    /// <summary>Extra Java classpath entries separated by ':' (a directory adds its *.jar files), e.g., extra modules.</summary>
-    [ConfigurationKeyName("EXTRA_CLASSPATH")]
-    public string? ExtraClasspath { get; set; }
-
-    [ConfigurationKeyName("FAILURE_DETECTION_TIMEOUT_MS")]
-    public int? FailureDetectionTimeoutMs { get; set; }
-
-    [ConfigurationKeyName("CLIENT_FAILURE_DETECTION_TIMEOUT_MS")]
-    public int? ClientFailureDetectionTimeoutMs { get; set; }
-
-    [ConfigurationKeyName("NETWORK_TIMEOUT_MS")]
-    public int? NetworkTimeoutMs { get; set; }
-
-    [ConfigurationKeyName("PUBLIC_THREAD_POOL_SIZE")]
-    public int? PublicThreadPoolSize { get; set; }
-
-    [ConfigurationKeyName("SYSTEM_THREAD_POOL_SIZE")]
-    public int? SystemThreadPoolSize { get; set; }
-
-    [ConfigurationKeyName("QUERY_THREAD_POOL_SIZE")]
-    public int? QueryThreadPoolSize { get; set; }
-
-    [ConfigurationKeyName("SERVICE_THREAD_POOL_SIZE")]
-    public int? ServiceThreadPoolSize { get; set; }
-
-    [ConfigurationKeyName("STRIPED_THREAD_POOL_SIZE")]
-    public int? StripedThreadPoolSize { get; set; }
-
-    [ConfigurationKeyName("DATA_STREAMER_THREAD_POOL_SIZE")]
-    public int? DataStreamerThreadPoolSize { get; set; }
-
-    /// <summary>Data and indexes (persistence); a dedicated volume is recommended.</summary>
-    [ConfigurationKeyName("STORAGE_PATH")]
-    public string? StoragePath { get; set; }
-
-    /// <summary>The write-ahead log; a dedicated volume (disk) is recommended.</summary>
-    [ConfigurationKeyName("WAL_PATH")]
-    public string? WalPath { get; set; }
-
-    [ConfigurationKeyName("WAL_ARCHIVE_PATH")]
-    public string? WalArchivePath { get; set; }
-
-    [ConfigurationKeyName("WAL_COMPACTION_ENABLED")]
-    public bool? WalCompactionEnabled { get; set; }
-
-    /// <summary>Fsync, LogOnly (Ignite's default), Background or None (LOG_ONLY style names work too).</summary>
-    [ConfigurationKeyName("WAL_MODE")]
-    public string? WalMode { get; set; }
 
     /// <summary>
     ///     Binds the settings; CLUSTER_ENDPOINTS is a list (CLUSTER_ENDPOINTS__0, ...) or a comma-separated value.
@@ -248,6 +101,11 @@ internal sealed class IgniteServerSettings
         if (BaselineAutoAdjustTimeoutInSeconds < 0)
         {
             errors.Add("BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS must not be negative.");
+        }
+
+        if (RebalanceReadinessMaxWaitInSeconds <= 0)
+        {
+            errors.Add("REBALANCE_READINESS_MAX_WAIT_IN_SECONDS must be positive.");
         }
 
         if (SslRestartMaxJitterInSeconds < 0)
@@ -337,6 +195,8 @@ internal sealed class IgniteServerSettings
         ActivationMinServerNodes = ActivationMinServerNodes,
         BaselineAutoAdjustTimeout = TimeSpan.FromSeconds(BaselineAutoAdjustTimeoutInSeconds),
         AutoResetLostPartitions = AutoResetLostPartitions,
+        ReadyWhenRebalanced = ReadyWhenRebalanced,
+        RebalanceReadinessMaxWait = TimeSpan.FromSeconds(RebalanceReadinessMaxWaitInSeconds),
         UseSsl = UseSsl,
         SslProtocol = SslProtocol,
         SslKeyStoreType = SslKeyStoreType,

@@ -16,9 +16,9 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
     {
         Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
 
-        var live = await Http.GetAsync(IgniteServerFixture.GetManagementUri(fixture.Node, "/health/live"));
-        var started = await Http.GetAsync(IgniteServerFixture.GetManagementUri(fixture.Node, "/health/started"));
-        var ready = await Http.GetAsync(IgniteServerFixture.GetManagementUri(fixture.Node, "/health/ready"));
+        var live = await Http.GetAsync(IgniteServerFixture.GetManagementUri(fixture.Node, "/health/liveness"));
+        var started = await Http.GetAsync(IgniteServerFixture.GetManagementUri(fixture.Node, "/health/startup"));
+        var ready = await Http.GetAsync(IgniteServerFixture.GetManagementUri(fixture.Node, "/health/readiness"));
         var metrics = await Http.GetStringAsync(IgniteServerFixture.GetManagementUri(fixture.Node, "/metrics"));
 
         Assert.Equal(HttpStatusCode.OK, live.StatusCode);
@@ -68,7 +68,7 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
 
         await node.StartAsync();
 
-        var ready = await Http.GetAsync(IgniteServerFixture.GetManagementUri(node, "/health/ready"));
+        var ready = await Http.GetAsync(IgniteServerFixture.GetManagementUri(node, "/health/readiness"));
         Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
     }
 

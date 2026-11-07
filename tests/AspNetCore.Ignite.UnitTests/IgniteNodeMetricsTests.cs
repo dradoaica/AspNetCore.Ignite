@@ -8,7 +8,7 @@ namespace AspNetCore.Ignite.UnitTests;
 public sealed class IgniteNodeMetricsTests
 {
     [Fact]
-    public void WithoutRunningNode_OnlyReadinessIsReported()
+    public void WithoutRunningNode_OnlyReadinessAndRebalancingAreReported()
     {
         using IgniteNodeMetrics metrics = new(new IgniteNodeState());
         Dictionary<string, List<double>> measurements = [];
@@ -28,7 +28,8 @@ public sealed class IgniteNodeMetricsTests
         listener.RecordObservableInstruments();
 
         Assert.Equal([0d,], measurements["node_ready"]);
-        Assert.Single(measurements);
+        Assert.Equal([0d,], measurements["node_rebalancing_caches"]);
+        Assert.Equal(2, measurements.Count);
 
         void Record(Instrument instrument, double value)
         {

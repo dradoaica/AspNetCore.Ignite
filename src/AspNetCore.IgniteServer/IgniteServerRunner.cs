@@ -30,15 +30,33 @@ internal sealed class IgniteServerRunner : IDisposable
         this.options = options;
         this.logger = logger ?? Serilog.Core.Logger.None;
         igniteConfiguration = IgniteConfigurationFactory.Create(options, this.logger);
+        RebalanceTracker = new RebalanceTracker(this.logger);
+        // in the configuration (not LocalListen after the start): rebalancing may start while the node joins
+        igniteConfiguration.LocalEventListeners =
+        [
+            ..igniteConfiguration.LocalEventListeners ?? [],
+            new LocalEventListener<CacheRebalancingEvent>
+            {
+                EventTypes = [EventType.CacheRebalanceStarted, EventType.CacheRebalanceStopped,],
+                Listener = RebalanceTracker,
+            },
+        ];
     }
+
+    /// <summary>The caches this node is rebalancing.</summary>
+    public RebalanceTracker RebalanceTracker { get; }
 
     internal IgniteConfiguration Configuration => igniteConfiguration;
 
     /// <summary>The running node, or null while it is (re)starting or stopped.</summary>
     public IIgnite? Node => Volatile.Read(ref ignite);
 
-    /// <summary>True once the node is running and its cluster is active (until it stops).</summary>
-    public bool IsReady => ready && Node != null;
+    /// <summary>
+    ///     True once the node is running, its cluster is active and (with ReadyWhenRebalanced) it is not rebalancing,
+    ///     until it stops.
+    /// </summary>
+    public bool IsReady => ready && Node != null &&
+                           !(options.ReadyWhenRebalanced && RebalanceTracker.IsRebalancing(options.RebalanceReadinessMaxWait));
 
     public void Dispose()
     {
@@ -102,6 +120,7 @@ internal sealed class IgniteServerRunner : IDisposable
         }
 
         logger.Information("Starting Ignite server runner...");
+        RebalanceTracker.Reset();
         // persistence may have been enabled after the memory limits were set
         IgniteConfigurationFactory.SetPageEvictionMode(igniteConfiguration);
         var current = Ignition.Start(igniteConfiguration);

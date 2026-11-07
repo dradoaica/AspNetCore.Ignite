@@ -124,11 +124,11 @@ jobs:
           helm install "$RELEASE" helm-charts/charts/aspnetcore-ignite-server
           --set image.tag=e2e --set image.pullPolicy=Never
           --set replicaCount=2 --set env.ACTIVATION_MIN_SERVER_NODES=2
-          --set secrets.igniteUserPassword=e2e-secret
+          --set authentication.igniteUserPassword=e2e-secret
           --set resources.requests.cpu=500m --set resources.limits.cpu=1
-          --set resources.requests.memory=2Gi --set resources.limits.memory=2Gi
-          --set env.DEFAULT_ON_HEAP_MEMORY=512 --set env.DEFAULT_OFF_HEAP_MEMORY=256
-          --set persistence.size=1Gi
+          --set resources.requests.memory=3Gi --set resources.limits.memory=3Gi
+          --set memory.onHeapMB=512 --set memory.offHeapMB=256 --set memory.maxDirectMemorySizeMB=1024
+          --set persistence.storageVolume.size=1Gi --set persistence.walVolume.size=1Gi
           --wait --timeout 10m
 
       - name: Helm Test

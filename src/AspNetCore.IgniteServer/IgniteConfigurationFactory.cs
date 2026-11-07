@@ -129,7 +129,7 @@ internal static class IgniteConfigurationFactory
         IncludedEventTypes =
         [
             EventType.NodeJoined, EventType.NodeLeft, EventType.NodeFailed, EventType.NodeSegmented,
-            EventType.CacheRebalancePartDataLost,
+            EventType.CacheRebalancePartDataLost, EventType.CacheRebalanceStarted, EventType.CacheRebalanceStopped,
         ],
     };
 
