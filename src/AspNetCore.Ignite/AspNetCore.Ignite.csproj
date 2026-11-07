@@ -1,7 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>netstandard2.1</TargetFramework>
+        <!-- netstandard2.0 for .NET Framework 4.6.1+ applications, as Apache.Ignite -->
+        <TargetFrameworks>netstandard2.0;netstandard2.1</TargetFrameworks>
         <PackageId>AspNetCore.Ignite</PackageId>
         <Description>Apache Ignite 2 thin client integration for ASP.NET Core: dependency injection, options, logging, health checks and resilient connections.</Description>
         <Authors>dradoaica</Authors>

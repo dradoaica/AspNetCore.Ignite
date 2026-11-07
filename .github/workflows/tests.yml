@@ -161,6 +161,24 @@ jobs:
           ref: ${{ steps.chart-ref.outputs.ref }}
           path: helm-charts
 
+      # paired release branches must agree: the server version is the chart's appVersion (on main, only a notice)
+      - name: Check Paired Versions
+        env:
+          CHART_REF: ${{ steps.chart-ref.outputs.ref }}
+        run: |
+          set -euo pipefail
+          server="$(sed -n -E 's/.*<Version>(.*)<\/Version>.*/\1/p' src/Directory.Build.props)"
+          app="$(sed -n -E 's/^appVersion: "?([^"]*)"?$/\1/p' helm-charts/charts/aspnetcore-ignite-server/Chart.yaml)"
+          echo "server ${server}, chart appVersion ${app} (helm-charts@${CHART_REF})"
+          if [ "$server" != "$app" ]; then
+            if [ "$CHART_REF" = main ]; then
+              echo "::notice::The chart on main has appVersion ${app}, this branch builds ${server}."
+            else
+              echo "::error::helm-charts@${CHART_REF} has appVersion ${app}, but this branch builds ${server}."
+              exit 1
+            fi
+          fi
+
       - name: Load Image
         uses: actions/download-artifact@v4
         with:

@@ -8,6 +8,11 @@ REST API and JSON, with the runtime dependencies their Maven POMs declare) are l
 copies them to `libs/` (not in IDE design-time builds). When upgrading Ignite (`IgniteVersion` in
 `Directory.Packages.props`), run `scripts/update-java-libs.sh` to update the hashes.
 
+Dependabot bumps `Apache.Ignite`; the Ignite Upgrade workflow then runs the script on its branch and pushes the new
+hashes. Dependabot stops rebasing a pull request once someone else pushed to it (merge or close it, and let it open a
+new one if needed), and a push with `GITHUB_TOKEN` starts no workflows: re-run the Tests workflow of the pull request,
+or set a `DEPENDABOT_PUSH_TOKEN` Dependabot secret (a token with `contents: write`) whose pushes do start them.
+
 ## Tests
 
 ```
@@ -32,17 +37,19 @@ The image is based on the ASP.NET Core runtime image with a Java 17 runtime redu
 and provenance attestations. `--build-arg VERSION=...` sets the assembly version (the release workflow passes the tag).
 
 ```
-docker build -t dradoaica/aspnetcore.ignite-server:2.19.0 -f Dockerfile .
-docker buildx build --platform linux/amd64,linux/arm64 -t dradoaica/aspnetcore.ignite-server:2.19.0 -f Dockerfile .
+docker build -t ghcr.io/dradoaica/aspnetcore.ignite-server:2.19.0 -f Dockerfile .
+docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/dradoaica/aspnetcore.ignite-server:2.19.0 -f Dockerfile .
 ```
 
 ## Push aspnetcore.ignite-server
 
-docker push dradoaica/aspnetcore.ignite-server:2.19.0
+Releases publish the image to GHCR (the Release workflow); to push one by hand:
+
+docker push ghcr.io/dradoaica/aspnetcore.ignite-server:2.19.0
 
 ## Run aspnetcore.ignite-server container
 
-docker run -p 0.0.0.0:10800:10800/tcp --name aspnetcore.ignite-server -d dradoaica/aspnetcore.ignite-server:2.19.0
+docker run -p 0.0.0.0:10800:10800/tcp --name aspnetcore.ignite-server -d ghcr.io/dradoaica/aspnetcore.ignite-server:2.19.0
 
 ## Remove aspnetcore.ignite-server container
 
@@ -50,4 +57,4 @@ docker rm -f aspnetcore.ignite-server
 
 ## Remove aspnetcore.ignite-server image
 
-docker rmi dradoaica/aspnetcore.ignite-server:2.19.0
+docker rmi ghcr.io/dradoaica/aspnetcore.ignite-server:2.19.0
