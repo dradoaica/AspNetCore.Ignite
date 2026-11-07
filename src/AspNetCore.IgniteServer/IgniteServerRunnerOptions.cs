@@ -73,4 +73,5 @@ internal sealed record IgniteServerRunnerOptions
     public string? WalArchivePath { get; init; }
     public bool? WalCompactionEnabled { get; init; }
     public WalMode? WalMode { get; init; }
+    public DataPageEvictionMode? PageEvictionMode { get; init; }
 }

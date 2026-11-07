@@ -113,6 +113,7 @@ internal sealed class IgniteServerHostedService(
                     settings.ToSpringConfigXmlPlaceholders()
                 )
                 .ConfigureAwait(false);
+            EnsureWellFormed(springConfigPath);
             runner = new IgniteServerRunner(settings.ToRunnerOptions(springConfigPath), logger);
             ApplySettings(runner, settings, DnsUtils.GetLocalIpAddress);
             nodeState.SetRunner(runner);
@@ -133,6 +134,22 @@ internal sealed class IgniteServerHostedService(
         {
             logger.Fatal(ex, "The Ignite server failed.");
             Fail();
+        }
+    }
+
+    /// <summary>A broken SPRING_EXTRA_* fragment fails here, with the file named, rather than deep in the JVM.</summary>
+    internal static void EnsureWellFormed(string springConfigPath)
+    {
+        try
+        {
+            System.Xml.Linq.XDocument.Load(springConfigPath);
+        }
+        catch (System.Xml.XmlException ex)
+        {
+            throw new InvalidOperationException(
+                $"The Spring configuration is not well-formed XML (check SPRING_EXTRA_BEANS_FILE and SPRING_EXTRA_PROPERTIES_FILE): {ex.Message}",
+                ex
+            );
         }
     }
 

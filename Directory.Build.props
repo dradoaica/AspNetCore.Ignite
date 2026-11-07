@@ -3,6 +3,9 @@
     <!-- every project (src/ imports this file): in CI (GitHub Actions sets CI=true), a warning fails the build -->
     <PropertyGroup Condition="'$(CI)' == 'true'">
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <!-- except low and moderate vulnerability advisories (NuGet audit), which are listed but not fatal, as in
+             scripts/check-vulnerable-packages.sh; high (NU1903) and critical (NU1904) ones fail the build -->
+        <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902</WarningsNotAsErrors>
     </PropertyGroup>
 
 </Project>

@@ -125,7 +125,7 @@ internal sealed class IgniteServerRunner : IDisposable
         logger.Information("Starting Ignite server runner...");
         RebalanceTracker.Reset();
         // persistence may have been enabled after the memory limits were set
-        IgniteConfigurationFactory.SetPageEvictionMode(igniteConfiguration);
+        IgniteConfigurationFactory.SetPageEvictionMode(igniteConfiguration, options.PageEvictionMode);
         var current = Ignition.Start(igniteConfiguration);
         ignite = current;
         current.Stopped += (s, _) =>

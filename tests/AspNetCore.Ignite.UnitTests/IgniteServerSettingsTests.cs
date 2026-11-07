@@ -242,4 +242,79 @@ public sealed class IgniteServerSettingsTests
             error => error.StartsWith("REBALANCE_READINESS_MAX_WAIT_IN_SECONDS", StringComparison.Ordinal)
         );
     }
+
+    [Fact]
+    public void SpringFragments_GoInsideTheTemplates()
+    {
+        var directory = Directory.CreateTempSubdirectory("spring-fragments");
+        try
+        {
+            var beans = Path.Combine(directory.FullName, "beans.xml");
+            var properties = Path.Combine(directory.FullName, "properties.xml");
+            File.WriteAllText(beans, "<bean id=\"extra\" class=\"java.lang.String\"/>");
+            File.WriteAllText(
+                properties,
+                "<property name=\"cacheConfiguration\"><list><bean class=\"org.apache.ignite.configuration.CacheConfiguration\"><property name=\"name\" value=\"fromSpring\"/></bean></list></property>"
+            );
+            var settings = Load(
+                new Dictionary<string, string?>
+                {
+                    ["SPRING_EXTRA_BEANS_FILE"] = beans,
+                    ["SPRING_EXTRA_PROPERTIES_FILE"] = properties,
+                    ["PEER_CLASS_LOADING_ENABLED"] = "true",
+                }
+            );
+
+            Assert.Empty(settings.Validate());
+            var rendered = System.Xml.Linq.XDocument.Parse(
+                AspNetCore.IgniteServer.Utils.SpringConfigRenderer.Render(
+                    File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "config", "spring-config.xml")),
+                    settings.ToSpringConfigPlaceholders(),
+                    settings.ToSpringConfigXmlPlaceholders()
+                )
+            );
+            System.Xml.Linq.XNamespace ns = "http://www.springframework.org/schema/beans";
+            var root = rendered.Root!;
+            var igniteBean = root.Elements(ns + "bean").Single(bean => (string?)bean.Attribute("class") == "org.apache.ignite.configuration.IgniteConfiguration");
+            Assert.Contains(root.Elements(ns + "bean"), bean => (string?)bean.Attribute("id") == "extra");
+            Assert.Contains(igniteBean.Elements(ns + "property"), property => (string?)property.Attribute("name") == "cacheConfiguration");
+            Assert.Contains(igniteBean.Elements(ns + "property"), property => (string?)property.Attribute("name") == "peerClassLoadingEnabled");
+        }
+        finally
+        {
+            directory.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void SpringFragments_MustExist() =>
+        Assert.Contains(
+            Load(new Dictionary<string, string?> { ["SPRING_EXTRA_PROPERTIES_FILE"] = "/nonexistent/properties.xml", }).Validate(),
+            error => error.StartsWith("SPRING_EXTRA_PROPERTIES_FILE", StringComparison.Ordinal)
+        );
+
+    [Fact]
+    public void MalformedSpringConfiguration_FailsWithAClearMessage()
+    {
+        var file = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(file, "<beans><bean></beans>");
+
+            var ex = Assert.Throws<InvalidOperationException>(() => IgniteServerHostedService.EnsureWellFormed(file));
+
+            Assert.Contains("SPRING_EXTRA_PROPERTIES_FILE", ex.Message);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Theory]
+    [InlineData("RANDOM_2_LRU", Apache.Ignite.Core.Configuration.DataPageEvictionMode.Random2Lru)]
+    [InlineData("randomlru", Apache.Ignite.Core.Configuration.DataPageEvictionMode.RandomLru)]
+    [InlineData("Disabled", Apache.Ignite.Core.Configuration.DataPageEvictionMode.Disabled)]
+    public void PageEvictionMode_AcceptsBothNamingStyles(string value, Apache.Ignite.Core.Configuration.DataPageEvictionMode expected) =>
+        Assert.Equal(expected, IgniteServerSettings.ParsePageEvictionMode(value));
 }

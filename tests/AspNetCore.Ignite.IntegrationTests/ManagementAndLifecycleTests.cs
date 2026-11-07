@@ -73,6 +73,34 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
     }
 
     [SkippableFact]
+    public async Task SpringConfigurationFragments_ConfigureTheNode()
+    {
+        Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
+        // the cacheConfiguration section of the Ignite chart, as is
+        const string properties = """
+            <property name="cacheConfiguration">
+                <list>
+                    <bean class="org.apache.ignite.configuration.CacheConfiguration">
+                        <property name="name" value="fromSpring"/>
+                        <property name="backups" value="1"/>
+                    </bean>
+                </list>
+            </property>
+            """;
+        await using var node = fixture.CreateNodeBuilder()
+            .WithEnvironment("ENABLE_AUTHENTICATION", "false")
+            .WithEnvironment("SPRING_EXTRA_PROPERTIES_FILE", "/app/work/spring-extra-properties.xml")
+            .WithResourceMapping(System.Text.Encoding.UTF8.GetBytes(properties), "/app/work/spring-extra-properties.xml", 1001, 0)
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
+            .Build();
+        await node.StartAsync();
+
+        using var igniteClient = CacheFactory.ConnectAsClient(CacheFactory.GetIgniteClientConfiguration(IgniteServerFixture.GetEndpoint(node)));
+
+        Assert.Contains("fromSpring", igniteClient.GetCacheNames());
+    }
+
+    [SkippableFact]
     public async Task GracefulStop_ExitsWithZero()
     {
         Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);

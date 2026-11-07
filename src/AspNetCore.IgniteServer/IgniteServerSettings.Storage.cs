@@ -19,6 +19,10 @@ internal sealed partial class IgniteServerSettings
     [ConfigurationKeyName("WAL_ARCHIVE_PATH")]
     public string? WalArchivePath { get; set; }
 
+    /// <summary>Page eviction of in-memory regions when full: Disabled, RandomLru or Random2Lru (the default); persistent regions write pages to disk instead.</summary>
+    [ConfigurationKeyName("PAGE_EVICTION_MODE")]
+    public string? PageEvictionMode { get; set; }
+
     [ConfigurationKeyName("WAL_COMPACTION_ENABLED")]
     public bool? WalCompactionEnabled { get; set; }
 

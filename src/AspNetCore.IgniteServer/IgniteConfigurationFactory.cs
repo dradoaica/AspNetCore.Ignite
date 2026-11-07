@@ -261,12 +261,12 @@ internal static class IgniteConfigurationFactory
     ///     In-memory regions evict pages when full (Random2Lru); persistent regions write them to disk instead, and Ignite
     ///     warns that an eviction mode has no effect there.
     /// </summary>
-    public static void SetPageEvictionMode(IgniteConfiguration igniteConfiguration)
+    public static void SetPageEvictionMode(IgniteConfiguration igniteConfiguration, DataPageEvictionMode? inMemoryMode = null)
     {
         if (igniteConfiguration.DataStorageConfiguration?.DefaultDataRegionConfiguration is { } region)
         {
             region.PageEvictionMode = region.PersistenceEnabled ? DataPageEvictionMode.Disabled
-                : DataPageEvictionMode.Random2Lru;
+                : inMemoryMode ?? DataPageEvictionMode.Random2Lru;
         }
     }
 

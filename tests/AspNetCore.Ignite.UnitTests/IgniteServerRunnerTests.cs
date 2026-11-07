@@ -107,8 +107,11 @@ public sealed class IgniteServerRunnerTests
         var region = runner.Configuration.DataStorageConfiguration.DefaultDataRegionConfiguration;
         Assert.Equal(Apache.Ignite.Core.Configuration.DataPageEvictionMode.Random2Lru, region.PageEvictionMode);
 
+        IgniteConfigurationFactory.SetPageEvictionMode(runner.Configuration, Apache.Ignite.Core.Configuration.DataPageEvictionMode.RandomLru);
+        Assert.Equal(Apache.Ignite.Core.Configuration.DataPageEvictionMode.RandomLru, region.PageEvictionMode);
+
         runner.SetPersistence(true);
-        IgniteConfigurationFactory.SetPageEvictionMode(runner.Configuration);
+        IgniteConfigurationFactory.SetPageEvictionMode(runner.Configuration, Apache.Ignite.Core.Configuration.DataPageEvictionMode.RandomLru);
         Assert.Equal(Apache.Ignite.Core.Configuration.DataPageEvictionMode.Disabled, region.PageEvictionMode);
     }
 

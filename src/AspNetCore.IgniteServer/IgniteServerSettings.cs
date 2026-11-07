@@ -2,6 +2,7 @@ using Apache.Ignite.Core.Configuration;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace AspNetCore.IgniteServer;
@@ -26,6 +27,25 @@ internal sealed partial class IgniteServerSettings
 
     [ConfigurationKeyName("DEFAULT_CONSISTENT_ID")]
     public string? ConsistentId { get; set; }
+
+    /// <summary>
+    ///     A Spring XML file with beans (e.g., data sources) next to the IgniteConfiguration bean, as extraBeans of the
+    ///     Ignite chart.
+    /// </summary>
+    [ConfigurationKeyName("SPRING_EXTRA_BEANS_FILE")]
+    public string? SpringExtraBeansFile { get; set; }
+
+    /// <summary>
+    ///     A Spring XML file with &lt;property&gt; elements of the IgniteConfiguration bean (cacheConfiguration,
+    ///     binaryConfiguration, sqlConfiguration, SPIs, ...), as the configuration sections of the Ignite chart; the
+    ///     .NET configuration wins for the properties it sets (communicationSpi, dataStorageConfiguration, ...).
+    /// </summary>
+    [ConfigurationKeyName("SPRING_EXTRA_PROPERTIES_FILE")]
+    public string? SpringExtraPropertiesFile { get; set; }
+
+    /// <summary>Java peer class loading (Zero Deployment): the Java counterpart of PEER_ASSEMBLY_LOADING.</summary>
+    [ConfigurationKeyName("PEER_CLASS_LOADING_ENABLED")]
+    public bool PeerClassLoadingEnabled { get; set; }
 
     [ConfigurationKeyName("PEER_ASSEMBLY_LOADING")]
     public bool PeerAssemblyLoading { get; set; }
@@ -153,6 +173,19 @@ internal sealed partial class IgniteServerSettings
             errors.Add("JVM_G1_HEAP_REGION_MB must be a power of 2 from 1 to 32.");
         }
 
+        foreach (var (key, path) in new[] { ("SPRING_EXTRA_BEANS_FILE", SpringExtraBeansFile), ("SPRING_EXTRA_PROPERTIES_FILE", SpringExtraPropertiesFile), })
+        {
+            if (!string.IsNullOrWhiteSpace(path) && !File.Exists(path))
+            {
+                errors.Add($"{key} ({path}) does not exist.");
+            }
+        }
+
+        if (PageEvictionMode != null && ParsePageEvictionMode(PageEvictionMode) == null)
+        {
+            errors.Add("PAGE_EVICTION_MODE must be one of Disabled, RandomLru, Random2Lru.");
+        }
+
         if (WalMode != null && ParseWalMode(WalMode) == null)
         {
             errors.Add("WAL_MODE must be one of Fsync, LogOnly, Background, None.");
@@ -222,6 +255,7 @@ internal sealed partial class IgniteServerSettings
         WalArchivePath = Blank(WalArchivePath),
         WalCompactionEnabled = WalCompactionEnabled,
         WalMode = WalMode == null ? null : ParseWalMode(WalMode),
+        PageEvictionMode = PageEvictionMode == null ? null : ParsePageEvictionMode(PageEvictionMode),
         SslKeyStoreFilePath = SslKeyStoreFilePath,
         SslKeyStorePassword = SslKeyStorePassword,
         SslTrustStoreFilePath = SslTrustStoreFilePath,
@@ -253,9 +287,20 @@ internal sealed partial class IgniteServerSettings
         // without a connector configuration Ignite starts neither the REST API (Jetty) nor the TCP binary protocol
         [ConnectorConfigurationPlaceholder] = RestEnabled ? null
             : "<property name=\"connectorConfiguration\"><null/></property>",
+        [ExtraBeansPlaceholder] = ReadFile(SpringExtraBeansFile),
+        [ExtraPropertiesPlaceholder] = (PeerClassLoadingEnabled ? "<property name=\"peerClassLoadingEnabled\" value=\"true\"/>\n" : "") +
+                                       ReadFile(SpringExtraPropertiesFile),
     };
 
     internal const string ConnectorConfigurationPlaceholder = "<!-- CONNECTOR_CONFIGURATION -->";
+    internal const string ExtraBeansPlaceholder = "<!-- EXTRA_BEANS -->";
+    internal const string ExtraPropertiesPlaceholder = "<!-- EXTRA_PROPERTIES -->";
+
+    private static string ReadFile(string? path) => string.IsNullOrWhiteSpace(path) ? "" : File.ReadAllText(path);
+
+    internal static DataPageEvictionMode? ParsePageEvictionMode(string value) =>
+        Enum.TryParse<DataPageEvictionMode>(value.Replace("_", string.Empty, StringComparison.Ordinal), true, out var mode) &&
+        Enum.IsDefined(mode) ? mode : null;
 
     internal static WalMode? ParseWalMode(string value) =>
         Enum.TryParse<WalMode>(value.Replace("_", string.Empty, StringComparison.Ordinal), true, out var walMode) &&

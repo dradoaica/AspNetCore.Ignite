@@ -55,6 +55,10 @@ command line options.
 | `DEFAULT_CONSISTENT_ID` | `-ConsistentId` | _(empty)_ | Consistent id of the node. Must be **unique per node**; leave empty to let Ignite derive one. |
 | `PERSISTENCE_ENABLED` | `-PersistenceEnabled` | `false` | Enables persistence. |
 | `K8S_NAMESPACE` / `K8S_SERVICE_NAME` | | _(empty)_ | Kubernetes IP finder settings. |
+| `SPRING_EXTRA_BEANS_FILE` | | _(empty)_ | A Spring XML file with beans (e.g., a data source) next to the `IgniteConfiguration` bean, as `extraBeans` of the Ignite chart. |
+| `SPRING_EXTRA_PROPERTIES_FILE` | | _(empty)_ | A Spring XML file with `<property>` elements of the `IgniteConfiguration` bean: `cacheConfiguration`, `binaryConfiguration`, `sqlConfiguration`, SPIs, ..., as the configuration sections of the Ignite chart. The .NET configuration wins for the properties it sets (communication SPI, data storage, client connector, discovery). |
+| `PEER_CLASS_LOADING_ENABLED` | | `false` | Java peer class loading (Zero Deployment); like peer assembly loading, it runs code of other nodes. |
+| `PAGE_EVICTION_MODE` | | `Random2Lru` | Eviction of in-memory regions when full (`Disabled`, `RandomLru`, `Random2Lru`); ignored with persistence. |
 | `PEER_ASSEMBLY_LOADING` | | `false` | Load .NET assemblies sent by other nodes (and so run their code); only for trusted clusters. |
 | `REST_ENABLED` | | `false` | Start the REST API (Jetty, port 8080) and the TCP binary protocol (port 11211); both are unencrypted. |
 | `ENABLE_AUTHENTICATION` | | `true` | Enables authentication (implies persistence). |

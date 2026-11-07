@@ -7,8 +7,9 @@
         <Version>2.19.0</Version>
         <LangVersion>default</LangVersion>
         <Nullable>enable</Nullable>
-        <!-- the recommended .NET code analysis rules, for every project in src/ -->
-        <AnalysisLevel>latest-recommended</AnalysisLevel>
+        <!-- the recommended .NET 10 code analysis rules, for every project in src/; pinned, so a newer SDK brings no new
+             rules (which fail CI, as warnings are errors there) until this is raised -->
+        <AnalysisLevel>10.0-recommended</AnalysisLevel>
     </PropertyGroup>
 
 </Project>
