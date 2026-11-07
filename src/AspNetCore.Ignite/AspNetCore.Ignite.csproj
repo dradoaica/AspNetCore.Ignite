@@ -2,24 +2,43 @@
 
     <PropertyGroup>
         <TargetFramework>netstandard2.1</TargetFramework>
-        <Version>2.18.1</Version>
-        <Nullable>enable</Nullable>
-        <LangVersion>default</LangVersion>
-        <Authors>AspNetCore.Ignite</Authors>
-        <Company>AspNetCore.Ignite</Company>
+        <PackageId>AspNetCore.Ignite</PackageId>
+        <Description>Apache Ignite 2 thin client integration for ASP.NET Core: dependency injection, options, logging, health checks and resilient connections.</Description>
+        <Authors>dradoaica</Authors>
+        <Company>dradoaica</Company>
+        <Copyright>Copyright (c) 2022 Radoaica Danut Cosmin &amp; Rysavy Ondrej</Copyright>
+        <PackageTags>apache-ignite;ignite;cache;aspnetcore;thin-client</PackageTags>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageProjectUrl>https://github.com/dradoaica/AspNetCore.Ignite</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/dradoaica/AspNetCore.Ignite.git</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <!-- SourceLink is built into the .NET SDK; ship symbols and embed untracked sources for debugging -->
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <EmbedUntrackedSources>true</EmbedUntrackedSources>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Apache.Ignite" Version="2.18.0"/>
-        <PackageReference Include="Apache.Ignite.Linq" Version="2.18.0"/>
-        <PackageReference Include="ConfigureAwait.Fody" Version="3.4.0" PrivateAssets="all"/>
-        <PackageReference Include="Fody" Version="6.9.3">
+        <PackageReference Include="Apache.Ignite"/>
+        <PackageReference Include="Apache.Ignite.Linq"/>
+        <PackageReference Include="ConfigureAwait.Fody" PrivateAssets="all"/>
+        <PackageReference Include="Fody">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.7"/>
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.7"/>
-        <PackageReference Include="Polly" Version="8.6.6"/>
+        <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions"/>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions"/>
+        <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks"/>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
+        <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions"/>
+        <PackageReference Include="Polly"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="..\..\README.md" Pack="true" PackagePath="\" Visible="false"/>
     </ItemGroup>
 
     <ItemGroup>

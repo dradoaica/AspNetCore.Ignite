@@ -1,6 +1,6 @@
 using Apache.Ignite.Core;
 using Apache.Ignite.Core.Events;
-using Serilog.Core;
+using Serilog;
 using System;
 
 namespace AspNetCore.IgniteServer.Listeners;
@@ -9,7 +9,7 @@ namespace AspNetCore.IgniteServer.Listeners;
 ///     Logs partition data loss and, when <paramref name="autoResetLostPartitions" /> is set, resets the lost partitions so
 ///     the cache becomes usable again. Resetting does NOT recover the lost data.
 /// </summary>
-internal sealed class CacheRebalancingEventListener(IIgnite ignite, Logger? logger, bool autoResetLostPartitions)
+internal sealed class CacheRebalancingEventListener(IIgnite ignite, ILogger logger, bool autoResetLostPartitions)
     : IEventListener<CacheRebalancingEvent>
 {
     private const string MessageTemplate =
@@ -22,7 +22,7 @@ internal sealed class CacheRebalancingEventListener(IIgnite ignite, Logger? logg
             return true;
         }
 
-        logger?.Error(
+        logger.Error(
             MessageTemplate,
             evt.Name,
             evt.CacheName,
@@ -38,11 +38,11 @@ internal sealed class CacheRebalancingEventListener(IIgnite ignite, Logger? logg
         try
         {
             ignite.ResetLostPartitions(evt.CacheName);
-            logger?.Warning("Lost partitions of cache {CacheName} were reset; their data is gone.", evt.CacheName);
+            logger.Warning("Lost partitions of cache {CacheName} were reset; their data is gone.", evt.CacheName);
         }
         catch (Exception ex)
         {
-            logger?.Warning(ex, "Failed to reset lost partitions of cache {CacheName}.", evt.CacheName);
+            logger.Warning(ex, "Failed to reset lost partitions of cache {CacheName}.", evt.CacheName);
         }
 
         return true;

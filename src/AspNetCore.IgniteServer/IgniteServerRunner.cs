@@ -9,9 +9,10 @@ using Apache.Ignite.Core.Discovery.Tcp;
 using Apache.Ignite.Core.Discovery.Tcp.Static;
 using Apache.Ignite.Core.Events;
 using Apache.Ignite.Core.Ssl;
-using Apache.Ignite.NLog;
 using AspNetCore.Ignite;
 using AspNetCore.IgniteServer.Listeners;
+using AspNetCore.IgniteServer.Utils;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -24,16 +25,20 @@ internal sealed class IgniteServerRunner : IDisposable
 {
     private const string DefaultIgniteUserName = "ignite";
     private const string DefaultIgniteUserPassword = "ignite";
+    private const int DefaultThinClientPort = 10800;
     private static readonly TimeSpan ActivationPollInterval = TimeSpan.FromSeconds(5);
 
     private readonly IgniteConfiguration igniteConfiguration;
+    private readonly ILogger logger;
     private readonly IgniteServerRunnerOptions options;
-    private bool disposed;
+    private volatile bool disposed;
     private IIgnite? ignite;
+    private volatile bool stopRequested;
 
-    public IgniteServerRunner(IgniteServerRunnerOptions options)
+    public IgniteServerRunner(IgniteServerRunnerOptions options, ILogger? logger = null)
     {
         this.options = options;
+        this.logger = logger ?? Serilog.Core.Logger.None;
         igniteConfiguration = string.IsNullOrWhiteSpace(options.ConfigurationFile) ? GetDefaultConfiguration()
             : LoadConfiguration(options.ConfigurationFile);
         if (!string.IsNullOrWhiteSpace(options.SpringConfigPath))
@@ -41,6 +46,9 @@ internal sealed class IgniteServerRunner : IDisposable
             igniteConfiguration.SpringConfigUrl = options.SpringConfigPath;
         }
 
+        // the JVM must not handle SIGTERM/SIGINT itself (its shutdown hook would stop the node behind the host's back):
+        // the .NET host stops the node gracefully
+        igniteConfiguration.JvmOptions = [..igniteConfiguration.JvmOptions ?? [], ..ReduceSignalUsageJvmOptions(igniteConfiguration.JvmOptions)];
         igniteConfiguration.MetricsExpireTime = options.MetricsExpireTime;
         igniteConfiguration.MetricsLogFrequency = options.MetricsLogFrequency;
         igniteConfiguration.MetricsUpdateFrequency = options.MetricsUpdateFrequency;
@@ -58,14 +66,17 @@ internal sealed class IgniteServerRunner : IDisposable
                 KeyStorePassword = options.SslKeyStorePassword,
                 TrustStoreFilePath = options.SslTrustStoreFilePath,
                 TrustStorePassword = options.SslTrustStorePassword,
-                Protocol = "TLSv1.2",
+                Protocol = options.SslProtocol,
             };
         }
 
-        igniteConfiguration.Logger = new IgniteNLogLogger();
+        igniteConfiguration.Logger = new SerilogIgniteLogger(this.logger);
     }
 
     internal IgniteConfiguration Configuration => igniteConfiguration;
+
+    private static IEnumerable<string> ReduceSignalUsageJvmOptions(ICollection<string>? jvmOptions) =>
+        jvmOptions?.Contains("-Xrs") == true ? [] : ["-Xrs",];
 
     public void Dispose()
     {
@@ -74,6 +85,7 @@ internal sealed class IgniteServerRunner : IDisposable
             return;
         }
 
+        stopRequested = true;
         StopIgnite(true);
         disposed = true;
     }
@@ -94,7 +106,7 @@ internal sealed class IgniteServerRunner : IDisposable
             [
                 "-Djava.net.preferIPv4Stack=true", "-DIGNITE_QUIET=false", "-DIGNITE_WAL_MMAP=false",
                 "-XX:MaxMetaspaceSize=256m", "-XX:ReservedCodeCacheSize=240m", "-XX:+AlwaysPreTouch",
-                "-XX:+UseG1GC", "-XX:+ScavengeBeforeFullGC", "-XX:+DisableExplicitGC",
+                "-XX:+UseG1GC", "-XX:+DisableExplicitGC",
                 "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
                 "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED", "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
                 "--add-opens=java.base/sun.util.calendar=ALL-UNNAMED",
@@ -268,15 +280,27 @@ internal sealed class IgniteServerRunner : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         TaskCompletionSource<string?> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        Program.Logger?.Information("Starting Ignite server runner...");
+        if (stopRequested)
+        {
+            return;
+        }
+
+        logger.Information("Starting Ignite server runner...");
         var current = Ignition.Start(igniteConfiguration);
         ignite = current;
         current.Stopped += (s, _) => tcs.TrySetResult(s?.ToString());
+        if (stopRequested)
+        {
+            // Stop() ran while starting, before this node could be stopped
+            StopIgnite(false);
+        }
+
         if (!ReferenceEquals(Volatile.Read(ref ignite), current))
         {
             // stopped before the handler was attached
             tcs.TrySetResult(current.Name);
         }
+
         var cluster = current.GetCluster();
         var persistenceEnabled = igniteConfiguration.DataStorageConfiguration?.DefaultDataRegionConfiguration
             ?.PersistenceEnabled == true;
@@ -287,7 +311,7 @@ internal sealed class IgniteServerRunner : IDisposable
 
         if (tcs.Task.IsCompleted)
         {
-            Program.Logger?.Information("{IgniteInstance} stopped before activation.", tcs.Task.Result);
+            logger.Information("{IgniteInstance} stopped before activation.", tcs.Task.Result);
             return;
         }
 
@@ -297,29 +321,29 @@ internal sealed class IgniteServerRunner : IDisposable
         }
 
         cluster.SetBaselineAutoAdjustEnabledFlag(true);
-        cluster.SetBaselineAutoAdjustTimeout(30000);
+        cluster.SetBaselineAutoAdjustTimeout((long)options.BaselineAutoAdjustTimeout.TotalMilliseconds);
         if (persistenceEnabled && !string.IsNullOrWhiteSpace(options.IgniteUserPassword))
         {
-            ChangeDefaultUserPassword(options.IgniteUserPassword);
+            ApplyIgniteUserPassword(GetThinClientEndpoint(current), options.IgniteUserPassword);
         }
 
         CacheRebalancingEventListener cacheRebalancingEventListener = new(
             current,
-            Program.Logger,
+            logger,
             options.AutoResetLostPartitions
         );
         current.GetEvents().LocalListen(cacheRebalancingEventListener, EventType.CacheRebalancePartDataLost);
-        DiscoveryEventListener discoveryEventListener = new(Program.Logger);
+        DiscoveryEventListener discoveryEventListener = new(logger);
         current.GetEvents()
             .LocalListen(discoveryEventListener, EventType.NodeJoined, EventType.NodeLeft, EventType.NodeFailed);
 
         var discoverySpiLocalPort = (current.GetConfiguration().DiscoverySpi as TcpDiscoverySpi)?.LocalPort;
-        Program.Logger?.Information(
+        logger.Information(
             "Ignite server runner is running (DiscoverySpi LocalPort={DiscoverySpiLocalPort}), press CTRL+C to terminate.",
             discoverySpiLocalPort
         );
         var stoppedInstance = await tcs.Task.ConfigureAwait(false);
-        Program.Logger?.Information("'{IgniteInstance}' stopped.", stoppedInstance);
+        logger.Information("'{IgniteInstance}' stopped.", stoppedInstance);
     }
 
     /// <summary>
@@ -336,7 +360,7 @@ internal sealed class IgniteServerRunner : IDisposable
                 return;
             }
 
-            Program.Logger?.Information(
+            logger.Information(
                 "Waiting for {ActivationMinServerNodes} server nodes before activating the cluster ({ServerNodes} joined)...",
                 options.ActivationMinServerNodes,
                 serverNodes
@@ -345,53 +369,96 @@ internal sealed class IgniteServerRunner : IDisposable
         }
     }
 
-    private void ChangeDefaultUserPassword(string newPassword)
+    /// <summary>
+    ///     Makes <paramref name="password" /> the password of the default user: nothing to do when it is already accepted,
+    ///     otherwise it replaces the previous password (rotation) or the default one (first start).
+    /// </summary>
+    private void ApplyIgniteUserPassword(string endpoint, string password)
+    {
+        if (CanAuthenticate(endpoint, password))
+        {
+            return;
+        }
+
+        foreach (var currentPassword in new[] { options.IgniteUserPreviousPassword, DefaultIgniteUserPassword, })
+        {
+            if (string.IsNullOrWhiteSpace(currentPassword) || !CanAuthenticate(endpoint, currentPassword))
+            {
+                continue;
+            }
+
+            using var igniteClient = ConnectAsDefaultUser(endpoint, currentPassword);
+            var alterUserSqlDdlCommand =
+                CacheFactory.GetOrCreateCacheClient<string, string>(igniteClient, "alterUserSqlDdlCommand");
+            alterUserSqlDdlCommand.Query(new SqlFieldsQuery(BuildAlterUserPasswordSql(DefaultIgniteUserName, password)))
+                .GetAll();
+            igniteClient.DestroyCache("alterUserSqlDdlCommand");
+            logger.Information(
+                "The password of the '{UserName}' user was changed (from the {PasswordKind} password).",
+                DefaultIgniteUserName,
+                ReferenceEquals(currentPassword, DefaultIgniteUserPassword) ? "default" : "previous"
+            );
+            return;
+        }
+
+        logger.Error(
+            "IGNITE_USER_PASSWORD was not applied: neither it, IGNITE_USER_PREVIOUS_PASSWORD nor the default password is accepted for the '{UserName}' user.",
+            DefaultIgniteUserName
+        );
+    }
+
+    private bool CanAuthenticate(string endpoint, string password)
     {
         try
         {
-            using var igniteClient = CacheFactory.ConnectAsClient(
-                CacheFactory.GetIgniteClientConfiguration(
-                    userName: DefaultIgniteUserName,
-                    password: DefaultIgniteUserPassword,
-                    useSsl: options.UseClientSsl,
-                    certificatePath: options.SslClientCertificatePath,
-                    certificatePassword: options.SslClientCertificatePassword,
-                    // loopback connection to this very node, whose certificate is not issued for 127.0.0.1
-                    skipServerCertificateValidation: true
-                )
-            );
-            var alterUserSqlDdlCommand =
-                CacheFactory.GetOrCreateCacheClient<string, string>(igniteClient, "alterUserSqlDdlCommand");
-            alterUserSqlDdlCommand.Query(new SqlFieldsQuery(BuildAlterUserPasswordSql(DefaultIgniteUserName, newPassword)))
-                .GetAll();
-            igniteClient.DestroyCache("alterUserSqlDdlCommand");
+            using var igniteClient = ConnectAsDefaultUser(endpoint, password);
+            return true;
         }
         catch (IgniteClientException icex) when (icex.StatusCode == ClientStatusCode.AuthenticationFailed)
         {
-            // the default password was already changed on a previous start
+            return false;
         }
+    }
+
+    private IIgniteClient ConnectAsDefaultUser(string endpoint, string password) =>
+        CacheFactory.ConnectAsClient(
+            CacheFactory.GetIgniteClientConfiguration(
+                endpoint,
+                DefaultIgniteUserName,
+                password,
+                options.UseClientSsl,
+                options.SslClientCertificatePath,
+                options.SslClientCertificatePassword,
+                // loopback connection to this very node, whose certificate is not issued for 127.0.0.1
+                skipServerCertificateValidation: true
+            )
+        );
+
+    /// <summary>The loopback endpoint of this node's thin client connector (as configured, e.g., by -ConfigFile).</summary>
+    private static string GetThinClientEndpoint(IIgnite current)
+    {
+        var port = current.GetConfiguration().ClientConnectorConfiguration?.Port ?? DefaultThinClientPort;
+        return $"127.0.0.1:{port}";
     }
 
     internal static string BuildAlterUserPasswordSql(string userName, string password) =>
         $"ALTER USER \"{userName.Replace("\"", "\"\"", StringComparison.Ordinal)}\" WITH PASSWORD '{password.Replace("'", "''", StringComparison.Ordinal)}';";
 
-    /// <summary>Stops the node immediately (cancelling ongoing jobs); <see cref="Run" /> may be called again afterward.</summary>
-    public void Terminate()
+    /// <summary>Stops the node gracefully so that <see cref="Run" /> can start it again (e.g., with renewed certificates).</summary>
+    public void Restart()
     {
-        Program.Logger?.Information("Terminating Ignite server runner...");
-        if (StopIgnite(true))
-        {
-            Program.Logger?.Information("Ignite server runner terminated.");
-        }
+        logger.Information("Restarting Ignite server runner...");
+        StopIgnite(false);
     }
 
-    /// <summary>Stops the node gracefully; <see cref="Run" /> may be called again afterward.</summary>
+    /// <summary>Stops the node gracefully; afterward, <see cref="Run" /> does not start it again.</summary>
     public void Stop()
     {
-        Program.Logger?.Information("Stopping Ignite server runner...");
+        stopRequested = true;
+        logger.Information("Stopping Ignite server runner...");
         if (StopIgnite(false))
         {
-            Program.Logger?.Information("Ignite server runner stopped.");
+            logger.Information("Ignite server runner stopped.");
         }
     }
 

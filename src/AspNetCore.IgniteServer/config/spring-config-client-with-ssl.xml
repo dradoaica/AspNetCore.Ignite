@@ -35,7 +35,7 @@
                         <property name="keyStorePassword" value="SSL_KEY_STORE_PASSWORD"/>
                         <property name="trustStoreFilePath" value="SSL_TRUST_STORE_FILE_PATH"/>
                         <property name="trustStorePassword" value="SSL_TRUST_STORE_PASSWORD"/>
-                        <property name="protocol" value="TLSv1.2"/>
+                        <property name="protocol" value="SSL_PROTOCOL"/>
                     </bean>
                 </property>
             </bean>

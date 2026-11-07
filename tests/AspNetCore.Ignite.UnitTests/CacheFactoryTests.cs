@@ -1,5 +1,7 @@
 using Apache.Ignite.Core;
 using Apache.Ignite.Core.Client;
+using AspNetCore.Ignite.Options;
+using System.Security.Authentication;
 using System.Net.Sockets;
 using Xunit;
 
@@ -49,6 +51,45 @@ public sealed class CacheFactoryTests
         Assert.False(sslStreamFactory.SkipServerCertificateValidation);
         Assert.True(sslStreamFactory.CheckCertificateRevocation);
         Assert.Equal("client.pfx", sslStreamFactory.CertificatePath);
+        // the OS chooses the best protocol (TLS 1.3 included)
+        Assert.Equal(SslProtocols.None, sslStreamFactory.SslProtocols);
+    }
+
+    [Fact]
+    public void GetIgniteClientConfiguration_FromOptions()
+    {
+        var cfg = CacheFactory.GetIgniteClientConfiguration(
+            new IgniteClientOptions
+            {
+                Endpoints = ["a:10800", " ", "b:10800",],
+                RetryLimit = 2,
+                SocketTimeout = TimeSpan.FromSeconds(3),
+            }
+        );
+
+        Assert.Equal(["a:10800", "b:10800",], cfg.Endpoints);
+        Assert.Equal(2, cfg.RetryLimit);
+        Assert.Equal(TimeSpan.FromSeconds(3), cfg.SocketTimeout);
+    }
+
+    [Fact]
+    public void CacheDefaults_PlatformCacheIsOptIn()
+    {
+        Assert.Null(CacheFactory.GetPlatformCacheConfiguration<int, string>(new IgniteCacheOptions()));
+
+        var platformCache = CacheFactory.GetPlatformCacheConfiguration<int, string>(
+            new IgniteCacheOptions { EnablePlatformCache = true, }
+        );
+
+        Assert.NotNull(platformCache);
+        Assert.Equal("System.String", platformCache.ValueTypeName);
+    }
+
+    [Fact]
+    public void CacheDefaults_GroupByValueType()
+    {
+        Assert.Equal("System.String", CacheFactory.GetGroupName<string>(new IgniteCacheOptions()));
+        Assert.Null(CacheFactory.GetGroupName<string>(new IgniteCacheOptions { GroupByValueType = false, }));
     }
 
     [Fact]

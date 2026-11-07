@@ -1,7 +1,11 @@
 using Apache.Ignite.Core.Client;
 using Apache.Ignite.Core.Client.Cache;
 using AspNetCore.Ignite.Abstractions;
+using AspNetCore.Ignite.Logging;
+using AspNetCore.Ignite.Options;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
 using System;
@@ -13,53 +17,50 @@ namespace AspNetCore.Ignite;
 
 public class IgniteManager : IIgniteManager, IDisposable
 {
-    private const int ConnectRetryCount = 6;
-    private const int OperationRetryCount = 3;
-
-    private static readonly RetryPolicy ConnectRetryPolicy = CreateRetryPolicy(ConnectRetryCount);
-    private static readonly RetryPolicy OperationRetryPolicy = CreateRetryPolicy(OperationRetryCount);
-
+    private readonly RetryPolicy connectRetryPolicy;
     private readonly IgniteClientConfiguration igniteClientConfiguration;
+    private readonly RetryPolicy operationRetryPolicy;
+    private readonly IgniteClientOptions options;
     private readonly object syncRoot = new();
     private bool disposed;
     private IIgniteClient? igniteClient;
 
-    public IgniteManager(IConfiguration configuration)
+    /// <summary>Configured by the flat <c>ASPNETCORE_IGNITE_*</c> keys.</summary>
+    public IgniteManager(IConfiguration configuration) : this(CreateOptions(configuration))
     {
-        var aspNetCoreIgniteEndpoint = configuration["ASPNETCORE_IGNITE_ENDPOINT"];
-        var aspNetCoreIgniteUserName = configuration["ASPNETCORE_IGNITE_USER_NAME"];
-        var aspNetCoreIgnitePassword = configuration["ASPNETCORE_IGNITE_PASSWORD"];
-        var aspNetCoreIgniteUseSsl = "true".Equals(
-            configuration["ASPNETCORE_IGNITE_USE_SSL"],
-            StringComparison.InvariantCultureIgnoreCase
-        );
-        var aspNetCoreIgniteSslCertificatePath = configuration["ASPNETCORE_IGNITE_SSL_CERTIFICATE_PATH"];
-        var aspNetCoreIgniteSslCertificatePassword = configuration["ASPNETCORE_IGNITE_SSL_CERTIFICATE_PASSWORD"];
-        var aspNetCoreIgniteSslSkipServerCertificateValidation = "true".Equals(
-            configuration["ASPNETCORE_IGNITE_SSL_SKIP_SERVER_CERTIFICATE_VALIDATION"],
-            StringComparison.InvariantCultureIgnoreCase
-        );
-        var aspNetCoreIgniteSslCheckCertificateRevocation = !"false".Equals(
-            configuration["ASPNETCORE_IGNITE_SSL_CHECK_CERTIFICATE_REVOCATION"],
-            StringComparison.InvariantCultureIgnoreCase
-        );
-        igniteClientConfiguration = CacheFactory.GetIgniteClientConfiguration(
-            aspNetCoreIgniteEndpoint,
-            aspNetCoreIgniteUserName,
-            aspNetCoreIgnitePassword,
-            aspNetCoreIgniteUseSsl,
-            aspNetCoreIgniteSslCertificatePath,
-            aspNetCoreIgniteSslCertificatePassword,
-            aspNetCoreIgniteSslSkipServerCertificateValidation,
-            aspNetCoreIgniteSslCheckCertificateRevocation
-        );
     }
+
+    public IgniteManager(IOptions<IgniteClientOptions> options, ILoggerFactory? loggerFactory = null) : this(
+        options.Value,
+        loggerFactory
+    )
+    {
+    }
+
+    public IgniteManager(IgniteClientOptions options, ILoggerFactory? loggerFactory = null)
+    {
+        this.options = options;
+        igniteClientConfiguration = CacheFactory.GetIgniteClientConfiguration(
+            options,
+            loggerFactory == null ? null : new IgniteLoggerAdapter(loggerFactory)
+        );
+        connectRetryPolicy = CreateRetryPolicy(options.ConnectRetryCount);
+        operationRetryPolicy = CreateRetryPolicy(options.OperationRetryCount);
+    }
+
+    /// <inheritdoc />
+    public IIgniteClient Client => GetIgniteClient();
 
     public ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
         string cacheName,
         Action<CacheClientConfiguration>? extendConfigurationAction = null
-    ) => OperationRetryPolicy.Execute(() =>
-        CacheFactory.GetOrCreateCacheClient<TKey, TData>(GetIgniteClient(), cacheName, extendConfigurationAction)
+    ) => operationRetryPolicy.Execute(() =>
+        CacheFactory.GetOrCreateCacheClient<TKey, TData>(
+            GetIgniteClient(),
+            cacheName,
+            extendConfigurationAction,
+            options.Cache
+        )
     );
 
     public void DestroyCache(string cacheName)
@@ -112,12 +113,19 @@ public class IgniteManager : IIgniteManager, IDisposable
             }
 
             return igniteClient ??=
-                ConnectRetryPolicy.Execute(() => CacheFactory.ConnectAsClient(igniteClientConfiguration));
+                connectRetryPolicy.Execute(() => CacheFactory.ConnectAsClient(igniteClientConfiguration));
         }
     }
 
+    private static IgniteClientOptions CreateOptions(IConfiguration configuration)
+    {
+        IgniteClientOptions options = new();
+        options.ApplyConfigurationKeys(configuration);
+        return options;
+    }
+
     private static RetryPolicy CreateRetryPolicy(int retryCount) => Policy.Handle<Exception>(IsTransient)
-        .WaitAndRetry(retryCount, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+        .WaitAndRetry(Math.Max(0, retryCount), retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
 
     internal static bool IsTransient(Exception ex) => ex switch
     {

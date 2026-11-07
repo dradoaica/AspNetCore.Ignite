@@ -1,5 +1,8 @@
 using Apache.Ignite.Core.Client;
+using AspNetCore.Ignite.Abstractions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Xunit;
 
 namespace AspNetCore.Ignite.IntegrationTests;
@@ -59,5 +62,28 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
         igniteManager.DestroyCache(cacheName);
         // destroying a cache that does not exist is a no-op
         igniteManager.DestroyCache(cacheName);
+    }
+
+    [SkippableFact]
+    public async Task HealthCheck_ReportsHealthyCluster()
+    {
+        Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
+        ServiceCollection services = new();
+        // with logging, the Ignite client logs through Microsoft.Extensions.Logging (IgniteLoggerAdapter)
+        services.AddLogging();
+        services.AddIgnite(options =>
+            {
+                options.Endpoints = [fixture.Endpoint,];
+                options.UserName = IgniteServerFixture.UserName;
+                options.Password = IgniteServerFixture.Password;
+            }
+        );
+        services.AddHealthChecks().AddIgnite();
+        await using var provider = services.BuildServiceProvider();
+
+        var report = await provider.GetRequiredService<HealthCheckService>().CheckHealthAsync();
+
+        Assert.Equal(HealthStatus.Healthy, report.Status);
+        Assert.True(provider.GetRequiredService<IIgniteManager>().Client.GetCluster().IsActive());
     }
 }

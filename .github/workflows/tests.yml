@@ -1,12 +1,14 @@
 name: Tests
 
-# build, unit tests and the integration tests (which build the server image and run it with Docker)
+# build, unit tests, dependency scan and the integration tests (which build the server image and run it with Docker);
+# the release workflows call this workflow, so nothing is published without passing it
 on:
   pull_request:
   push:
     branches:
       - main
       - 'release/**'
+  workflow_call:
 
 env:
   DOTNET_NOLOGO: true
@@ -33,6 +35,9 @@ jobs:
 
       - name: Unit Tests
         run: dotnet test tests/AspNetCore.Ignite.UnitTests -c Release --no-build
+
+      - name: Dependency Scan
+        run: ./scripts/check-vulnerable-packages.sh AspNetCore.Ignite.slnx
 
       # Docker on the hosted runner
       - name: Integration Tests

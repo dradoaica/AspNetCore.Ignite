@@ -11,8 +11,15 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   PACK_PROJECT: src/AspNetCore.Ignite/AspNetCore.Ignite.csproj
 
+permissions:
+  contents: read
+
 jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+
   release:
+    needs: tests
     permissions:
       contents: read # to checkout codebase
       packages: write # to push NuGet packages to GitHub Packages
@@ -43,6 +50,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           dotnet pack "${{ env.PACK_PROJECT }}" -c Release -o "$out" --no-restore -p:Version="$version"
 
+      # the .nupkg and its symbols (.snupkg)
       - name: Push to GitHub Packages
         run: |
           set -euo pipefail

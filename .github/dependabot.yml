@@ -1,0 +1,30 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # released together: the Ignite packages and the Java modules of JavaLibs.props move as one (update the hashes)
+      apache-ignite:
+        patterns:
+          - Apache.Ignite*
+      microsoft-extensions:
+        patterns:
+          - Microsoft.Extensions.*
+      tests:
+        patterns:
+          - Microsoft.NET.Test.Sdk
+          - Testcontainers*
+          - xunit*
+          - Xunit.*
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

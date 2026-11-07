@@ -1,10 +1,10 @@
 using Apache.Ignite.Core.Events;
-using Serilog.Core;
+using Serilog;
 using Serilog.Events;
 
 namespace AspNetCore.IgniteServer.Listeners;
 
-internal sealed class DiscoveryEventListener(Logger? logger) : IEventListener<DiscoveryEvent>
+internal sealed class DiscoveryEventListener(ILogger logger) : IEventListener<DiscoveryEvent>
 {
     private const string MessageTemplate =
         "Name: {Name}; EventNodeAddresses: {EventNodeAddresses}; EventNodeHostNames: {EventNodeHostNames}";
@@ -17,7 +17,7 @@ internal sealed class DiscoveryEventListener(Logger? logger) : IEventListener<Di
             : null;
         if (level.HasValue)
         {
-            logger?.Write(
+            logger.Write(
                 level.Value,
                 MessageTemplate,
                 evt.Name,
