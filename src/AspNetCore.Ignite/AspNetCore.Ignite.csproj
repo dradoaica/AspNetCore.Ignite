@@ -23,7 +23,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <InternalsVisibleTo Include="AspNetCore.Ignite.Tests"/>
+        <InternalsVisibleTo Include="AspNetCore.Ignite.UnitTests"/>
     </ItemGroup>
 
 </Project>

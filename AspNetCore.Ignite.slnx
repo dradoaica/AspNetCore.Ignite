@@ -13,7 +13,12 @@
         <File Path="README.md"/>
         <File Path="SECURITY.md"/>
     </Folder>
-    <Project Path="src/AspNetCore.Ignite.Tests/AspNetCore.Ignite.Tests.csproj"/>
-    <Project Path="src/AspNetCore.Ignite/AspNetCore.Ignite.csproj"/>
-    <Project Path="src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj"/>
+    <Folder Name="/src/">
+        <Project Path="src/AspNetCore.Ignite/AspNetCore.Ignite.csproj"/>
+        <Project Path="src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj"/>
+    </Folder>
+    <Folder Name="/tests/">
+        <Project Path="tests/AspNetCore.Ignite.IntegrationTests/AspNetCore.Ignite.IntegrationTests.csproj"/>
+        <Project Path="tests/AspNetCore.Ignite.UnitTests/AspNetCore.Ignite.UnitTests.csproj"/>
+    </Folder>
 </Solution>

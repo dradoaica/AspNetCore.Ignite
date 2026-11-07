@@ -1,16 +1,11 @@
 using AspNetCore.IgniteServer.Utils;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading.Tasks;
+using Xunit;
 
-namespace AspNetCore.Ignite.Tests;
+namespace AspNetCore.Ignite.UnitTests;
 
-[TestClass]
-public class SpringConfigRendererTests
+public sealed class SpringConfigRendererTests
 {
-    [TestMethod]
+    [Fact]
     public void Render_ReplacesAndEscapesPlaceholders()
     {
         var rendered = SpringConfigRenderer.Render(
@@ -23,10 +18,10 @@ public class SpringConfigRendererTests
             }
         );
 
-        Assert.AreEqual("<a ns=\"prod\" pwd=\"a&amp;b&lt;&quot;c&quot;&gt;\" svc=\"\"/>", rendered);
+        Assert.Equal("<a ns=\"prod\" pwd=\"a&amp;b&lt;&quot;c&quot;&gt;\" svc=\"\"/>", rendered);
     }
 
-    [TestMethod]
+    [Fact]
     public async Task RenderToFileAsync_LeavesTemplateUntouched()
     {
         var directory = Path.Combine(Path.GetTempPath(), "spring-config-renderer-tests", Guid.NewGuid().ToString("N"));
@@ -49,12 +44,12 @@ public class SpringConfigRendererTests
                 outputDirectory
             );
 
-            Assert.AreEqual(template, await File.ReadAllTextAsync(templatePath));
-            Assert.AreEqual(first, second);
-            Assert.AreEqual("<p value=\"second\"/>", await File.ReadAllTextAsync(second));
+            Assert.Equal(template, await File.ReadAllTextAsync(templatePath));
+            Assert.Equal(first, second);
+            Assert.Equal("<p value=\"second\"/>", await File.ReadAllTextAsync(second));
             if (!OperatingSystem.IsWindows())
             {
-                Assert.AreEqual(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(second));
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(second));
             }
         }
         finally

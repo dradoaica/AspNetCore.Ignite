@@ -36,7 +36,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <InternalsVisibleTo Include="AspNetCore.Ignite.Tests"/>
+        <InternalsVisibleTo Include="AspNetCore.Ignite.UnitTests"/>
     </ItemGroup>
 
     <!-- Sample keystores/certificates (publicly known passwords) are for local development only and never published. -->

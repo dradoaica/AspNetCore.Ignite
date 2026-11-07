@@ -1,0 +1,41 @@
+name: Tests
+
+# build, unit tests and the integration tests (which build the server image and run it with Docker)
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'release/**'
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Build
+        run: dotnet build AspNetCore.Ignite.slnx -c Release
+
+      - name: Unit Tests
+        run: dotnet test tests/AspNetCore.Ignite.UnitTests -c Release --no-build
+
+      # Docker on the hosted runner
+      - name: Integration Tests
+        run: >-
+          dotnet test tests/AspNetCore.Ignite.IntegrationTests -c Release --no-build
+          --logger "console;verbosity=normal"

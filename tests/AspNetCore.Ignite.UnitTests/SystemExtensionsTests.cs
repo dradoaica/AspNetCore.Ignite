@@ -1,17 +1,15 @@
 using AspNetCore.Ignite.Utils;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using System.Collections.Generic;
+using Xunit;
 
-namespace AspNetCore.Ignite.Tests;
+namespace AspNetCore.Ignite.UnitTests;
 
-[TestClass]
-public class SystemExtensionsTests
+public sealed class SystemExtensionsTests
 {
-    [TestMethod]
+    [Fact]
     public void FullNameWithoutAssemblyInfo_NonGeneric() =>
-        Assert.AreEqual("System.String", typeof(string).FullNameWithoutAssemblyInfo());
+        Assert.Equal("System.String", typeof(string).FullNameWithoutAssemblyInfo());
 
-    [TestMethod]
+    [Fact]
     public void FullNameWithoutAssemblyInfo_Generic()
     {
         var name = typeof(List<string>).FullNameWithoutAssemblyInfo();
@@ -20,8 +18,8 @@ public class SystemExtensionsTests
         Assert.StartsWith("System.Collections.Generic.List`1[[System.String", name);
     }
 
-    [TestMethod]
+    [Fact]
     public void FullNameWithoutAssemblyInfo_OpenGeneric_FallsBackToName() =>
         // open generic parameters have no FullName
-        Assert.AreEqual("T", typeof(List<>).GetGenericArguments()[0].FullNameWithoutAssemblyInfo());
+        Assert.Equal("T", typeof(List<>).GetGenericArguments()[0].FullNameWithoutAssemblyInfo());
 }

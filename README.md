@@ -108,6 +108,16 @@ memory calculation: ON_HEAP_MEMORY (JVM Heap max size)
     + ~512MB (other overheads; e.g., thread stacks, GC, symbols, etc.)
 ```
 
+## Tests
+
+```
+dotnet test tests/AspNetCore.Ignite.UnitTests
+dotnet test tests/AspNetCore.Ignite.IntegrationTests
+```
+
+The integration tests build the server image from the `Dockerfile` and run it with Docker (via Testcontainers); they
+are skipped when Docker is not available.
+
 ## Build aspnetcore.ignite-server
 
 docker build -t dradoaica/aspnetcore.ignite-server:2.18.1 -f Dockerfile .
