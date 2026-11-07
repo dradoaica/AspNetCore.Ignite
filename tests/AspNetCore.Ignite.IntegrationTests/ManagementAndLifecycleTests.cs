@@ -72,32 +72,95 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
         Assert.Equal(HttpStatusCode.OK, ready.StatusCode);
     }
 
+    /// <summary>
+    ///     The configuration sections of the Ignite chart that the chart renders (SPRING_EXTRA_PROPERTIES_FILE), checked on
+    ///     the node through what it reports to clients (attributes, metrics, caches), with SQL_SCHEMAS and Java peer
+    ///     class loading.
+    /// </summary>
     [SkippableFact]
-    public async Task SpringConfigurationFragments_ConfigureTheNode()
+    public async Task SpringConfigurationSections_ConfigureTheNode()
     {
         Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
-        // the cacheConfiguration section of the Ignite chart, as is
         const string properties = """
+            <property name="userAttributes">
+                <map><entry key="stage" value="spring-test"/></map>
+            </property>
+            <property name="binaryConfiguration">
+                <bean class="org.apache.ignite.configuration.BinaryConfiguration">
+                    <property name="compactFooter" value="false"/>
+                </bean>
+            </property>
             <property name="cacheConfiguration">
                 <list>
                     <bean class="org.apache.ignite.configuration.CacheConfiguration">
                         <property name="name" value="fromSpring"/>
-                        <property name="backups" value="1"/>
                     </bean>
                 </list>
             </property>
+            <property name="executorConfiguration">
+                <list>
+                    <bean class="org.apache.ignite.configuration.ExecutorConfiguration">
+                        <property name="name" value="myPool"/>
+                        <property name="size" value="3"/>
+                    </bean>
+                </list>
+            </property>
+            <property name="transactionConfiguration">
+                <bean class="org.apache.ignite.configuration.TransactionConfiguration">
+                    <property name="txSerializableEnabled" value="true"/>
+                </bean>
+            </property>
+            <property name="collisionSpi"><bean class="org.apache.ignite.spi.collision.fifoqueue.FifoQueueCollisionSpi"/></property>
+            <property name="deploymentSpi"><bean class="org.apache.ignite.spi.deployment.local.LocalDeploymentSpi"/></property>
+            <property name="failoverSpi">
+                <bean class="org.apache.ignite.spi.failover.always.AlwaysFailoverSpi">
+                    <property name="maximumFailoverAttempts" value="7"/>
+                </bean>
+            </property>
+            <property name="loadBalancingSpi"><bean class="org.apache.ignite.spi.loadbalancing.roundrobin.RoundRobinLoadBalancingSpi"/></property>
             """;
         await using var node = fixture.CreateNodeBuilder()
             .WithEnvironment("ENABLE_AUTHENTICATION", "false")
             .WithEnvironment("SPRING_EXTRA_PROPERTIES_FILE", "/app/work/spring-extra-properties.xml")
+            .WithEnvironment("SQL_SCHEMAS", "MY_SCHEMA, OTHER_SCHEMA")
+            .WithEnvironment("PEER_CLASS_LOADING_ENABLED", "true")
             .WithResourceMapping(System.Text.Encoding.UTF8.GetBytes(properties), "/app/work/spring-extra-properties.xml", 1001, 0)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
             .Build();
         await node.StartAsync();
 
         using var igniteClient = CacheFactory.ConnectAsClient(CacheFactory.GetIgniteClientConfiguration(IgniteServerFixture.GetEndpoint(node)));
+        var attributes = igniteClient.GetCluster().ForServers().GetNodes().Single().Attributes;
+        var sql = igniteClient.GetCache<int, int>("fromSpring");
+        IList<IList<object>> Query(string text) =>
+            sql.Query(new Apache.Ignite.Core.Cache.Query.SqlFieldsQuery(text) { Schema = "PUBLIC", }).GetAll();
 
         Assert.Contains("fromSpring", igniteClient.GetCacheNames());
+        Assert.Equal("spring-test", attributes["stage"]);
+        Assert.Equal(false, attributes["org.apache.ignite.marshaller.compactFooter"]);
+        Assert.Equal(true, attributes["org.apache.ignite.tx.serializable.enabled"]);
+        Assert.Equal(true, attributes["org.apache.ignite.peer.classloading.enabled"]);
+        Assert.Equal(7, Convert.ToInt32(attributes["AlwaysFailoverSpi.gg:failover:maxattempts"]));
+        foreach (var spi in new[] { "fifoqueue.FifoQueueCollisionSpi", "deployment.local.LocalDeploymentSpi", "loadbalancing.roundrobin.RoundRobinLoadBalancingSpi", })
+        {
+            Assert.Contains(attributes.Values, value => value is string text && text.EndsWith(spi, StringComparison.Ordinal));
+        }
+
+        Assert.Contains(Query("SELECT NAME, VALUE FROM SYS.METRICS WHERE NAME = 'threadPools.myPool.CorePoolSize'"), row => Convert.ToInt32(row[1]) == 3);
+        var schemas = Query("SELECT SCHEMA_NAME FROM SYS.SCHEMAS").Select(row => (string)row[0]).ToList();
+        Assert.Contains("MY_SCHEMA", schemas);
+        Assert.Contains("OTHER_SCHEMA", schemas);
+    }
+
+    [SkippableFact]
+    public void PeerClassLoading_IsOffByDefault()
+    {
+        Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
+        using var igniteClient = CacheFactory.ConnectAsClient(
+            CacheFactory.GetIgniteClientConfiguration(fixture.Endpoint, IgniteServerFixture.UserName, IgniteServerFixture.Password)
+        );
+
+        Assert.Equal(false, igniteClient.GetCluster().ForServers().GetNodes().Single().Attributes["org.apache.ignite.peer.classloading.enabled"]);
     }
 
     [SkippableFact]

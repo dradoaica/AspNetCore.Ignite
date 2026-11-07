@@ -317,4 +317,18 @@ public sealed class IgniteServerSettingsTests
     [InlineData("Disabled", Apache.Ignite.Core.Configuration.DataPageEvictionMode.Disabled)]
     public void PageEvictionMode_AcceptsBothNamingStyles(string value, Apache.Ignite.Core.Configuration.DataPageEvictionMode expected) =>
         Assert.Equal(expected, IgniteServerSettings.ParsePageEvictionMode(value));
+
+    [Fact]
+    public void SqlSchemas_ListOrCommaSeparated()
+    {
+        Assert.Equal(["A", "B",], Load(new Dictionary<string, string?> { ["SQL_SCHEMAS"] = "A, B", }).SqlSchemas);
+        Assert.Equal(["C",], Load(new Dictionary<string, string?> { ["SQL_SCHEMAS:0"] = "C", }).SqlSchemas);
+
+        var configuration = IgniteConfigurationFactory.Create(
+            Load(new Dictionary<string, string?> { ["SQL_SCHEMAS"] = "A, B", }).ToRunnerOptions("spring.xml"),
+            Serilog.Core.Logger.None
+        );
+
+        Assert.Equal(["A", "B",], configuration.SqlSchemas);
+    }
 }

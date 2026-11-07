@@ -49,6 +49,10 @@ internal static class IgniteConfigurationFactory
         igniteConfiguration.DataStreamerThreadPoolSize =
             options.DataStreamerThreadPoolSize ?? igniteConfiguration.DataStreamerThreadPoolSize;
         ApplyStorage(igniteConfiguration, options);
+        if (options.SqlSchemas.Count > 0)
+        {
+            igniteConfiguration.SqlSchemas = [..options.SqlSchemas,];
+        }
 
         // loading .NET assemblies sent by other nodes runs their code on this node: opt-in only
         igniteConfiguration.PeerAssemblyLoadingMode = options.PeerAssemblyLoading ? PeerAssemblyLoadingMode.CurrentAppDomain

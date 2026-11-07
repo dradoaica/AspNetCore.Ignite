@@ -36,12 +36,21 @@ internal sealed partial class IgniteServerSettings
     public string? SpringExtraBeansFile { get; set; }
 
     /// <summary>
-    ///     A Spring XML file with &lt;property&gt; elements of the IgniteConfiguration bean (cacheConfiguration,
-    ///     binaryConfiguration, sqlConfiguration, SPIs, ...), as the configuration sections of the Ignite chart; the
-    ///     .NET configuration wins for the properties it sets (communicationSpi, dataStorageConfiguration, ...).
+    ///     A Spring XML file with &lt;property&gt; elements of the IgniteConfiguration bean, as the configuration
+    ///     sections of the Ignite chart. Verified on a node: userAttributes, binaryConfiguration, cacheConfiguration,
+    ///     executorConfiguration, transactionConfiguration and the collision, deployment, failover and load balancing
+    ///     SPIs. The .NET configuration wins for the properties it sets: sqlConfiguration (use SQL_SCHEMAS),
+    ///     encryptionSpi (use -ConfigFile), the communication and discovery SPIs, data storage, the client connector.
     /// </summary>
     [ConfigurationKeyName("SPRING_EXTRA_PROPERTIES_FILE")]
     public string? SpringExtraPropertiesFile { get; set; }
+
+    /// <summary>
+    ///     SQL schemas created on start (a list, or comma-separated): the sqlSchemas of the Ignite chart's
+    ///     sqlConfiguration, which the .NET configuration would override in a Spring fragment.
+    /// </summary>
+    [ConfigurationKeyName("SQL_SCHEMAS")]
+    public List<string> SqlSchemas { get; set; } = [];
 
     /// <summary>Java peer class loading (Zero Deployment): the Java counterpart of PEER_ASSEMBLY_LOADING.</summary>
     [ConfigurationKeyName("PEER_CLASS_LOADING_ENABLED")]
@@ -84,11 +93,12 @@ internal sealed partial class IgniteServerSettings
         var settings = configuration.Get<IgniteServerSettings>() ?? new IgniteServerSettings();
         if (settings.ClusterEndpoints.Count == 0 && configuration["CLUSTER_ENDPOINTS"] is { } clusterEndpoints)
         {
-            settings.ClusterEndpoints = clusterEndpoints.Split(
-                    ',',
-                    StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
-                )
-                .ToList();
+            settings.ClusterEndpoints = SplitList(clusterEndpoints);
+        }
+
+        if (settings.SqlSchemas.Count == 0 && configuration["SQL_SCHEMAS"] is { } sqlSchemas)
+        {
+            settings.SqlSchemas = SplitList(sqlSchemas);
         }
 
         return settings;
@@ -224,6 +234,7 @@ internal sealed partial class IgniteServerSettings
         IgniteUserPreviousPassword = IgniteUserPreviousPassword,
         ConfigurationFile = string.IsNullOrWhiteSpace(ConfigFile) ? null : ConfigFile,
         PeerAssemblyLoading = PeerAssemblyLoading,
+        SqlSchemas = SqlSchemas,
         SpringConfigPath = springConfigPath,
         ActivationMinServerNodes = ActivationMinServerNodes,
         BaselineAutoAdjustTimeout = TimeSpan.FromSeconds(BaselineAutoAdjustTimeoutInSeconds),
@@ -295,6 +306,9 @@ internal sealed partial class IgniteServerSettings
     internal const string ConnectorConfigurationPlaceholder = "<!-- CONNECTOR_CONFIGURATION -->";
     internal const string ExtraBeansPlaceholder = "<!-- EXTRA_BEANS -->";
     internal const string ExtraPropertiesPlaceholder = "<!-- EXTRA_PROPERTIES -->";
+
+    private static List<string> SplitList(string value) =>
+        value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
     private static string ReadFile(string? path) => string.IsNullOrWhiteSpace(path) ? "" : File.ReadAllText(path);
 

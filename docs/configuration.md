@@ -56,7 +56,8 @@ command line options.
 | `PERSISTENCE_ENABLED` | `-PersistenceEnabled` | `false` | Enables persistence. |
 | `K8S_NAMESPACE` / `K8S_SERVICE_NAME` | | _(empty)_ | Kubernetes IP finder settings. |
 | `SPRING_EXTRA_BEANS_FILE` | | _(empty)_ | A Spring XML file with beans (e.g., a data source) next to the `IgniteConfiguration` bean, as `extraBeans` of the Ignite chart. |
-| `SPRING_EXTRA_PROPERTIES_FILE` | | _(empty)_ | A Spring XML file with `<property>` elements of the `IgniteConfiguration` bean: `cacheConfiguration`, `binaryConfiguration`, `sqlConfiguration`, SPIs, ..., as the configuration sections of the Ignite chart. The .NET configuration wins for the properties it sets (communication SPI, data storage, client connector, discovery). |
+| `SPRING_EXTRA_PROPERTIES_FILE` | | _(empty)_ | A Spring XML file with `<property>` elements of the `IgniteConfiguration` bean, as the configuration sections of the Ignite chart. Verified on a node: `userAttributes`, `binaryConfiguration`, `cacheConfiguration` (with its `keyConfiguration`), `executorConfiguration`, `transactionConfiguration`, and the collision, deployment, failover and load balancing SPIs. The .NET configuration wins for the properties it sets: `sqlConfiguration` (use `SQL_SCHEMAS`), `encryptionSpi` (use `-ConfigFile`, e.g., `<encryptionSpi type="KeystoreEncryptionSpi" .../>`), the communication and discovery SPIs, data storage and the client connector. |
+| `SQL_SCHEMAS` | | _(empty)_ | SQL schemas created on start (comma-separated or `SQL_SCHEMAS__0`, ...). |
 | `PEER_CLASS_LOADING_ENABLED` | | `false` | Java peer class loading (Zero Deployment); like peer assembly loading, it runs code of other nodes. |
 | `PAGE_EVICTION_MODE` | | `Random2Lru` | Eviction of in-memory regions when full (`Disabled`, `RandomLru`, `Random2Lru`); ignored with persistence. |
 | `PEER_ASSEMBLY_LOADING` | | `false` | Load .NET assemblies sent by other nodes (and so run their code); only for trusted clusters. |
