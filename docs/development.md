@@ -9,6 +9,10 @@ copies them to `libs/` (not in IDE design-time builds). When upgrading Ignite (`
 `Directory.Packages.props`), run `scripts/update-java-libs.sh`: it derives the dependencies of the Ignite modules listed
 there from their POMs again (without what the package contains) and updates the hashes. An entry with an `Override`
 attribute keeps its version (e.g., Jackson 2.21.7 instead of the 2.19.0 Ignite declares, for its fixed vulnerabilities).
+The chart records the Ignite version of its image (the `ignite.apache.org/version` annotation of its `Chart.yaml`) and
+refuses rolling upgrades across Ignite minor versions: keep it equal to `IgniteVersion` on the chart's release branch.
+The Release workflow sets it in the pull requests it opens, and fails when the chart of the released version records
+another one.
 
 Dependabot bumps `Apache.Ignite`; the Ignite Upgrade workflow then runs the script on its branch and pushes the updated
 modules. Dependabot stops rebasing a pull request once someone else pushed to it (merge or close it, and let it open a

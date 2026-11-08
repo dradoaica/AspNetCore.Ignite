@@ -63,8 +63,18 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
 ## Moving to Apache Ignite 2.19.0
 
 Once Apache Ignite 2.19.0 is released, `IgniteVersion` moves to it (with `scripts/update-java-libs.sh`), and its upgrade
-notes apply. Ignite 2.19 introduces rolling upgrades (`control.sh --rolling-upgrade`) and checks the features of a
-joining node during the discovery handshake (IGNITE-28969): plan the move from Ignite 2.18 as a full cluster restart
-(stop every node cleanly, then start them on the new image) unless its notes say that 2.18 nodes support the rolling
-upgrade. It also moves Jetty (REST) to 11.0.25, whose request smuggling fix is still past it (keep REST off).
+notes apply. From its `ignite-2.19` branch:
+
+* Ignite 2.19 nodes cannot join a cluster of 2.18 nodes: the discovery protocol header changes (IGNITE-28601), so 2.18
+  nodes drop the connections of 2.19 ones, and a 2.19 node of a Kubernetes cluster starts a second cluster beside them.
+  Move as a full cluster restart: deactivate the cluster (`control.sh --set-state INACTIVE --yes`), stop every node,
+  then start them on the new image. The chart refuses a rolling upgrade across Ignite minor versions (it records the
+  Ignite version of its image).
+* SQL runs on the Calcite engine by default (IGNITE-29117), with H2 still available (the `QUERY_ENGINE('h2')` hint, or
+  `IndexingQueryEngineConfiguration` as the default engine of `SqlConfiguration`); the package has to bring the
+  `ignite-calcite` module.
+* The REST API moves to Jetty 12.1, which removes the reason for the REST caveat of the chart's Ingress.
+* `MemoryConfiguration` and the OpenCensus tracing are removed (the server uses neither), and the `namespace` and
+  `serviceName` properties of the Kubernetes IP finder are deprecated (`KubernetesConnectionConfiguration` replaces
+  them in the Spring templates).
 

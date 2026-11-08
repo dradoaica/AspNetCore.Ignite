@@ -33,7 +33,9 @@ peer assembly loading. There are two predefined configuration files available in
 The server runs on the .NET Generic Host: SIGTERM/CTRL+C stop the node gracefully. The `GRACEFUL` shutdown policy
 waits until other nodes hold copies of the node's partitions, which never happens when the whole cluster stops; after
 `GRACEFUL_STOP_TIMEOUT_IN_SECONDS` an error is logged and the node stops with the process (persistent nodes recover
-from the WAL on the next start).
+from the WAL on the next start). The cluster's last server node deactivates the cluster first and stops at once (the
+next start activates it again); to stop several nodes at once (e.g., `helm uninstall`), deactivate the cluster first
+(`control.sh --set-state INACTIVE --yes`).
 
 | Exit code | Meaning                                                                               |
 |-----------|---------------------------------------------------------------------------------------|

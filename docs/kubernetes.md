@@ -10,6 +10,9 @@ a StatefulSet. A deployment should:
   `GRACEFUL_STOP_TIMEOUT_IN_SECONDS` (e.g., 240) below `SHUTDOWN_TIMEOUT_IN_SECONDS` (e.g., 270) below
   `terminationGracePeriodSeconds` (e.g., 300); together with `READY_WHEN_REBALANCED`, a rolling restart moves on only
   once the restarted node holds its data again,
+* deactivate the cluster before stopping all its pods at once (`helm uninstall`, scaling to 0):
+  `kubectl exec <pod> -- control.sh --set-state INACTIVE --yes`; otherwise its last nodes wait for each other until
+  `GRACEFUL_STOP_TIMEOUT_IN_SECONDS` and stop uncleanly (a single node deactivates it by itself),
 * restart a pod within `BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS` (300 s with persistence): a node away longer leaves
   the baseline, and its data is moved to the others and back once it returns; a new pod (scale-out) is ready once the
   auto-adjust added it to the baseline and it received its data,

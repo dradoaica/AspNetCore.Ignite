@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using Apache.Ignite.Core.Cache.Query;
+using Apache.Ignite.Core.Client.Cache;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Xunit;
@@ -243,6 +245,39 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
 
         Assert.Equal(0, await node.GetExitCodeAsync());
         var (stdout, _) = await node.GetLogsAsync();
+        Assert.Contains("Ignite server runner stopped.", stdout);
+    }
+
+    [SkippableFact]
+    public async Task LastServerNode_DeactivatesTheCluster_AndStopsAtOnce()
+    {
+        Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
+        await using var node = fixture.CreateNodeBuilder()
+            .WithEnvironment("GRACEFUL_STOP_TIMEOUT_IN_SECONDS", "60")
+            .WithEnvironment("SHUTDOWN_TIMEOUT_IN_SECONDS", "70")
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
+            .Build();
+        await node.StartAsync();
+        using (var igniteClient = CacheFactory.ConnectAsClient(
+                   IgniteServerFixture.ClientConfiguration(
+                       IgniteServerFixture.GetEndpoint(node),
+                       IgniteServerFixture.UserName,
+                       IgniteServerFixture.Password
+                   )
+               ))
+        {
+            // alone, the GRACEFUL shutdown policy would wait for the backups of this cache until the timeout
+            igniteClient.GetOrCreateCache<int, int>(new CacheClientConfiguration("backed-up") { Backups = 1 })
+                .Put(1, 1);
+        }
+
+        var stopping = Stopwatch.StartNew();
+        await node.StopAsync();
+
+        Assert.Equal(0, await node.GetExitCodeAsync());
+        Assert.True(stopping.Elapsed < TimeSpan.FromSeconds(30), $"The node took {stopping.Elapsed} to stop.");
+        var (stdout, _) = await node.GetLogsAsync();
+        Assert.Contains("deactivating the cluster so that it stops at once", stdout);
         Assert.Contains("Ignite server runner stopped.", stdout);
     }
 

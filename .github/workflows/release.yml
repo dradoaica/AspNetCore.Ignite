@@ -29,11 +29,22 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       image: ${{ steps.image.outputs.image }}
+      ignite: ${{ steps.ignite.outputs.ignite }}
     steps:
       - id: version
         run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
         env:
           TAG: ${{ github.event.release.tag_name || inputs.version }}
+
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: Directory.Packages.props
+          sparse-checkout-cone-mode: false
+
+      # the Apache Ignite version of the image, which the chart records
+      - id: ignite
+        run: echo "ignite=$(sed -n -E 's/.*<IgniteVersion>([^<]*)<\/IgniteVersion>.*/\1/p' Directory.Packages.props)" >> "$GITHUB_OUTPUT"
 
       # GHCR requires lowercase names
       - id: image
@@ -241,13 +252,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.HELM_CHARTS_TOKEN }}
           VERSION: ${{ needs.version.outputs.version }}
+          IGNITE_VERSION: ${{ needs.version.outputs.ignite }}
           REF: ${{ steps.chart-ref.outputs.ref }}
         run: |
           set -euo pipefail
           chart=charts/aspnetcore-ignite-server/Chart.yaml
           branch="aspnetcore-ignite-server-${VERSION}"
+          # the Ignite version the chart records: it refuses rolling upgrades across Ignite minor versions
+          recorded="$(sed -n -E 's/^  ignite\.apache\.org\/version: "?([^"]*)"?$/\1/p' "$chart")"
           # the chart may already be released for this image (e.g., the release branches of both repositories)
           if grep -q -E "^appVersion: \"?${VERSION}\"?$" "$chart"; then
+            if [ "$recorded" != "$IGNITE_VERSION" ]; then
+              echo "::error::The chart of ${REF} records Ignite ${recorded:-(none)}, the image runs ${IGNITE_VERSION}: set its ignite.apache.org/version annotation."
+              exit 1
+            fi
             echo "::notice::The chart of ${REF} already has appVersion ${VERSION}: no pull request."
             exit 0
           fi
@@ -257,15 +275,20 @@ jobs:
             echo "::warning::The chart of ${REF} has appVersion ${app}: release the chart of ${VERSION%.*} (its release branch) with this image instead."
             exit 0
           fi
-          # appVersion follows the image; the chart version gets a patch bump
+          # appVersion and the recorded Ignite version follow the image; the chart version gets a patch bump
           sed -i -E "s/^appVersion: .*/appVersion: \"${VERSION}\"/" "$chart"
+          sed -i -E "s/^(  ignite\.apache\.org\/version: ).*/\1\"${IGNITE_VERSION}\"/" "$chart"
           current="$(sed -n -E 's/^version: (.*)/\1/p' "$chart")"
           sed -i -E "s/^version: .*/version: ${current%.*}.$(( ${current##*.} + 1 ))/" "$chart"
+          notes=""
+          if [ "${recorded%.*}" != "${IGNITE_VERSION%.*}" ]; then
+            notes=" It moves from Ignite ${recorded} to ${IGNITE_VERSION}, whose nodes cannot form one cluster: upgrading a running release needs a full stop."
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
           git commit -am "aspnetcore-ignite-server: appVersion ${VERSION}"
           git push origin "$branch"
           gh pr create --base "$REF" --title "aspnetcore-ignite-server: appVersion ${VERSION}" \
-            --body "Moves the chart to the ${VERSION} image released by ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${{ github.event.release.tag_name }}."
+            --body "Moves the chart to the ${VERSION} image released by ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${{ github.event.release.tag_name }}.${notes}"
 

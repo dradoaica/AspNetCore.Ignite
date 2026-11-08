@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -211,13 +212,17 @@ internal sealed class IgniteServerRunner : IDisposable
     ///     Stops the node gracefully; afterward, <see cref="Run" /> does not start it again. Returns false when the node
     ///     did not stop within <paramref name="timeout" />: the GRACEFUL shutdown policy waits until the node's
     ///     partitions have copies on other nodes, which never happens when the whole cluster stops; the node then stops
-    ///     with the process.
+    ///     with the process. The cluster's last server node deactivates the cluster first, so it stops at once.
     /// </summary>
     public bool Stop(TimeSpan timeout)
     {
         stopRequested = true;
+        ready = false;
         logger.Information("Stopping Ignite server runner...");
-        if (StopGracefully(timeout))
+        var stopping = Stopwatch.StartNew();
+        DeactivateIfLastServerNode(timeout);
+        var remaining = timeout - stopping.Elapsed;
+        if (StopGracefully(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero))
         {
             logger.Information("Ignite server runner stopped.");
             return true;
@@ -228,6 +233,33 @@ internal sealed class IgniteServerRunner : IDisposable
             timeout
         );
         return false;
+    }
+
+    /// <summary>
+    ///     No other node can take over the partitions of the cluster's last server node, which the GRACEFUL shutdown
+    ///     policy would wait for until the timeout: that node deactivates the cluster (a persistent one checkpoints its
+    ///     data, and the next start activates it again).
+    /// </summary>
+    private void DeactivateIfLastServerNode(TimeSpan timeout)
+    {
+        if (Node is not { } node) return;
+
+        try
+        {
+            var cluster = node.GetCluster();
+            if (!cluster.IsActive() || cluster.ForServers().GetNodes().Count > 1) return;
+
+            logger.Information(
+                "The node is the cluster's last server node: deactivating the cluster so that it stops at once."
+            );
+            if (!Task.Run(() => cluster.SetActive(false)).Wait(timeout))
+                logger.Warning("The cluster was not deactivated within {Timeout}.", timeout);
+        }
+        catch (Exception ex) when (ex is IgniteException or InvalidOperationException or AggregateException)
+        {
+            // the graceful stop decides then
+            logger.Warning(ex, "The cluster was not deactivated before the stop.");
+        }
     }
 
     /// <summary>Stops the running node, if any, gracefully; false when it is still stopping after <paramref name="timeout" />.</summary>
