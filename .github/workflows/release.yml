@@ -48,6 +48,8 @@ jobs:
       contents: read # to checkout codebase
       packages: write # to push NuGet packages to GitHub Packages
     runs-on: ubuntu-24.04
+    env:
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
@@ -73,6 +75,15 @@ jobs:
           dotnet nuget push "artifacts/package/release/*.nupkg"
           --api-key "${{ secrets.GITHUB_TOKEN }}"
           --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+          --skip-duplicate
+
+      # nuget.org too, with a NUGET_API_KEY secret: installing from GitHub Packages needs a token, even for a public package
+      - name: Push to nuget.org
+        if: github.event_name == 'release' && env.NUGET_API_KEY != ''
+        run: >-
+          dotnet nuget push "artifacts/package/release/*.nupkg"
+          --api-key "$NUGET_API_KEY"
+          --source https://api.nuget.org/v3/index.json
           --skip-duplicate
 
   # each platform is built natively (no emulation) and pushed by digest; the manifest job tags the multi-platform image

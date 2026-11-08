@@ -3,7 +3,8 @@
 # Directory.Packages.props): the Ignite modules listed there are kept, and the other entries are derived again from
 # their Maven POMs (which list every compile and runtime dependency, with its version), without what the Apache.Ignite
 # NuGet package already contains (ignite-core, ignite-spring, ignite-indexing and their dependencies). An entry with an
-# Override attribute (its reason) keeps its version instead of the one the POMs declare (e.g., a fixed vulnerability).
+# Override attribute (its reason) keeps its version instead of the one the POMs declare (e.g., a fixed vulnerability),
+# as long as that is older: the override is dropped once Ignite declares the same version or a newer one.
 # Every jar is downloaded from Maven Central and its SHA-256 written back. Review the diff before committing: a hash
 # change without a version change means the artifact changed upstream. Needs python3.
 set -euo pipefail
@@ -73,12 +74,17 @@ while pending:
             libs[(group, artifact)] = version
 
 lines = []
-for (group, artifact), (version, reason) in overrides.items():
-    if (group, artifact) in libs:
-        print(f"OVERRIDE  {group}:{artifact}: {version} instead of {libs[(group, artifact)]} ({reason})")
-        libs[(group, artifact)] = version
+for (group, artifact), (version, reason) in list(overrides.items()):
+    declared = libs.get((group, artifact))
+    if declared is None:
+        print(f"DROPPED   {group}:{artifact}: no longer a dependency, so its override is gone")
+        del overrides[(group, artifact)]
+    elif version_key(declared) >= version_key(version):
+        print(f"DROPPED   {group}:{artifact}: Ignite declares {declared}, so the override of {version} is gone")
+        del overrides[(group, artifact)]
     else:
-        print(f"WARNING   {group}:{artifact} is no longer a dependency: its override is dropped")
+        print(f"OVERRIDE  {group}:{artifact}: {version} instead of {declared} ({reason})")
+        libs[(group, artifact)] = version
 
 for (group, artifact), version in sorted(libs.items(), key=lambda item: (item[0][1], item[0][0])):
     with urllib.request.urlopen(url(group, artifact, version, "jar")) as response:

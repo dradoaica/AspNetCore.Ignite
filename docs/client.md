@@ -1,6 +1,14 @@
 # Client library (`AspNetCore.Ignite`)
 
-The package targets .NET 10 (`net10.0`), like the server.
+The package targets .NET 10 (`net10.0`), like the server. Releases publish it to GitHub Packages, which needs a token
+to install even a public package (a classic personal access token with `read:packages`), and to nuget.org once the
+release workflow has its key (`NUGET_API_KEY`):
+
+```
+dotnet nuget add source https://nuget.pkg.github.com/dradoaica/index.json --name dradoaica \
+  --username <user> --password <token> --store-password-in-clear-text
+dotnet add package AspNetCore.Ignite
+```
 
 ```csharp
 services.AddIgnite();                                         // the ASPNETCORE_IGNITE_* settings below

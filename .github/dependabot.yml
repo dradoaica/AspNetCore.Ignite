@@ -24,11 +24,15 @@ updates:
           - xunit*
           - Xunit.*
 
-  # the base images of the Dockerfile (pinned by digest)
+  # the base images of the Dockerfile (pinned by digest), in one pull request
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    groups:
+      base-images:
+        patterns:
+          - "*"
 
   - package-ecosystem: github-actions
     directory: /

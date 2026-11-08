@@ -38,11 +38,17 @@ platform, and publishes nothing.
 
 ## Release
 
-Merge the release branches of both repositories into `main` (the chart's first), then publish a GitHub release whose
-tag is the version (e.g., `2.19.0`). The Release workflow tests once more, publishes the package and the image (also
-tagged `2.19`, `2` and `latest`), and, for a patch release of the image, opens a pull request on the chart repository
-that moves the chart to it (with a `HELM_CHARTS_TOKEN` secret): on the chart's branch of the same version if there is
-one, otherwise `main`. A new minor version of the image needs the chart released with it, so it opens none then.
+The image comes first: the chart repository publishes a chart on every push to its `main`, and its pull requests
+install the chart with its image.
+
+1. Merge the release branch of this repository into `main`.
+2. Publish a GitHub release whose tag is the version (e.g., `2.19.0`). The Release workflow tests once more, and
+   publishes the package (to GitHub Packages, and to nuget.org with a `NUGET_API_KEY` secret) and the image (also
+   tagged `2.19`, `2` and `latest`). For a patch release of the image, it also opens a pull request on the chart
+   repository that moves the chart to it (with a `HELM_CHARTS_TOKEN` secret): on the chart's branch of the same version
+   if there is one, otherwise `main`; a new minor version of the image needs the chart released with it.
+3. Merge the chart's release branch (e.g., `release/2.19.0`) into the `main` of the chart repository, which publishes
+   the chart.
 
 ## Build aspnetcore.ignite-server
 
