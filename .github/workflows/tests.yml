@@ -211,10 +211,9 @@ jobs:
       - name: Import Image
         run: docker load -i "${RUNNER_TEMP}/image.tar"
 
+      # kind comes with the runner image (no download, whose checksum check failed now and then)
       - name: Create kind Cluster
-        uses: helm/kind-action@v1
-        with:
-          cluster_name: e2e
+        run: kind create cluster --name e2e --wait 120s
 
       - name: Load Image
         run: kind load docker-image "$IMAGE:e2e" --name e2e
@@ -295,10 +294,9 @@ jobs:
           name: server-image
           path: ${{ runner.temp }}
 
+      # kind comes with the runner image (no download, whose checksum check failed now and then)
       - name: Create kind Cluster
-        uses: helm/kind-action@v1
-        with:
-          cluster_name: upgrade
+        run: kind create cluster --name upgrade --wait 120s
 
       - name: Import Images
         run: |

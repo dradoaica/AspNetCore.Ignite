@@ -54,13 +54,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      # nuget.org only: with a second package source, central package management wants a source mapping (NU1507,
+      # an error in CI); the push names GitHub Packages and its key itself
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
-          source-url: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
-        env:
-          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pack NuGet Packages
         run: >-
