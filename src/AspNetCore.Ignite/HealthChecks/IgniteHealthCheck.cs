@@ -1,7 +1,6 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Apache.Ignite.Core.Client;
 using AspNetCore.Ignite.Abstractions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
@@ -29,19 +28,21 @@ public sealed class IgniteHealthCheck(IIgniteManager igniteManager, TimeSpan tim
         {
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(timeout);
-            IIgniteClient client;
+            bool active;
             try
             {
                 // shared with every other caller: a slow connection does not block a thread per check
-                client = await igniteManager.GetClientAsync(timeoutCts.Token).ConfigureAwait(false);
+                var client = await igniteManager.GetClientAsync(timeoutCts.Token).ConfigureAwait(false);
+                // the client's calls are synchronous (bounded by its socket timeout only): wait no longer than the check
+                active = await Task.Run(() => client.GetCluster().IsActive(), CancellationToken.None)
+                    .WaitAsync(timeoutCts.Token)
+                    .ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 throw new TimeoutException($"The Ignite cluster did not answer within {timeout}.");
             }
 
-            // bounded by the client's socket timeout
-            var active = client.GetCluster().IsActive();
             return active
                 ? HealthCheckResult.Healthy("The Ignite cluster is active.")
                 : new HealthCheckResult(context.Registration.FailureStatus, "The Ignite cluster is not active.");

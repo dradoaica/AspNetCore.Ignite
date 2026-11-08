@@ -68,4 +68,24 @@ public sealed class SpringConfigRendererTests
             Directory.Delete(directory, true);
         }
     }
+
+    [Fact]
+    public void Render_DoesNotSearchInsertedValuesAndFragments()
+    {
+        var rendered = SpringConfigRenderer.Render(
+            "<a ns=\"K8S_NAMESPACE\" pwd=\"SSL_KEY_STORE_PASSWORD\"/><!-- X -->",
+            new Dictionary<string, string?>
+            {
+                ["K8S_NAMESPACE"] = "SSL_KEY_STORE_PASSWORD",
+                ["SSL_KEY_STORE_PASSWORD"] = "secret"
+            },
+            new Dictionary<string, string?>
+                { ["<!-- X -->"] = "<b key=\"K8S_NAMESPACE\" value=\"${SSL_KEY_STORE_PASSWORD}\"/>" }
+        );
+
+        Assert.Equal(
+            "<a ns=\"SSL_KEY_STORE_PASSWORD\" pwd=\"secret\"/><b key=\"K8S_NAMESPACE\" value=\"${SSL_KEY_STORE_PASSWORD}\"/>",
+            rendered
+        );
+    }
 }

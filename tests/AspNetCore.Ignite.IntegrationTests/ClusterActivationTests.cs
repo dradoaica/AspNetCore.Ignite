@@ -1,7 +1,11 @@
 using System.Net;
+using Apache.Ignite.Core.Cache.Configuration;
+using Apache.Ignite.Core.Client;
+using Apache.Ignite.Core.Client.Cache;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
+using DotNet.Testcontainers.Volumes;
 using Xunit;
 
 namespace AspNetCore.Ignite.IntegrationTests;
@@ -89,10 +93,127 @@ public sealed class ClusterActivationTests(IgniteServerFixture fixture)
         Assert.Contains("ignite_node_rebalancing_caches 0", metrics);
     }
 
+    [SkippableFact]
+    public async Task LostPartitions_AreReset_AndTheCacheIsUsableAgain()
+    {
+        Skip.IfNot(fixture.IsDockerAvailable, "Docker is not available.");
+        await using var network = new NetworkBuilder().WithName($"ignite-{Guid.NewGuid():N}").Build();
+        await network.CreateAsync();
+        const string clusterEndpoints = "ignite-x:47500,ignite-y:47500";
+        await using var nodeX = InMemoryNode(network, "ignite-x", clusterEndpoints);
+        await using var nodeY = InMemoryNode(network, "ignite-y", clusterEndpoints);
+        await nodeX.StartAsync();
+        await nodeY.StartAsync();
+        // ready once the baseline auto-adjust added it: it then holds a share of the partitions
+        using HttpClient http = new();
+        await WaitUntilAsync(
+            () => http.GetAsync(IgniteServerFixture.GetManagementUri(nodeY, "/health/readiness")).Result.StatusCode ==
+                  HttpStatusCode.OK,
+            TimeSpan.FromSeconds(90)
+        );
+        using var igniteClient =
+            CacheFactory.ConnectAsClient(CacheFactory.GetIgniteClientConfiguration(IgniteServerFixture.GetEndpoint(nodeX)));
+        // without backups, the partitions of a node that leaves are lost; the safe policy blocks them until reset
+        var cache = igniteClient.GetOrCreateCache<int, int>(
+            new CacheClientConfiguration("lossy") { Backups = 0, PartitionLossPolicy = PartitionLossPolicy.ReadWriteSafe });
+        var entries = Enumerable.Range(0, 1000).Select(i => new KeyValuePair<int, int>(i, i)).ToList();
+        cache.PutAll(entries);
+
+        await nodeY.StopAsync();
+
+        // the departed in-memory node is dropped from the baseline, so the partitions can be reset (empty)
+        await TestContainerLogs.WaitForMessageAsync(nodeX, "Partition data lost", 1, TimeSpan.FromSeconds(60));
+        await TestContainerLogs.WaitForMessageAsync(nodeX, "were reset; their data is gone", 1, TimeSpan.FromSeconds(60));
+        await WaitUntilAsync(() => Succeeds(() => cache.PutAll(entries)), TimeSpan.FromSeconds(30));
+        Assert.Equal(entries.Count, cache.GetSize());
+    }
+
+    [SkippableFact]
+    public async Task LostPersistentPartitions_AreResetOnceTheirNodeReturns_WithTheirData()
+    {
+        Skip.IfNot(fixture.IsDockerAvailable, "Docker is not available.");
+        await using var network = new NetworkBuilder().WithName($"ignite-{Guid.NewGuid():N}").Build();
+        await network.CreateAsync();
+        await using var volume = new VolumeBuilder().WithName($"ignite-{Guid.NewGuid():N}").Build();
+        await volume.CreateAsync();
+        const string clusterEndpoints = "ignite-p:47500,ignite-q:47500";
+        await using var nodeP = PersistentNode(network, "ignite-p", clusterEndpoints, null)
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Waiting for 2 server nodes"))
+            .Build();
+        await nodeP.StartAsync();
+        List<KeyValuePair<int, int>> entries = [.. Enumerable.Range(0, 1000).Select(i => new KeyValuePair<int, int>(i, i))];
+        await using (var nodeQ = PersistentNode(network, "ignite-q", clusterEndpoints, volume).Build())
+        {
+            await nodeQ.StartAsync();
+            await TestContainerLogs.WaitForMessageAsync(nodeP, IgniteServerFixture.RunningMessage, 1,
+                TimeSpan.FromSeconds(60));
+            using var igniteClient =
+                CacheFactory.ConnectAsClient(
+                    CacheFactory.GetIgniteClientConfiguration(IgniteServerFixture.GetEndpoint(nodeP)));
+            igniteClient.GetOrCreateCache<int, int>(
+                    new CacheClientConfiguration("durable")
+                        { Backups = 0, PartitionLossPolicy = PartitionLossPolicy.ReadWriteSafe })
+                .PutAll(entries);
+        }
+
+        // the partitions of the departed node stay lost (its data is on its volume), and are not reset meanwhile
+        await TestContainerLogs.WaitForMessageAsync(nodeP, "Partition data lost", 1, TimeSpan.FromSeconds(60));
+        await TestContainerLogs.WaitForMessageAsync(nodeP, "once a node that owns them returns", 1,
+            TimeSpan.FromSeconds(30));
+        await using var returned = PersistentNode(network, "ignite-q", clusterEndpoints, volume).Build();
+        await returned.StartAsync();
+
+        await TestContainerLogs.WaitForMessageAsync(nodeP, "with the data of the nodes that returned", 1,
+            TimeSpan.FromSeconds(60));
+        using var client =
+            CacheFactory.ConnectAsClient(CacheFactory.GetIgniteClientConfiguration(IgniteServerFixture.GetEndpoint(nodeP)));
+        var cache = client.GetCache<int, int>("durable");
+        await WaitUntilAsync(() => Succeeds(() => cache.GetSize()), TimeSpan.FromSeconds(30));
+        Assert.Equal(entries.Count, cache.GetSize());
+    }
+
+    private static bool Succeeds(Action action)
+    {
+        try
+        {
+            action();
+            return true;
+        }
+        catch (IgniteClientException)
+        {
+            return false;
+        }
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (!condition())
+        {
+            if (DateTime.UtcNow > deadline) throw new TimeoutException($"The condition was not met within {timeout}.");
+
+            await Task.Delay(TimeSpan.FromSeconds(1));
+        }
+    }
+
     private static async Task<bool> Delay()
     {
         await Task.Delay(TimeSpan.FromSeconds(1));
         return true;
+    }
+
+    private ContainerBuilder PersistentNode(INetwork network, string alias, string clusterEndpoints, IVolume? volume)
+    {
+        var builder = fixture.CreateNodeBuilder()
+            .WithNetwork(network)
+            .WithNetworkAliases(alias)
+            .WithEnvironment("ENABLE_AUTHENTICATION", "false")
+            .WithEnvironment("PERSISTENCE_ENABLED", "true")
+            .WithEnvironment("ACTIVATION_MIN_SERVER_NODES", "2")
+            .WithEnvironment("DEFAULT_CONSISTENT_ID", alias)
+            .WithEnvironment("CLUSTER_ENDPOINTS", clusterEndpoints)
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage));
+        return volume == null ? builder : builder.WithVolumeMount(volume, "/app/work");
     }
 
     private IContainer InMemoryNode(

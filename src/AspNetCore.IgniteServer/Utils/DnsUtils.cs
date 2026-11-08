@@ -12,11 +12,6 @@ internal static class DnsUtils
         return GetLocalIpAddress(Dns.GetHostName());
     }
 
-    internal static string GetLocalIpAddress(Uri uri)
-    {
-        return GetLocalIpAddress(uri.Host);
-    }
-
     private static string GetLocalIpAddress(string hostName)
     {
         var host = Dns.GetHostEntryAsync(hostName).GetAwaiter().GetResult();

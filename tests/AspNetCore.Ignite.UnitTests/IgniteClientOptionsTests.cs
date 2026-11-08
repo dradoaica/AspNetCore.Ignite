@@ -1,3 +1,4 @@
+using System.Reflection;
 using Apache.Ignite.Core.Client;
 using Apache.Ignite.Core.Client.Cache;
 using AspNetCore.Ignite.Abstractions;
@@ -128,6 +129,28 @@ public sealed class IgniteClientOptionsTests
     }
 
     [Fact]
+    public async Task HealthCheck_HangingCluster_TimesOut()
+    {
+        var cluster = DispatchProxy.Create<IClientCluster, HangingClusterProxy>();
+        var client = DispatchProxy.Create<IIgniteClient, ClientProxy>();
+        ((ClientProxy)(object)client).Cluster = cluster;
+        IgniteHealthCheck healthCheck = new(new FakeIgniteManager(Task.FromResult(client)), TimeSpan.FromMilliseconds(100));
+        try
+        {
+            // connected, but the cluster does not answer: the check ends with its timeout, not the socket timeout
+            var result = await healthCheck.CheckHealthAsync(Context(healthCheck, HealthStatus.Unhealthy))
+                .WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(HealthStatus.Unhealthy, result.Status);
+            Assert.IsType<TimeoutException>(result.Exception);
+        }
+        finally
+        {
+            ((HangingClusterProxy)(object)cluster).Release.Set();
+        }
+    }
+
+    [Fact]
     public async Task IgniteManager_ConcurrentCallers_ShareOneConnectionAttempt()
     {
         // nothing listens on port 1: each attempt fails fast, and no retries are configured
@@ -177,6 +200,30 @@ public sealed class IgniteClientOptionsTests
         public void DestroyCache(string cacheName)
         {
             throw new NotSupportedException();
+        }
+    }
+
+    public class HangingClusterProxy : DispatchProxy
+    {
+        public ManualResetEventSlim Release { get; } = new();
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            // IsActive blocks, as when the cluster does not answer
+            Release.Wait();
+            return true;
+        }
+    }
+
+    public class ClientProxy : DispatchProxy
+    {
+        public IClientCluster? Cluster { get; set; }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            return targetMethod?.Name == nameof(IIgniteClient.GetCluster)
+                ? Cluster
+                : throw new NotSupportedException(targetMethod?.Name);
         }
     }
 }

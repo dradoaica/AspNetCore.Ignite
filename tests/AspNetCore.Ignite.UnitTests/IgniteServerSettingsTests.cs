@@ -357,4 +357,42 @@ public sealed class IgniteServerSettingsTests
 
         Assert.Equal(["A", "B"], configuration.SqlSchemas);
     }
+
+    [Fact]
+    public void BaselineAutoAdjustTimeout_DependsOnPersistence_UnlessSet()
+    {
+        var options = Load([]).ToRunnerOptions("spring.xml");
+
+        Assert.Null(options.BaselineAutoAdjustTimeout);
+        // a restarted persistent node returns with its data: its data is not moved away (and back) meanwhile
+        Assert.Equal(TimeSpan.FromMinutes(5), options.GetBaselineAutoAdjustTimeout(true));
+        Assert.Equal(TimeSpan.FromSeconds(30), options.GetBaselineAutoAdjustTimeout(false));
+        // an empty value (the Helm chart's default) is not set
+        Assert.Null(
+            Load(new Dictionary<string, string?> { ["BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS"] = "" })
+                .BaselineAutoAdjustTimeoutInSeconds
+        );
+        Assert.Equal(
+            TimeSpan.Zero,
+            Load(new Dictionary<string, string?> { ["BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS"] = "0" })
+                .ToRunnerOptions("spring.xml")
+                .GetBaselineAutoAdjustTimeout(true)
+        );
+    }
+
+    [Fact]
+    public void SqlQueryHistorySize_IsOptional_AndNotNegative()
+    {
+        Assert.Null(Load([]).ToRunnerOptions("spring.xml").SqlQueryHistorySize);
+        Assert.Equal(
+            0,
+            Load(new Dictionary<string, string?> { ["SQL_QUERY_HISTORY_SIZE"] = "0" })
+                .ToRunnerOptions("spring.xml")
+                .SqlQueryHistorySize
+        );
+        Assert.Contains(
+            Load(new Dictionary<string, string?> { ["SQL_QUERY_HISTORY_SIZE"] = "-1" }).Validate(),
+            error => error.StartsWith("SQL_QUERY_HISTORY_SIZE", StringComparison.Ordinal)
+        );
+    }
 }

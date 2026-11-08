@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace AspNetCore.IgniteServer.Utils;
@@ -11,7 +13,8 @@ internal static class SpringConfigRenderer
 {
     /// <summary>
     ///     Replaces each placeholder in <paramref name="template" /> with its XML-escaped value, and each of
-    ///     <paramref name="xmlPlaceholders" /> with its value as is (XML elements).
+    ///     <paramref name="xmlPlaceholders" /> with its value as is (XML elements). One pass: the values and fragments
+    ///     inserted are not searched for placeholders (a fragment may contain e.g. <c>${SSL_KEY_STORE_PASSWORD}</c>).
     /// </summary>
     internal static string Render(
         string template,
@@ -19,14 +22,19 @@ internal static class SpringConfigRenderer
         IReadOnlyDictionary<string, string?>? xmlPlaceholders = null
     )
     {
-        StringBuilder sb = new(template);
-        foreach (var (placeholder, xml) in xmlPlaceholders ?? new Dictionary<string, string?>())
-            sb.Replace(placeholder, xml ?? string.Empty);
+        xmlPlaceholders ??= new Dictionary<string, string?>();
+        var names = placeholders.Keys.Concat(xmlPlaceholders.Keys).ToList();
+        if (names.Count == 0) return template;
 
-        foreach (var (placeholder, value) in placeholders)
-            sb.Replace(placeholder, SecurityElement.Escape(value ?? string.Empty));
-
-        return sb.ToString();
+        // the longest name first, should one contain another
+        var pattern = string.Join('|', names.OrderByDescending(name => name.Length).Select(Regex.Escape));
+        return Regex.Replace(
+            template,
+            pattern,
+            match => xmlPlaceholders.TryGetValue(match.Value, out var xml)
+                ? xml ?? string.Empty
+                : SecurityElement.Escape(placeholders[match.Value] ?? string.Empty)
+        );
     }
 
     /// <summary>

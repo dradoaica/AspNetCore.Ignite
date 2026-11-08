@@ -32,7 +32,7 @@ internal sealed class IgniteServerRunner : IDisposable
         this.options = options;
         this.logger = logger ?? Logger.None;
         Configuration = IgniteConfigurationFactory.Create(options, this.logger);
-        RebalanceTracker = new RebalanceTracker(this.logger);
+        RebalanceTracker = new RebalanceTracker(this.logger, options.RebalanceReadinessMaxWait);
         // in the configuration (not LocalListen after the start): rebalancing may start while the node joins
         Configuration.LocalEventListeners =
         [
@@ -54,12 +54,11 @@ internal sealed class IgniteServerRunner : IDisposable
     public IIgnite? Node => Volatile.Read(ref ignite);
 
     /// <summary>
-    ///     True once the node is running, its cluster is active and (with ReadyWhenRebalanced) it is not rebalancing,
-    ///     until it stops.
+    ///     True once the node is running, its cluster is active and (with ReadyWhenRebalanced) it has caught up after its
+    ///     start (received its partitions), until it stops.
     /// </summary>
-    public bool IsReady => ready && Node != null &&
-                           !(options.ReadyWhenRebalanced &&
-                             RebalanceTracker.IsRebalancing(options.RebalanceReadinessMaxWait));
+    public bool IsReady => ready && Node is { } node &&
+                           !(options.ReadyWhenRebalanced && RebalanceTracker.IsCatchingUp(() => IsInBaseline(node)));
 
     public void Dispose()
     {
@@ -158,16 +157,25 @@ internal sealed class IgniteServerRunner : IDisposable
         }
 
         cluster.SetBaselineAutoAdjustEnabledFlag(true);
-        cluster.SetBaselineAutoAdjustTimeout((long)options.BaselineAutoAdjustTimeout.TotalMilliseconds);
+        cluster.SetBaselineAutoAdjustTimeout(
+            (long)options.GetBaselineAutoAdjustTimeout(persistenceEnabled).TotalMilliseconds);
         // users exist only with authentication (which implies persistence); without it there is no password to set
         if (Configuration.AuthenticationEnabled && !string.IsNullOrWhiteSpace(options.IgniteUserPassword))
-            new IgniteUserPasswordManager(options, logger).Apply(current, options.IgniteUserPassword, newCluster);
+            try
+            {
+                new IgniteUserPasswordManager(options, logger).Apply(current, options.IgniteUserPassword, newCluster);
+            }
+            catch (Exception ex)
+            {
+                // the node keeps running with the current password, as without IGNITE_USER_PASSWORD
+                logger.Error(ex, "IGNITE_USER_PASSWORD was not applied.");
+            }
 
-        current.GetEvents()
-            .LocalListen(
-                new CacheRebalancingEventListener(current, logger, options.AutoResetLostPartitions),
-                EventType.CacheRebalancePartDataLost
-            );
+        // disposed once this run's node stopped
+        using LostPartitionsListener lostPartitions = new(current, logger, options.AutoResetLostPartitions,
+            persistenceEnabled);
+        current.GetEvents().LocalListen<CacheRebalancingEvent>(lostPartitions, EventType.CacheRebalancePartDataLost);
+        current.GetEvents().LocalListen<DiscoveryEvent>(lostPartitions, EventType.NodeJoined);
         current.GetEvents()
             .LocalListen(
                 new DiscoveryEventListener(logger),
@@ -178,6 +186,7 @@ internal sealed class IgniteServerRunner : IDisposable
             );
 
         ready = !tcs.Task.IsCompleted;
+        RebalanceTracker.OnRunning();
         var discoverySpiLocalPort = (current.GetConfiguration().DiscoverySpi as TcpDiscoverySpi)?.LocalPort;
         logger.Information(
             "Ignite server runner is running (DiscoverySpi LocalPort={DiscoverySpiLocalPort}), press CTRL+C to terminate.",
@@ -240,6 +249,22 @@ internal sealed class IgniteServerRunner : IDisposable
                 string.Join(", ", serverNodes.Select(node => node.ConsistentId))
             );
             await Task.WhenAny(stopped, Task.Delay(ActivationPollInterval)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>Whether the node's consistent id is in the baseline (false when it cannot tell, e.g., while stopping).</summary>
+    internal static bool IsInBaseline(IIgnite node)
+    {
+        try
+        {
+            var cluster = node.GetCluster();
+            var consistentId = cluster.GetLocalNode().ConsistentId;
+            return GetBaselineTopology(cluster)?.Any(baselineNode => Equals(baselineNode.ConsistentId, consistentId)) ==
+                   true;
+        }
+        catch (Exception ex) when (ex is IgniteException or InvalidOperationException)
+        {
+            return false;
         }
     }
 

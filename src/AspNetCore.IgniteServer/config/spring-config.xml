@@ -28,6 +28,9 @@
     <!-- EXTRA_BEANS -->
     <bean class="org.apache.ignite.configuration.IgniteConfiguration">
         <property name="shutdownPolicy" value="GRACEFUL"/>
+        <!-- no environment variables or system properties as node attributes: they would show secrets (e.g.,
+             IGNITE_USER_PASSWORD) to every node and client -->
+        <property name="includeProperties"><list/></property>
         <!-- CONNECTOR_CONFIGURATION -->
         <!-- EXTRA_PROPERTIES -->
         <property name="discoverySpi">

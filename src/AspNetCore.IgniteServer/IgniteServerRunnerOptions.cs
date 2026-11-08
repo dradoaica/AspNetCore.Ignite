@@ -29,11 +29,17 @@ internal sealed record IgniteServerRunnerOptions
     /// <summary>Persistent clusters are activated only once this many server nodes have joined.</summary>
     public int ActivationMinServerNodes { get; init; } = 1;
 
-    public TimeSpan BaselineAutoAdjustTimeout { get; init; } = TimeSpan.FromSeconds(30);
+    /// <summary>
+    ///     How long the baseline waits for a stable topology before following it; when not set, 5 minutes with
+    ///     persistence (a restarted node returns with its data, which is then not moved away and back) and 30 seconds
+    ///     without.
+    /// </summary>
+    public TimeSpan? BaselineAutoAdjustTimeout { get; init; }
 
     /// <summary>
-    ///     The node is ready only once the caches it receives partitions of are rebalanced, so that rolling restarts wait
-    ///     for the data to be back before stopping the next node; at most <see cref="RebalanceReadinessMaxWait" />.
+    ///     After its start, the node is ready only once the caches it receives partitions of are rebalanced, so that
+    ///     rolling restarts wait for the data to be back before stopping the next node; at most
+    ///     <see cref="RebalanceReadinessMaxWait" />. Later rebalances (e.g., another node left) do not make it unready.
     /// </summary>
     public bool ReadyWhenRebalanced { get; init; } = true;
 
@@ -80,4 +86,10 @@ internal sealed record IgniteServerRunnerOptions
     public bool? WalCompactionEnabled { get; init; }
     public WalMode? WalMode { get; init; }
     public DataPageEvictionMode? PageEvictionMode { get; init; }
+    public int? SqlQueryHistorySize { get; init; }
+
+    internal TimeSpan GetBaselineAutoAdjustTimeout(bool persistenceEnabled)
+    {
+        return BaselineAutoAdjustTimeout ?? (persistenceEnabled ? TimeSpan.FromMinutes(5) : TimeSpan.FromSeconds(30));
+    }
 }

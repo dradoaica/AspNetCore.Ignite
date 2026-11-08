@@ -14,7 +14,7 @@ internal sealed class IgniteNodeState
     /// <summary>True while the node is running (joined the topology), also before its cluster is activated.</summary>
     public bool IsStarted => runner?.Node != null;
 
-    /// <summary>True once the node is running and its cluster is active.</summary>
+    /// <summary>True once the node is running, its cluster is active and it has caught up after its start.</summary>
     public bool IsReady => runner?.IsReady == true;
 
     /// <summary>The caches the node is rebalancing (receiving partitions of).</summary>

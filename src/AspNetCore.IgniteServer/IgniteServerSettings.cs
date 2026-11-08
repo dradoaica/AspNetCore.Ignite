@@ -54,6 +54,14 @@ internal sealed partial class IgniteServerSettings
     [ConfigurationKeyName("SQL_SCHEMAS")]
     public List<string> SqlSchemas { get; set; } = [];
 
+    /// <summary>
+    ///     SQL queries each node keeps in SYS.SQL_QUERIES_HISTORY (Ignite's default when not set; 0 keeps none). The node
+    ///     that applies a new IGNITE_USER_PASSWORD keeps its ALTER USER statement there, password included, until it
+    ///     restarts.
+    /// </summary>
+    [ConfigurationKeyName("SQL_QUERY_HISTORY_SIZE")]
+    public int? SqlQueryHistorySize { get; set; }
+
     /// <summary>Java peer class loading (Zero Deployment): the Java counterpart of PEER_ASSEMBLY_LOADING.</summary>
     [ConfigurationKeyName("PEER_CLASS_LOADING_ENABLED")]
     public bool PeerClassLoadingEnabled { get; set; }
@@ -79,8 +87,9 @@ internal sealed partial class IgniteServerSettings
     [ConfigurationKeyName("ACTIVATION_MIN_SERVER_NODES")]
     public int ActivationMinServerNodes { get; set; } = 1;
 
+    /// <summary>When not set, 300 with persistence (a restarted node returns with its data) and 30 without.</summary>
     [ConfigurationKeyName("BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS")]
-    public int BaselineAutoAdjustTimeoutInSeconds { get; set; } = 30;
+    public int? BaselineAutoAdjustTimeoutInSeconds { get; set; }
 
     [ConfigurationKeyName("AUTO_RESET_LOST_PARTITIONS")]
     public bool AutoResetLostPartitions { get; set; } = true;
@@ -116,6 +125,8 @@ internal sealed partial class IgniteServerSettings
 
         if (BaselineAutoAdjustTimeoutInSeconds < 0)
             errors.Add("BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS must not be negative.");
+
+        if (SqlQueryHistorySize < 0) errors.Add("SQL_QUERY_HISTORY_SIZE must not be negative.");
 
         if (RebalanceReadinessMaxWaitInSeconds <= 0)
             errors.Add("REBALANCE_READINESS_MAX_WAIT_IN_SECONDS must be positive.");
@@ -199,7 +210,9 @@ internal sealed partial class IgniteServerSettings
             SqlSchemas = SqlSchemas,
             SpringConfigPath = springConfigPath,
             ActivationMinServerNodes = ActivationMinServerNodes,
-            BaselineAutoAdjustTimeout = TimeSpan.FromSeconds(BaselineAutoAdjustTimeoutInSeconds),
+            BaselineAutoAdjustTimeout = BaselineAutoAdjustTimeoutInSeconds is { } autoAdjustTimeout
+                ? TimeSpan.FromSeconds(autoAdjustTimeout)
+                : null,
             AutoResetLostPartitions = AutoResetLostPartitions,
             ReadyWhenRebalanced = ReadyWhenRebalanced,
             RebalanceReadinessMaxWait = TimeSpan.FromSeconds(RebalanceReadinessMaxWaitInSeconds),
@@ -229,6 +242,7 @@ internal sealed partial class IgniteServerSettings
             WalCompactionEnabled = WalCompactionEnabled,
             WalMode = WalMode == null ? null : ParseWalMode(WalMode),
             PageEvictionMode = PageEvictionMode == null ? null : ParsePageEvictionMode(PageEvictionMode),
+            SqlQueryHistorySize = SqlQueryHistorySize,
             SslKeyStoreFilePath = SslKeyStoreFilePath,
             SslKeyStorePassword = SslKeyStorePassword,
             SslTrustStoreFilePath = SslTrustStoreFilePath,

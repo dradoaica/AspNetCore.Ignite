@@ -159,4 +159,15 @@ public sealed class IgniteServerRunnerTests
 
         Assert.Equal(HealthStatus.Unhealthy, result.Status);
     }
+
+    [Fact]
+    public void DdlCacheName_IsStablePerNode()
+    {
+        var name = IgniteUserPasswordManager.GetDdlCacheName("ignite-0");
+
+        // nodes that apply the password at the same time do not share (and destroy) one cache
+        Assert.Equal(name, IgniteUserPasswordManager.GetDdlCacheName("ignite-0"));
+        Assert.NotEqual(name, IgniteUserPasswordManager.GetDdlCacheName("ignite-1"));
+        Assert.Matches("^alterUserSqlDdlCommand-[0-9a-f]{16}$", name);
+    }
 }

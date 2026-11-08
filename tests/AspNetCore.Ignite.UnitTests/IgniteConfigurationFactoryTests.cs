@@ -133,6 +133,20 @@ public sealed class IgniteConfigurationFactoryTests
     }
 
     [Fact]
+    public void SqlQueryHistorySize_AppliesOnlyWhenSet()
+    {
+        Assert.Equal(
+            IgniteConfiguration.DefaultSqlQueryHistorySize,
+            IgniteConfigurationFactory.Create(new IgniteServerRunnerOptions(), Logger.None).SqlQueryHistorySize
+        );
+        Assert.Equal(
+            0,
+            IgniteConfigurationFactory.Create(new IgniteServerRunnerOptions { SqlQueryHistorySize = 0 }, Logger.None)
+                .SqlQueryHistorySize
+        );
+    }
+
+    [Fact]
     public void DefaultConfiguration_LogsSegmentation()
     {
         Assert.Contains(EventType.NodeSegmented, IgniteConfigurationFactory.CreateDefault().IncludedEventTypes);

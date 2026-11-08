@@ -4,7 +4,10 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace AspNetCore.IgniteServer.Management;
 
-/// <summary>Ready when the node is running and its cluster is active (not while starting, restarting or stopping).</summary>
+/// <summary>
+///     Ready when the node is running, its cluster is active and it has caught up after its start (not while starting,
+///     receiving its data, restarting or stopping).
+/// </summary>
 internal sealed class IgniteNodeHealthCheck(IgniteNodeState nodeState) : IHealthCheck
 {
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context,
@@ -14,7 +17,7 @@ internal sealed class IgniteNodeHealthCheck(IgniteNodeState nodeState) : IHealth
             nodeState.IsReady
                 ? HealthCheckResult.Healthy("The Ignite node is running and its cluster is active.")
                 : new HealthCheckResult(context.Registration.FailureStatus,
-                    "The Ignite node is not ready (starting, restarting or stopping).")
+                    "The Ignite node is not ready (starting, receiving its data, restarting or stopping).")
         );
     }
 }

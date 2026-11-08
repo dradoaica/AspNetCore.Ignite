@@ -10,6 +10,11 @@ a StatefulSet. A deployment should:
   `GRACEFUL_STOP_TIMEOUT_IN_SECONDS` (e.g., 240) below `SHUTDOWN_TIMEOUT_IN_SECONDS` (e.g., 270) below
   `terminationGracePeriodSeconds` (e.g., 300); together with `READY_WHEN_REBALANCED`, a rolling restart moves on only
   once the restarted node holds its data again,
+* restart a pod within `BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS` (300 s with persistence): a node away longer leaves
+  the baseline, and its data is moved to the others and back once it returns; a new pod (scale-out) is ready once the
+  auto-adjust added it to the baseline and it received its data,
+* spread the pods across Kubernetes nodes (a soft `topologySpreadConstraints` by `kubernetes.io/hostname`), so that a
+  Kubernetes node failure takes as few Ignite nodes, and copies of the same partitions, as possible,
 * add a PodDisruptionBudget (`maxUnavailable: 1`) so that drains evict one node at a time,
 * give `helm upgrade --wait` a `--timeout` above its 5 minute default: a rolling restart waits for each node to
   rebalance, up to `REBALANCE_READINESS_MAX_WAIT_IN_SECONDS` per node (e.g., `--timeout 60m` for 5 nodes and the

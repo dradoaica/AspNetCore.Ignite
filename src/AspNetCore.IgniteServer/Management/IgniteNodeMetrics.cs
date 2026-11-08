@@ -36,7 +36,7 @@ internal sealed class IgniteNodeMetrics : IDisposable
         this.perCache = perCache;
         this.timeProvider = timeProvider ?? TimeProvider.System;
         meter.CreateObservableGauge("node_ready", () => nodeState.IsReady ? 1 : 0,
-            description: "1 when the node is running, its cluster is active and it is not rebalancing.");
+            description: "1 when the node is running, its cluster is active and it has caught up after its start.");
         meter.CreateObservableGauge("node_rebalancing_caches", () => nodeState.RebalancingCaches.Count,
             description: "Caches this node is rebalancing (receiving partitions of).");
 

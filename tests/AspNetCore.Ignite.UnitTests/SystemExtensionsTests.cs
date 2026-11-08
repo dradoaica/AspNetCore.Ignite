@@ -26,4 +26,15 @@ public sealed class SystemExtensionsTests
         // open generic parameters have no FullName
         Assert.Equal("T", typeof(List<>).GetGenericArguments()[0].FullNameWithoutAssemblyInfo());
     }
+
+    [Fact]
+    public void FullNameWithoutAssemblyInfo_EveryTypeArgument()
+    {
+        Assert.Equal(
+            "System.Collections.Generic.Dictionary`2[[System.String, System.Private.CoreLib],[System.Int32, System.Private.CoreLib]]",
+            typeof(Dictionary<string, int>).FullNameWithoutAssemblyInfo()
+        );
+        Assert.DoesNotContain("Version=", typeof(List<Dictionary<string, int>>).FullNameWithoutAssemblyInfo());
+        Assert.DoesNotContain("Version=", typeof(List<int>[]).FullNameWithoutAssemblyInfo());
+    }
 }

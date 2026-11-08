@@ -40,8 +40,9 @@ ENV Serilog__WriteTo__0__Args__formatter="Serilog.Formatting.Compact.RenderedCom
 WORKDIR /app
 COPY --from=build /app/publish .
 
-# work/ (persistence, WAL) is pre-created so that volumes mounted there are writable by the non-root user
-RUN mkdir -p /app/work && chown -R 1001:0 /app && chmod -R g=u /app
+# work/ (persistence, WAL) is pre-created so that volumes mounted there are writable by the non-root user (and its group
+# 0, for arbitrary user ids); the application itself stays read-only for it
+RUN mkdir -p /app/work && chown 1001:0 /app/work && chmod g=u /app/work
 
 USER 1001
 
