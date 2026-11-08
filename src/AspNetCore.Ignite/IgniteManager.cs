@@ -1,9 +1,3 @@
-using System;
-using System.IO;
-using System.Linq;
-using System.Net.Sockets;
-using System.Threading;
-using System.Threading.Tasks;
 using Apache.Ignite.Core.Client;
 using Apache.Ignite.Core.Client.Cache;
 using AspNetCore.Ignite.Abstractions;
@@ -14,6 +8,12 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
+using System;
+using System.IO;
+using System.Linq;
+using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace AspNetCore.Ignite;
 
@@ -30,17 +30,16 @@ public class IgniteManager : IIgniteManager, IDisposable
     private IIgniteClient? igniteClient;
 
     /// <summary>Configured by the flat <c>ASPNETCORE_IGNITE_*</c> keys.</summary>
-    public IgniteManager(IConfiguration configuration) : this(CreateOptions(configuration))
+    public IgniteManager(IConfiguration configuration)
+        : this(CreateOptions(configuration))
     {
     }
 
     /// <summary>Configured by <paramref name="options" />.</summary>
     /// <param name="options">The options.</param>
     /// <param name="loggerFactory">Where the client logs (category <c>Apache.Ignite</c>); none when null.</param>
-    public IgniteManager(IOptions<IgniteClientOptions> options, ILoggerFactory? loggerFactory = null) : this(
-        options.Value,
-        loggerFactory
-    )
+    public IgniteManager(IOptions<IgniteClientOptions> options, ILoggerFactory? loggerFactory = null)
+        : this(options.Value, loggerFactory)
     {
     }
 
@@ -69,27 +68,21 @@ public class IgniteManager : IIgniteManager, IDisposable
     public IIgniteClient Client => GetIgniteClient();
 
     /// <inheritdoc />
-    public Task<IIgniteClient> GetClientAsync(CancellationToken cancellationToken = default)
-    {
+    public Task<IIgniteClient> GetClientAsync(CancellationToken cancellationToken = default) =>
         // cancelling stops this caller's wait, not the shared connection attempt
-        return GetOrStartConnecting().WaitAsync(cancellationToken);
-    }
+        GetOrStartConnecting().WaitAsync(cancellationToken);
 
     /// <inheritdoc />
     public ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
         string cacheName,
         Action<CacheClientConfiguration>? extendConfigurationAction = null
-    )
-    {
-        return operationRetryPolicy.Execute(() =>
-            CacheFactory.GetOrCreateCacheClient<TKey, TData>(
-                GetIgniteClient(),
-                cacheName,
-                extendConfigurationAction,
-                options.Cache
-            )
-        );
-    }
+    ) => operationRetryPolicy.Execute(() => CacheFactory.GetOrCreateCacheClient<TKey, TData>(
+            GetIgniteClient(),
+            cacheName,
+            extendConfigurationAction,
+            options.Cache
+        )
+    );
 
     /// <inheritdoc />
     public void DestroyCache(string cacheName)
@@ -110,7 +103,10 @@ public class IgniteManager : IIgniteManager, IDisposable
     {
         lock (syncRoot)
         {
-            if (disposed) return;
+            if (disposed)
+            {
+                return;
+            }
 
             if (disposing)
             {
@@ -124,13 +120,10 @@ public class IgniteManager : IIgniteManager, IDisposable
     }
 
     /// <summary>
-    ///     Connects on first use (not during DI resolution); concurrent callers share one connection attempt, and a failed
-    ///     attempt is retried by the next call.
+    ///     Connects on first use (not during DI resolution); concurrent callers share one connection attempt, and a
+    ///     failed attempt is retried by the next call.
     /// </summary>
-    private IIgniteClient GetIgniteClient()
-    {
-        return GetOrStartConnecting().GetAwaiter().GetResult();
-    }
+    private IIgniteClient GetIgniteClient() => GetOrStartConnecting().GetAwaiter().GetResult();
 
     private Task<IIgniteClient> GetOrStartConnecting()
     {
@@ -138,11 +131,16 @@ public class IgniteManager : IIgniteManager, IDisposable
         {
             ObjectDisposedException.ThrowIf(disposed, this);
 
-            if (igniteClient != null) return Task.FromResult(igniteClient);
+            if (igniteClient != null)
+            {
+                return Task.FromResult(igniteClient);
+            }
 
-            if (connecting is not { IsFaulted: false, IsCanceled: false })
+            if (connecting is not { IsFaulted: false, IsCanceled: false, })
                 // one background thread runs the connection retries, however many callers wait for them
+            {
                 connecting = Task.Run(Connect);
+            }
 
             return connecting;
         }
@@ -172,24 +170,18 @@ public class IgniteManager : IIgniteManager, IDisposable
         return options;
     }
 
-    private static RetryPolicy CreateRetryPolicy(int retryCount)
-    {
-        return Policy.Handle<Exception>(IsTransient)
-            .WaitAndRetry(Math.Max(0, retryCount), retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
-    }
+    private static RetryPolicy CreateRetryPolicy(int retryCount) => Policy.Handle<Exception>(IsTransient)
+        .WaitAndRetry(Math.Max(0, retryCount), retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
 
-    internal static bool IsTransient(Exception ex)
+    internal static bool IsTransient(Exception ex) => ex switch
     {
-        return ex switch
-        {
-            // a failed connection (with its socket, IO or timeout exception), or a cluster that is not active (yet); the
-            // other answers of the server (e.g., an invalid cache configuration) do not change on retry
-            IgniteClientException { StatusCode: ClientStatusCode.InvalidNodeState } => true,
-            IgniteClientException { InnerException: { } inner } => IsTransient(inner),
-            IgniteClientException => false,
-            AggregateException aex => aex.InnerExceptions.Count > 0 && aex.InnerExceptions.All(IsTransient),
-            SocketException or IOException or TimeoutException => true,
-            _ => false
-        };
-    }
+        // a failed connection (with its socket, IO or timeout exception), or a cluster that is not active (yet); the
+        // other answers of the server (e.g., an invalid cache configuration) do not change on retry
+        IgniteClientException { StatusCode: ClientStatusCode.InvalidNodeState, } => true,
+        IgniteClientException { InnerException: { } inner, } => IsTransient(inner),
+        IgniteClientException => false,
+        AggregateException aex => aex.InnerExceptions.Count > 0 && aex.InnerExceptions.All(IsTransient),
+        SocketException or IOException or TimeoutException => true,
+        _ => false,
+    };
 }

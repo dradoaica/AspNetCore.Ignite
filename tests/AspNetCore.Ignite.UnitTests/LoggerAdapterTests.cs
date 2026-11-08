@@ -20,8 +20,8 @@ public sealed class LoggerAdapterTests
         SerilogIgniteLogger igniteLogger = new(logger);
 
         igniteLogger.Log(IgniteLogLevel.Warn, "a {not a template}", null, null, "org.apache.ignite.X", "native", null);
-        igniteLogger.Log(IgniteLogLevel.Info, "value {0}", ["x"], null, null, null, null);
-        igniteLogger.Log(IgniteLogLevel.Info, "bad {format} {0}", ["y"], null, null, null, null);
+        igniteLogger.Log(IgniteLogLevel.Info, "value {0}", ["x",], null, null, null, null);
+        igniteLogger.Log(IgniteLogLevel.Info, "bad {format} {0}", ["y",], null, null, null, null);
         igniteLogger.Log(IgniteLogLevel.Debug, "debug", null, null, null, null, null);
 
         Assert.Equal(3, sink.Events.Count);
@@ -40,7 +40,7 @@ public sealed class LoggerAdapterTests
         CollectingLogger logger = new();
         IgniteLoggerAdapter igniteLogger = new(logger);
 
-        igniteLogger.Log(IgniteLogLevel.Error, "failed {0}", [42], null, "Client", null, null);
+        igniteLogger.Log(IgniteLogLevel.Error, "failed {0}", [42,], null, "Client", null, null);
 
         var (level, message) = Assert.Single(logger.Entries);
         Assert.Equal(LogLevel.Error, level);
@@ -52,25 +52,17 @@ public sealed class LoggerAdapterTests
     {
         public List<LogEvent> Events { get; } = [];
 
-        public void Emit(LogEvent logEvent)
-        {
-            Events.Add(logEvent);
-        }
+        public void Emit(LogEvent logEvent) => Events.Add(logEvent);
     }
 
     private sealed class CollectingLogger : ILogger
     {
         public List<(LogLevel Level, string Message)> Entries { get; } = [];
 
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull
-        {
-            return null;
-        }
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
 
-        public bool IsEnabled(LogLevel logLevel)
-        {
-            return logLevel >= LogLevel.Information;
-        }
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= LogLevel.Information;
 
         public void Log<TState>(
             LogLevel logLevel,
@@ -78,9 +70,6 @@ public sealed class LoggerAdapterTests
             TState state,
             Exception? exception,
             Func<TState, Exception?, string> formatter
-        )
-        {
-            Entries.Add((logLevel, formatter(state, exception)));
-        }
+        ) => Entries.Add((logLevel, formatter(state, exception)));
     }
 }

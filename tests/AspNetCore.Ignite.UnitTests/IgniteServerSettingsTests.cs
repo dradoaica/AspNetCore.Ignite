@@ -1,4 +1,3 @@
-using System.Xml.Linq;
 using Apache.Ignite.Core.Configuration;
 using Apache.Ignite.Core.Discovery.Tcp;
 using Apache.Ignite.Core.Discovery.Tcp.Static;
@@ -6,16 +5,15 @@ using AspNetCore.IgniteServer;
 using AspNetCore.IgniteServer.Utils;
 using Microsoft.Extensions.Configuration;
 using Serilog.Core;
+using System.Xml.Linq;
 using Xunit;
 
 namespace AspNetCore.Ignite.UnitTests;
 
 public sealed class IgniteServerSettingsTests
 {
-    private static IgniteServerSettings Load(Dictionary<string, string?> values)
-    {
-        return IgniteServerSettings.Load(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
-    }
+    private static IgniteServerSettings Load(Dictionary<string, string?> values) =>
+        IgniteServerSettings.Load(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
 
     [Fact]
     public void Load_Defaults_AreValid()
@@ -41,25 +39,28 @@ public sealed class IgniteServerSettingsTests
                 ["ENABLE_AUTHENTICATION"] = "True",
                 ["CLUSTER_ENDPOINTS:0"] = "a:47500",
                 ["CLUSTER_ENDPOINTS:1"] = "b:47500",
-                ["BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS"] = "5"
+                ["BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS"] = "5",
             }
         );
 
         Assert.Equal(256, settings.OffHeapMemory);
         Assert.Equal(47600, settings.SpiPort);
         Assert.True(settings.EnableAuthentication);
-        Assert.Equal(["a:47500", "b:47500"], settings.ClusterEndpoints);
+        Assert.Equal(["a:47500", "b:47500",], settings.ClusterEndpoints);
         Assert.Equal(TimeSpan.FromSeconds(5), settings.ToRunnerOptions("spring.xml").BaselineAutoAdjustTimeout);
     }
 
     [Fact]
-    public void Load_ClusterEndpoints_CommaSeparated()
-    {
-        Assert.Equal(
-            ["a:47500", "b:47500"],
-            Load(new Dictionary<string, string?> { ["CLUSTER_ENDPOINTS"] = "a:47500, b:47500" }).ClusterEndpoints
-        );
-    }
+    public void Load_ClusterEndpoints_CommaSeparated() => Assert.Equal(
+        ["a:47500", "b:47500",],
+        Load(
+                new Dictionary<string, string?>
+                {
+                    ["CLUSTER_ENDPOINTS"] = "a:47500, b:47500",
+                }
+            )
+            .ClusterEndpoints
+    );
 
     [Fact]
     public void Validate_ReportsInvalidSettings()
@@ -70,7 +71,7 @@ public sealed class IgniteServerSettingsTests
                     ["DEFAULT_ON_HEAP_MEMORY"] = "0",
                     ["SPI_PORT"] = "70000",
                     ["ACTIVATION_MIN_SERVER_NODES"] = "0",
-                    ["USE_CLIENT_SSL"] = "true"
+                    ["USE_CLIENT_SSL"] = "true",
                 }
             )
             .Validate();
@@ -87,23 +88,35 @@ public sealed class IgniteServerSettingsTests
     [InlineData(true)]
     public void SpringConfigPlaceholders_CoverTheTemplates_AndRestIsOffByDefault(bool restEnabled)
     {
-        var settings = Load(new Dictionary<string, string?> { ["REST_ENABLED"] = restEnabled ? "true" : null });
+        var settings = Load(
+            new Dictionary<string, string?>
+            {
+                ["REST_ENABLED"] = restEnabled ? "true" : null,
+            }
+        );
         var configDirectory = Path.Combine(AppContext.BaseDirectory, "config");
 
-        foreach (var template in new[] { "spring-config.xml", "spring-config-client-with-ssl.xml" })
+        foreach (var template in new[]
+                 {
+                     "spring-config.xml", "spring-config-client-with-ssl.xml",
+                 })
         {
             var rendered = SpringConfigRenderer.Render(
                 File.ReadAllText(Path.Combine(configDirectory, template)),
                 settings.ToSpringConfigPlaceholders(),
                 settings.ToSpringConfigXmlPlaceholders()
             );
-            foreach (var placeholder in settings.ToSpringConfigPlaceholders().Keys
-                         .Concat(settings.ToSpringConfigXmlPlaceholders().Keys))
+            foreach (var placeholder in settings.ToSpringConfigPlaceholders()
+                         .Keys.Concat(settings.ToSpringConfigXmlPlaceholders().Keys))
+            {
                 Assert.DoesNotContain(placeholder, rendered);
+            }
 
             // no connector configuration: neither the REST API nor the TCP binary protocol
-            Assert.Equal(!restEnabled,
-                rendered.Contains("<property name=\"connectorConfiguration\"><null/></property>"));
+            Assert.Equal(
+                !restEnabled,
+                rendered.Contains("<property name=\"connectorConfiguration\"><null/></property>")
+            );
             Assert.DoesNotContain("OpenCensus", rendered);
             XDocument.Parse(rendered);
         }
@@ -135,7 +148,7 @@ public sealed class IgniteServerSettingsTests
                 new Dictionary<string, string?>
                 {
                     ["GRACEFUL_STOP_TIMEOUT_IN_SECONDS"] = gracefulStopTimeout,
-                    ["SHUTDOWN_TIMEOUT_IN_SECONDS"] = shutdownTimeout
+                    ["SHUTDOWN_TIMEOUT_IN_SECONDS"] = shutdownTimeout,
                 }
             );
         }
@@ -145,8 +158,10 @@ public sealed class IgniteServerSettingsTests
             return;
         }
 
-        Assert.Contains(settings.Validate(),
-            error => error.StartsWith("GRACEFUL_STOP_TIMEOUT_IN_SECONDS", StringComparison.Ordinal));
+        Assert.Contains(
+            settings.Validate(),
+            error => error.StartsWith("GRACEFUL_STOP_TIMEOUT_IN_SECONDS", StringComparison.Ordinal)
+        );
     }
 
     [Fact]
@@ -163,8 +178,13 @@ public sealed class IgniteServerSettingsTests
         using IgniteServerRunner withEndpoints = new(new IgniteServerRunnerOptions());
         IgniteServerHostedService.ApplySettings(
             withEndpoints,
-            Load(new Dictionary<string, string?>
-                { ["CLUSTER_ENDPOINTS:0"] = "a:47500", ["USE_TCP_DISCOVERY_STATIC_IP_FINDER"] = "true" }),
+            Load(
+                new Dictionary<string, string?>
+                {
+                    ["CLUSTER_ENDPOINTS:0"] = "a:47500",
+                    ["USE_TCP_DISCOVERY_STATIC_IP_FINDER"] = "true",
+                }
+            ),
             GetLocalIpAddress
         );
         Assert.Equal(0, resolved);
@@ -172,28 +192,29 @@ public sealed class IgniteServerSettingsTests
         using IgniteServerRunner withStaticIpFinder = new(new IgniteServerRunnerOptions());
         IgniteServerHostedService.ApplySettings(
             withStaticIpFinder,
-            Load(new Dictionary<string, string?>
-                { ["USE_TCP_DISCOVERY_STATIC_IP_FINDER"] = "true", ["PERSISTENCE_ENABLED"] = "true" }),
+            Load(
+                new Dictionary<string, string?>
+                {
+                    ["USE_TCP_DISCOVERY_STATIC_IP_FINDER"] = "true",
+                    ["PERSISTENCE_ENABLED"] = "true",
+                }
+            ),
             GetLocalIpAddress
         );
         Assert.Equal(1, resolved);
         var spi = Assert.IsType<TcpDiscoverySpi>(withStaticIpFinder.Configuration.DiscoverySpi);
-        Assert.Equal(
-            ["10.1.2.3:47500"],
-            Assert.IsType<TcpDiscoveryStaticIpFinder>(spi.IpFinder).Endpoints
+        Assert.Equal(["10.1.2.3:47500",], Assert.IsType<TcpDiscoveryStaticIpFinder>(spi.IpFinder).Endpoints);
+        Assert.True(
+            withStaticIpFinder.Configuration.DataStorageConfiguration.DefaultDataRegionConfiguration.PersistenceEnabled
         );
-        Assert.True(withStaticIpFinder.Configuration.DataStorageConfiguration.DefaultDataRegionConfiguration
-            .PersistenceEnabled);
     }
 
     [Theory]
     [InlineData("LOG_ONLY", WalMode.LogOnly)]
     [InlineData("logonly", WalMode.LogOnly)]
     [InlineData("Fsync", WalMode.Fsync)]
-    public void WalMode_AcceptsBothNamingStyles(string value, WalMode expected)
-    {
+    public void WalMode_AcceptsBothNamingStyles(string value, WalMode expected) =>
         Assert.Equal(expected, IgniteServerSettings.ParseWalMode(value));
-    }
 
     [Fact]
     public void Validate_JavaChartSettings()
@@ -205,7 +226,7 @@ public sealed class IgniteServerSettingsTests
                     ["JVM_G1_HEAP_REGION_MB"] = "3",
                     ["PUBLIC_THREAD_POOL_SIZE"] = "0",
                     ["CLIENT_FAILURE_DETECTION_TIMEOUT_MS"] = "30000",
-                    ["METRICS_UPDATE_FREQUENCY_IN_SECONDS"] = "60"
+                    ["METRICS_UPDATE_FREQUENCY_IN_SECONDS"] = "60",
                 }
             )
             .Validate();
@@ -213,8 +234,10 @@ public sealed class IgniteServerSettingsTests
         Assert.Contains(errors, error => error.StartsWith("WAL_MODE", StringComparison.Ordinal));
         Assert.Contains(errors, error => error.StartsWith("JVM_G1_HEAP_REGION_MB", StringComparison.Ordinal));
         Assert.Contains(errors, error => error.StartsWith("PUBLIC_THREAD_POOL_SIZE", StringComparison.Ordinal));
-        Assert.Contains(errors,
-            error => error.StartsWith("CLIENT_FAILURE_DETECTION_TIMEOUT_MS", StringComparison.Ordinal));
+        Assert.Contains(
+            errors,
+            error => error.StartsWith("CLIENT_FAILURE_DETECTION_TIMEOUT_MS", StringComparison.Ordinal)
+        );
     }
 
     [Fact]
@@ -227,7 +250,7 @@ public sealed class IgniteServerSettingsTests
                 ["SSL_CLIENT_AUTH"] = "false",
                 ["SSL_KEY_STORE_FILE_PATH"] = "/certs/server.p12",
                 ["SSL_TRUST_STORE_FILE_PATH"] = "/certs/trust.p12",
-                ["SSL_KEY_STORE_TYPE"] = "PKCS12"
+                ["SSL_KEY_STORE_TYPE"] = "PKCS12",
             }
         );
 
@@ -256,7 +279,13 @@ public sealed class IgniteServerSettingsTests
         Assert.True(options.ReadyWhenRebalanced);
         Assert.Equal(TimeSpan.FromMinutes(10), options.RebalanceReadinessMaxWait);
         Assert.Contains(
-            Load(new Dictionary<string, string?> { ["REBALANCE_READINESS_MAX_WAIT_IN_SECONDS"] = "0" }).Validate(),
+            Load(
+                    new Dictionary<string, string?>
+                    {
+                        ["REBALANCE_READINESS_MAX_WAIT_IN_SECONDS"] = "0",
+                    }
+                )
+                .Validate(),
             error => error.StartsWith("REBALANCE_READINESS_MAX_WAIT_IN_SECONDS", StringComparison.Ordinal)
         );
     }
@@ -279,7 +308,7 @@ public sealed class IgniteServerSettingsTests
                 {
                     ["SPRING_EXTRA_BEANS_FILE"] = beans,
                     ["SPRING_EXTRA_PROPERTIES_FILE"] = properties,
-                    ["PEER_CLASS_LOADING_ENABLED"] = "true"
+                    ["PEER_CLASS_LOADING_ENABLED"] = "true",
                 }
             );
 
@@ -293,13 +322,19 @@ public sealed class IgniteServerSettingsTests
             );
             XNamespace ns = "http://www.springframework.org/schema/beans";
             var root = rendered.Root!;
-            var igniteBean = root.Elements(ns + "bean").Single(bean =>
-                (string?)bean.Attribute("class") == "org.apache.ignite.configuration.IgniteConfiguration");
+            var igniteBean = root.Elements(ns + "bean")
+                .Single(bean =>
+                    (string?)bean.Attribute("class") == "org.apache.ignite.configuration.IgniteConfiguration"
+                );
             Assert.Contains(root.Elements(ns + "bean"), bean => (string?)bean.Attribute("id") == "extra");
-            Assert.Contains(igniteBean.Elements(ns + "property"),
-                property => (string?)property.Attribute("name") == "cacheConfiguration");
-            Assert.Contains(igniteBean.Elements(ns + "property"),
-                property => (string?)property.Attribute("name") == "peerClassLoadingEnabled");
+            Assert.Contains(
+                igniteBean.Elements(ns + "property"),
+                property => (string?)property.Attribute("name") == "cacheConfiguration"
+            );
+            Assert.Contains(
+                igniteBean.Elements(ns + "property"),
+                property => (string?)property.Attribute("name") == "peerClassLoadingEnabled"
+            );
         }
         finally
         {
@@ -308,14 +343,16 @@ public sealed class IgniteServerSettingsTests
     }
 
     [Fact]
-    public void SpringFragments_MustExist()
-    {
-        Assert.Contains(
-            Load(new Dictionary<string, string?> { ["SPRING_EXTRA_PROPERTIES_FILE"] = "/nonexistent/properties.xml" })
-                .Validate(),
-            error => error.StartsWith("SPRING_EXTRA_PROPERTIES_FILE", StringComparison.Ordinal)
-        );
-    }
+    public void SpringFragments_MustExist() => Assert.Contains(
+        Load(
+                new Dictionary<string, string?>
+                {
+                    ["SPRING_EXTRA_PROPERTIES_FILE"] = "/nonexistent/properties.xml",
+                }
+            )
+            .Validate(),
+        error => error.StartsWith("SPRING_EXTRA_PROPERTIES_FILE", StringComparison.Ordinal)
+    );
 
     [Fact]
     public void MalformedSpringConfiguration_FailsWithAClearMessage()
@@ -339,23 +376,47 @@ public sealed class IgniteServerSettingsTests
     [InlineData("RANDOM_2_LRU", DataPageEvictionMode.Random2Lru)]
     [InlineData("randomlru", DataPageEvictionMode.RandomLru)]
     [InlineData("Disabled", DataPageEvictionMode.Disabled)]
-    public void PageEvictionMode_AcceptsBothNamingStyles(string value, DataPageEvictionMode expected)
-    {
-        Assert.Equal(expected, IgniteServerSettings.ParsePageEvictionMode(value));
-    }
+    public void PageEvictionMode_AcceptsBothNamingStyles(string value, DataPageEvictionMode expected) => Assert.Equal(
+        expected,
+        IgniteServerSettings.ParsePageEvictionMode(value)
+    );
 
     [Fact]
     public void SqlSchemas_ListOrCommaSeparated()
     {
-        Assert.Equal(["A", "B"], Load(new Dictionary<string, string?> { ["SQL_SCHEMAS"] = "A, B" }).SqlSchemas);
-        Assert.Equal(["C"], Load(new Dictionary<string, string?> { ["SQL_SCHEMAS:0"] = "C" }).SqlSchemas);
+        Assert.Equal(
+            ["A", "B",],
+            Load(
+                    new Dictionary<string, string?>
+                    {
+                        ["SQL_SCHEMAS"] = "A, B",
+                    }
+                )
+                .SqlSchemas
+        );
+        Assert.Equal(
+            ["C",],
+            Load(
+                    new Dictionary<string, string?>
+                    {
+                        ["SQL_SCHEMAS:0"] = "C",
+                    }
+                )
+                .SqlSchemas
+        );
 
         var configuration = IgniteConfigurationFactory.Create(
-            Load(new Dictionary<string, string?> { ["SQL_SCHEMAS"] = "A, B" }).ToRunnerOptions("spring.xml"),
+            Load(
+                    new Dictionary<string, string?>
+                    {
+                        ["SQL_SCHEMAS"] = "A, B",
+                    }
+                )
+                .ToRunnerOptions("spring.xml"),
             Logger.None
         );
 
-        Assert.Equal(["A", "B"], configuration.SqlSchemas);
+        Assert.Equal(["A", "B",], configuration.SqlSchemas);
     }
 
     [Fact]
@@ -369,12 +430,22 @@ public sealed class IgniteServerSettingsTests
         Assert.Equal(TimeSpan.FromSeconds(30), options.GetBaselineAutoAdjustTimeout(false));
         // an empty value (the Helm chart's default) is not set
         Assert.Null(
-            Load(new Dictionary<string, string?> { ["BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS"] = "" })
+            Load(
+                    new Dictionary<string, string?>
+                    {
+                        ["BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS"] = "",
+                    }
+                )
                 .BaselineAutoAdjustTimeoutInSeconds
         );
         Assert.Equal(
             TimeSpan.Zero,
-            Load(new Dictionary<string, string?> { ["BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS"] = "0" })
+            Load(
+                    new Dictionary<string, string?>
+                    {
+                        ["BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS"] = "0",
+                    }
+                )
                 .ToRunnerOptions("spring.xml")
                 .GetBaselineAutoAdjustTimeout(true)
         );
@@ -386,12 +457,23 @@ public sealed class IgniteServerSettingsTests
         Assert.Null(Load([]).ToRunnerOptions("spring.xml").SqlQueryHistorySize);
         Assert.Equal(
             0,
-            Load(new Dictionary<string, string?> { ["SQL_QUERY_HISTORY_SIZE"] = "0" })
+            Load(
+                    new Dictionary<string, string?>
+                    {
+                        ["SQL_QUERY_HISTORY_SIZE"] = "0",
+                    }
+                )
                 .ToRunnerOptions("spring.xml")
                 .SqlQueryHistorySize
         );
         Assert.Contains(
-            Load(new Dictionary<string, string?> { ["SQL_QUERY_HISTORY_SIZE"] = "-1" }).Validate(),
+            Load(
+                    new Dictionary<string, string?>
+                    {
+                        ["SQL_QUERY_HISTORY_SIZE"] = "-1",
+                    }
+                )
+                .Validate(),
             error => error.StartsWith("SQL_QUERY_HISTORY_SIZE", StringComparison.Ordinal)
         );
     }

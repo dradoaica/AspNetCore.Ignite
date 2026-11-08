@@ -1,11 +1,11 @@
-using System.Diagnostics;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
 using Apache.Ignite.Core.Cache.Query;
 using Apache.Ignite.Core.Client.Cache;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
+using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using Xunit;
 
 namespace AspNetCore.Ignite.IntegrationTests;
@@ -14,7 +14,11 @@ namespace AspNetCore.Ignite.IntegrationTests;
 public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
 {
     private const string DockerUnavailable = "Docker is not available.";
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
+
+    private static readonly HttpClient Http = new()
+    {
+        Timeout = TimeSpan.FromSeconds(10),
+    };
 
     [SkippableFact]
     public async Task ManagementEndpoints_ReportHealthAndMetrics()
@@ -56,8 +60,12 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
         Assert.Contains("\"successStatus\":0", version);
 
         // ...and nothing listens on its port by default
-        var (exitCode, _, _) = await ExecAsync(fixture.Node, "bash", "-c",
-            $"exec 3<>/dev/tcp/127.0.0.1/{IgniteServerFixture.RestPort}");
+        var (exitCode, _, _) = await ExecAsync(
+            fixture.Node,
+            "bash",
+            "-c",
+            $"exec 3<>/dev/tcp/127.0.0.1/{IgniteServerFixture.RestPort}"
+        );
         Assert.NotEqual(0, exitCode);
     }
 
@@ -80,9 +88,9 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
     }
 
     /// <summary>
-    ///     The configuration sections of the Ignite chart that the chart renders (SPRING_EXTRA_PROPERTIES_FILE), checked on
-    ///     the node through what it reports to clients (attributes, metrics, caches), with SQL_SCHEMAS and Java peer
-    ///     class loading.
+    ///     The configuration sections of the Ignite chart that the chart renders (SPRING_EXTRA_PROPERTIES_FILE), checked
+    ///     on the node through what it reports to clients (attributes, metrics, caches), with SQL_SCHEMAS and Java peer class
+    ///     loading.
     /// </summary>
     [SkippableFact]
     public async Task SpringConfigurationSections_ConfigureTheNode()
@@ -136,15 +144,21 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
             .Build();
         await node.StartAsync();
 
-        using var igniteClient =
-            CacheFactory.ConnectAsClient(
-                IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(node)));
+        using var igniteClient = CacheFactory.ConnectAsClient(
+            IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(node))
+        );
         var attributes = igniteClient.GetCluster().ForServers().GetNodes().Single().Attributes;
         var sql = igniteClient.GetCache<int, int>("fromSpring");
 
         IList<IList<object>> Query(string text)
         {
-            return sql.Query(new SqlFieldsQuery(text) { Schema = "PUBLIC" }).GetAll();
+            return sql.Query(
+                    new SqlFieldsQuery(text)
+                    {
+                        Schema = "PUBLIC",
+                    }
+                )
+                .GetAll();
         }
 
         Assert.Contains("fromSpring", igniteClient.GetCacheNames());
@@ -156,13 +170,19 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
         foreach (var spi in new[]
                  {
                      "fifoqueue.FifoQueueCollisionSpi", "deployment.local.LocalDeploymentSpi",
-                     "loadbalancing.roundrobin.RoundRobinLoadBalancingSpi"
+                     "loadbalancing.roundrobin.RoundRobinLoadBalancingSpi",
                  })
-            Assert.Contains(attributes.Values,
-                value => value is string text && text.EndsWith(spi, StringComparison.Ordinal));
+        {
+            Assert.Contains(
+                attributes.Values,
+                value => value is string text && text.EndsWith(spi, StringComparison.Ordinal)
+            );
+        }
 
-        Assert.Contains(Query("SELECT NAME, VALUE FROM SYS.METRICS WHERE NAME = 'threadPools.myPool.CorePoolSize'"),
-            row => Convert.ToInt32(row[1]) == 3);
+        Assert.Contains(
+            Query("SELECT NAME, VALUE FROM SYS.METRICS WHERE NAME = 'threadPools.myPool.CorePoolSize'"),
+            row => Convert.ToInt32(row[1]) == 3
+        );
         var schemas = Query("SELECT SCHEMA_NAME FROM SYS.SCHEMAS").Select(row => (string)row[0]).ToList();
         Assert.Contains("MY_SCHEMA", schemas);
         Assert.Contains("OTHER_SCHEMA", schemas);
@@ -174,10 +194,11 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
         Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
 
         // with the node's own credentials (IGNITE_USER_PASSWORD, quotes and all)
-        var result = await fixture.Node.ExecAsync(["control.sh", "--baseline"]);
+        var result = await fixture.Node.ExecAsync(["control.sh", "--baseline",]);
         // the given ones win
         var wrong = await fixture.Node.ExecAsync(
-            ["control.sh", "--user", IgniteServerFixture.UserName, "--password", "wrong", "--state"]);
+            ["control.sh", "--user", IgniteServerFixture.UserName, "--password", "wrong", "--state",]
+        );
 
         Assert.True(result.ExitCode == 0, result.Stdout + result.Stderr);
         Assert.Contains("Cluster state: ACTIVE", result.Stdout);
@@ -221,13 +242,21 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
     {
         Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
         using var igniteClient = CacheFactory.ConnectAsClient(
-            IgniteServerFixture.ClientConfiguration(fixture.Endpoint, IgniteServerFixture.UserName,
-                IgniteServerFixture.Password)
+            IgniteServerFixture.ClientConfiguration(
+                fixture.Endpoint,
+                IgniteServerFixture.UserName,
+                IgniteServerFixture.Password
+            )
         );
 
-        Assert.Equal(false,
-            igniteClient.GetCluster().ForServers().GetNodes().Single()
-                .Attributes["org.apache.ignite.peer.classloading.enabled"]);
+        Assert.Equal(
+            false,
+            igniteClient.GetCluster()
+                .ForServers()
+                .GetNodes()
+                .Single()
+                .Attributes["org.apache.ignite.peer.classloading.enabled"]
+        );
     }
 
     [SkippableFact]
@@ -267,7 +296,12 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
                ))
         {
             // alone, the GRACEFUL shutdown policy would wait for the backups of this cache until the timeout
-            igniteClient.GetOrCreateCache<int, int>(new CacheClientConfiguration("backed-up") { Backups = 1 })
+            igniteClient.GetOrCreateCache<int, int>(
+                    new CacheClientConfiguration("backed-up")
+                    {
+                        Backups = 1,
+                    }
+                )
                 .Put(1, 1);
         }
 

@@ -1,8 +1,8 @@
-using System.Net.Sockets;
-using System.Security.Authentication;
 using Apache.Ignite.Core;
 using Apache.Ignite.Core.Client;
 using AspNetCore.Ignite.Options;
+using System.Net.Sockets;
+using System.Security.Authentication;
 using Xunit;
 
 namespace AspNetCore.Ignite.UnitTests;
@@ -11,18 +11,42 @@ public sealed class CacheFactoryTests
 {
     public static TheoryData<Exception, bool> TransientCases => new()
     {
-        { new SocketException(), true },
-        { new IOException(), true },
-        { new TimeoutException(), true },
-        { new AggregateException(new SocketException(), new IOException()), true },
-        { new IgniteClientException("x", new AggregateException(new SocketException()), ClientStatusCode.Fail), true },
-        { new IgniteClientException("x", null, ClientStatusCode.InvalidNodeState), true },
-        { new IgniteClientException("invalid cache configuration", null, ClientStatusCode.Fail), false },
-        { new IgniteClientException("x", null, ClientStatusCode.AuthenticationFailed), false },
-        { new IgniteClientException("x", null, ClientStatusCode.SecurityViolation), false },
-        { new AggregateException(new SocketException(), new ArgumentException()), false },
-        { new AggregateException(), false },
-        { new InvalidOperationException(), false }
+        {
+            new SocketException(), true
+        },
+        {
+            new IOException(), true
+        },
+        {
+            new TimeoutException(), true
+        },
+        {
+            new AggregateException(new SocketException(), new IOException()), true
+        },
+        {
+            new IgniteClientException("x", new AggregateException(new SocketException()), ClientStatusCode.Fail), true
+        },
+        {
+            new IgniteClientException("x", null, ClientStatusCode.InvalidNodeState), true
+        },
+        {
+            new IgniteClientException("invalid cache configuration", null, ClientStatusCode.Fail), false
+        },
+        {
+            new IgniteClientException("x", null, ClientStatusCode.AuthenticationFailed), false
+        },
+        {
+            new IgniteClientException("x", null, ClientStatusCode.SecurityViolation), false
+        },
+        {
+            new AggregateException(new SocketException(), new ArgumentException()), false
+        },
+        {
+            new AggregateException(), false
+        },
+        {
+            new InvalidOperationException(), false
+        },
     };
 
     [Fact]
@@ -30,7 +54,7 @@ public sealed class CacheFactoryTests
     {
         var cfg = CacheFactory.GetIgniteClientConfiguration();
 
-        Assert.Equal([CacheFactory.DefaultEndpoint], cfg.Endpoints);
+        Assert.Equal([CacheFactory.DefaultEndpoint,], cfg.Endpoints);
         Assert.Null(cfg.UserName);
         Assert.Null(cfg.Password);
         Assert.Null(cfg.SslStreamFactory);
@@ -38,7 +62,12 @@ public sealed class CacheFactoryTests
         Assert.True(cfg.EnablePartitionAwareness);
         Assert.True(cfg.EnableClusterDiscovery);
         Assert.False(
-            CacheFactory.GetIgniteClientConfiguration(new IgniteClientOptions { EnableClusterDiscovery = false })
+            CacheFactory.GetIgniteClientConfiguration(
+                    new IgniteClientOptions
+                    {
+                        EnableClusterDiscovery = false,
+                    }
+                )
                 .EnableClusterDiscovery
         );
     }
@@ -51,7 +80,7 @@ public sealed class CacheFactoryTests
     {
         var cfg = CacheFactory.GetIgniteClientConfiguration(endpoint);
 
-        Assert.Equal([CacheFactory.DefaultEndpoint], cfg.Endpoints);
+        Assert.Equal([CacheFactory.DefaultEndpoint,], cfg.Endpoints);
     }
 
     [Fact]
@@ -59,7 +88,7 @@ public sealed class CacheFactoryTests
     {
         var cfg = CacheFactory.GetIgniteClientConfiguration("10.0.0.1:10800", "user", "secret");
 
-        Assert.Equal(["10.0.0.1:10800"], cfg.Endpoints);
+        Assert.Equal(["10.0.0.1:10800",], cfg.Endpoints);
         Assert.Equal("user", cfg.UserName);
         Assert.Equal("secret", cfg.Password);
     }
@@ -83,13 +112,13 @@ public sealed class CacheFactoryTests
         var cfg = CacheFactory.GetIgniteClientConfiguration(
             new IgniteClientOptions
             {
-                Endpoints = ["a:10800", " ", "b:10800"],
+                Endpoints = ["a:10800", " ", "b:10800",],
                 RetryLimit = 2,
-                SocketTimeout = TimeSpan.FromSeconds(3)
+                SocketTimeout = TimeSpan.FromSeconds(3),
             }
         );
 
-        Assert.Equal(["a:10800", "b:10800"], cfg.Endpoints);
+        Assert.Equal(["a:10800", "b:10800",], cfg.Endpoints);
         Assert.Equal(2, cfg.RetryLimit);
         Assert.Equal(TimeSpan.FromSeconds(3), cfg.SocketTimeout);
     }
@@ -100,7 +129,10 @@ public sealed class CacheFactoryTests
         Assert.Null(CacheFactory.GetPlatformCacheConfiguration<int, string>(new IgniteCacheOptions()));
 
         var platformCache = CacheFactory.GetPlatformCacheConfiguration<int, string>(
-            new IgniteCacheOptions { EnablePlatformCache = true }
+            new IgniteCacheOptions
+            {
+                EnablePlatformCache = true,
+            }
         );
 
         Assert.NotNull(platformCache);
@@ -111,7 +143,14 @@ public sealed class CacheFactoryTests
     public void CacheDefaults_GroupByValueType()
     {
         Assert.Equal("System.String", CacheFactory.GetGroupName<string>(new IgniteCacheOptions()));
-        Assert.Null(CacheFactory.GetGroupName<string>(new IgniteCacheOptions { GroupByValueType = false }));
+        Assert.Null(
+            CacheFactory.GetGroupName<string>(
+                new IgniteCacheOptions
+                {
+                    GroupByValueType = false,
+                }
+            )
+        );
     }
 
     [Fact]
@@ -130,10 +169,8 @@ public sealed class CacheFactoryTests
 
     [Theory]
     [MemberData(nameof(TransientCases))]
-    public void IsTransient_ClassifiesExceptions(Exception exception, bool expected)
-    {
+    public void IsTransient_ClassifiesExceptions(Exception exception, bool expected) =>
         Assert.Equal(expected, IgniteManager.IsTransient(exception));
-    }
 
     [Fact]
     public void ConnectAsClient_ThickClient_DoesNotChangeGlobalClientMode()
@@ -142,7 +179,7 @@ public sealed class CacheFactoryTests
         IgniteConfiguration cfg = new()
         {
             // an invalid JVM path makes Start fail before any JVM is created
-            JvmDllPath = Path.Combine(Path.GetTempPath(), "does-not-exist", "jvm.dll")
+            JvmDllPath = Path.Combine(Path.GetTempPath(), "does-not-exist", "jvm.dll"),
         };
 
         Assert.ThrowsAny<Exception>(() => CacheFactory.ConnectAsClient(cfg));

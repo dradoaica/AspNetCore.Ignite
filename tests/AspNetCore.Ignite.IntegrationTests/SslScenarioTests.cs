@@ -46,8 +46,12 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
         var (exitCode, _, stderr) = await ExecAsync(node, "touch", $"{CertificatesDirectory}/server.jks");
         Assert.True(exitCode == 0, stderr);
         await TestContainerLogs.WaitForMessageAsync(node, "SSL files changed", 1, TimeSpan.FromSeconds(60));
-        await TestContainerLogs.WaitForMessageAsync(node, IgniteServerFixture.RunningMessage, 2,
-            TimeSpan.FromSeconds(120));
+        await TestContainerLogs.WaitForMessageAsync(
+            node,
+            IgniteServerFixture.RunningMessage,
+            2,
+            TimeSpan.FromSeconds(120)
+        );
         using (var igniteClient = Connect(endpoint, clientCertificate, true))
         {
             Assert.True(igniteClient.GetCluster().IsActive());
@@ -72,15 +76,24 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
                ))
         {
             // alone, the node waits forever for the backups of this cache before it stops gracefully
-            igniteClient.GetOrCreateCache<int, int>(new CacheClientConfiguration("backed-up") { Backups = 1 })
+            igniteClient.GetOrCreateCache<int, int>(
+                    new CacheClientConfiguration("backed-up")
+                    {
+                        Backups = 1,
+                    }
+                )
                 .Put(1, 1);
         }
 
         var (touched, _, stderr) = await ExecAsync(node, "touch", $"{CertificatesDirectory}/server.jks");
         Assert.True(touched == 0, stderr);
 
-        await TestContainerLogs.WaitForMessageAsync(node, "to restart with the renewed SSL files", 1,
-            TimeSpan.FromSeconds(60));
+        await TestContainerLogs.WaitForMessageAsync(
+            node,
+            "to restart with the renewed SSL files",
+            1,
+            TimeSpan.FromSeconds(60)
+        );
 
         // the server exits (it waits for the container to exit), and its container restarts with the renewed files
         Assert.Equal(1, await node.GetExitCodeAsync().WaitAsync(TimeSpan.FromSeconds(60)));
@@ -98,7 +111,11 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
             .WithEnvironment("SSL_TRUST_STORE_PASSWORD", SamplePassword)
             .WithEnvironment("SSL_RESTART_MAX_JITTER_IN_SECONDS", "0")
             .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage));
-        foreach (var file in new[] { "server.jks", "trust.jks", "thin-client-cert.pfx" })
+        foreach (var file in new[]
+                 {
+                     "server.jks", "trust.jks", "thin-client-cert.pfx",
+                 })
+        {
             builder = builder.WithResourceMapping(
                 new FileInfo(Path.Combine(IgniteServerFixture.SampleCertificatesDirectory, file)),
                 new FileInfo($"{CertificatesDirectory}/{file}"),
@@ -106,12 +123,16 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
                 0,
                 ownerReadWrite
             );
+        }
 
         return builder;
     }
 
-    private static IIgniteClient Connect(string endpoint, string? clientCertificate,
-        bool skipServerCertificateValidation)
+    private static IIgniteClient Connect(
+        string endpoint,
+        string? clientCertificate,
+        bool skipServerCertificateValidation
+    )
     {
         var configuration = CacheFactory.GetIgniteClientConfiguration(
             endpoint,
@@ -129,8 +150,10 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
         return CacheFactory.ConnectAsClient(configuration);
     }
 
-    private static async Task<(long ExitCode, string Stdout, string Stderr)> ExecAsync(IContainer node,
-        params string[] command)
+    private static async Task<(long ExitCode, string Stdout, string Stderr)> ExecAsync(
+        IContainer node,
+        params string[] command
+    )
     {
         var result = await node.ExecAsync(command);
         return (result.ExitCode ?? -1, result.Stdout, result.Stderr);

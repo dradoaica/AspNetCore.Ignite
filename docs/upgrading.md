@@ -46,19 +46,23 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
 
   The `chart-upgrade` job of the Tests workflow (`upgrade-test` input) runs these steps with data. The chart's values
   also change:
-  * The probes use `/health/startup`, `/health/liveness` and `/health/readiness` on the management port (9464).
-  * `container.ports`/`service.ports`: `thinClients` (10800) replaces `sql`, `management` is new, `rest` and `restTcp`
-    (11211, was `jdbc`) exist only with `rest.enabled`, and `jmx` and 10900 are gone.
-  * The values follow the ignite chart: `persistence.storageVolume` (`/app/work`) and `persistence.walVolume` (`/wal`),
-    `memory.*`, `authentication.*`, `timeouts.*`, `threadPools.*`, `dataStorage.*` and `ssl.*` (Secrets `<fullname>-auth`
-    and `<fullname>-ssl`); `secrets.*` and most `env` keys are gone.
-  * `authentication.igniteUserPassword` is empty by default: set it. A new password applies to the whole cluster as soon
-    as the first restarted node sets it, so change the clients' password together with the rollout.
-  * The client Service has the thin client and management ports (and REST); the discovery and communication ports are
-    on the headless Service only.
-  * The root file system is read-only, a PodDisruptionBudget is created for more than one replica, the termination grace
-    period is 300 seconds, a node is ready only once it holds its data after starting, and the pods spread across
-    Kubernetes nodes (`topologySpreadConstraints`).
+    * The probes use `/health/startup`, `/health/liveness` and `/health/readiness` on the management port (9464).
+    * `container.ports`/`service.ports`: `thinClients` (10800) replaces `sql`, `management` is new, `rest` and `restTcp`
+      (11211, was `jdbc`) exist only with `rest.enabled`, and `jmx` and 10900 are gone.
+    * The values follow the ignite chart: `persistence.storageVolume` (`/app/work`) and `persistence.walVolume`
+      (`/wal`),
+      `memory.*`, `authentication.*`, `timeouts.*`, `threadPools.*`, `dataStorage.*` and `ssl.*` (Secrets
+      `<fullname>-auth`
+      and `<fullname>-ssl`); `secrets.*` and most `env` keys are gone.
+    * `authentication.igniteUserPassword` is empty by default: set it. A new password applies to the whole cluster as
+      soon
+      as the first restarted node sets it, so change the clients' password together with the rollout.
+    * The client Service has the thin client and management ports (and REST); the discovery and communication ports are
+      on the headless Service only.
+    * The root file system is read-only, a PodDisruptionBudget is created for more than one replica, the termination
+      grace
+      period is 300 seconds, a node is ready only once it holds its data after starting, and the pods spread across
+      Kubernetes nodes (`topologySpreadConstraints`).
 
 ## Moving to Apache Ignite 2.19.0
 

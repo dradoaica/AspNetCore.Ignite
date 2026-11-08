@@ -1,7 +1,7 @@
+using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.Extensions.Configuration;
 
 namespace AspNetCore.Ignite.Options;
 
@@ -54,16 +54,18 @@ public sealed class IgniteClientOptions
     public IgniteCacheOptions Cache { get; set; } = new();
 
     /// <summary>
-    ///     Applies the flat <c>ASPNETCORE_IGNITE_*</c> keys (environment variables); <c>ASPNETCORE_IGNITE_ENDPOINT</c> may
-    ///     list several comma-separated endpoints.
+    ///     Applies the flat <c>ASPNETCORE_IGNITE_*</c> keys (environment variables); <c>ASPNETCORE_IGNITE_ENDPOINT</c>
+    ///     may list several comma-separated endpoints.
     /// </summary>
     public void ApplyConfigurationKeys(IConfiguration configuration)
     {
         if (configuration["ASPNETCORE_IGNITE_ENDPOINT"] is { } endpoints && !string.IsNullOrWhiteSpace(endpoints))
+        {
             Endpoints = endpoints.Split(',')
                 .Select(endpoint => endpoint.Trim())
                 .Where(endpoint => endpoint.Length > 0)
                 .ToList();
+        }
 
         UserName = configuration["ASPNETCORE_IGNITE_USER_NAME"] ?? UserName;
         Password = configuration["ASPNETCORE_IGNITE_PASSWORD"] ?? Password;
@@ -79,8 +81,6 @@ public sealed class IgniteClientOptions
                                  EnableClusterDiscovery;
     }
 
-    private static bool? GetBool(IConfiguration configuration, string key)
-    {
-        return bool.TryParse(configuration[key], out var value) ? value : null;
-    }
+    private static bool? GetBool(IConfiguration configuration, string key) =>
+        bool.TryParse(configuration[key], out var value) ? value : null;
 }

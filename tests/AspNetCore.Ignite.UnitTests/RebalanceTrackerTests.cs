@@ -20,10 +20,10 @@ public sealed class RebalanceTrackerTests
         tracker.OnStarted("a");
         tracker.OnStarted("b");
         Assert.True(tracker.IsCatchingUp(InBaseline));
-        Assert.Equal(["a", "b"], tracker.RebalancingCaches.Order());
+        Assert.Equal(["a", "b",], tracker.RebalancingCaches.Order());
 
         tracker.OnStopped("a");
-        Assert.Equal(["b"], tracker.RebalancingCaches);
+        Assert.Equal(["b",], tracker.RebalancingCaches);
         tracker.OnStopped("b");
 
         Assert.False(tracker.IsCatchingUp(InBaseline));
@@ -46,7 +46,7 @@ public sealed class RebalanceTrackerTests
     public void Reset_ForgetsThePreviousRun()
     {
         FakeTimeProvider time = new();
-        RebalanceTracker tracker = CaughtUp(time);
+        var tracker = CaughtUp(time);
 
         tracker.Reset();
 
@@ -99,7 +99,7 @@ public sealed class RebalanceTrackerTests
         tracker.OnStarted("a");
 
         Assert.False(tracker.IsCatchingUp(InBaseline));
-        Assert.Equal(["a"], tracker.RebalancingCaches);
+        Assert.Equal(["a",], tracker.RebalancingCaches);
     }
 
     [Fact]

@@ -20,19 +20,26 @@ public sealed class IgniteConfigurationFactoryTests
     public void ShippedConfigurationFiles_KeepTheServerDefaults(string file, bool persistent)
     {
         var configuration = IgniteConfigurationFactory.Create(
-            new IgniteServerRunnerOptions { ConfigurationFile = Path.Combine(ConfigDirectory, file) },
+            new IgniteServerRunnerOptions
+            {
+                ConfigurationFile = Path.Combine(ConfigDirectory, file),
+            },
             Logger.None
         );
 
-        Assert.Contains(configuration.JvmOptions,
-            option => option.StartsWith("--add-opens=", StringComparison.Ordinal));
+        Assert.Contains(
+            configuration.JvmOptions,
+            option => option.StartsWith("--add-opens=", StringComparison.Ordinal)
+        );
         Assert.Contains("-XX:MaxMetaspaceSize=256m", configuration.JvmOptions);
         Assert.Contains(EventType.CacheRebalancePartDataLost, configuration.IncludedEventTypes);
         Assert.Equal(TimeSpan.FromSeconds(30), configuration.FailureDetectionTimeout);
         // Ignite refuses to start otherwise (the bug of -ConfigFile)
         Assert.True(configuration.ClientFailureDetectionTimeout >= configuration.MetricsUpdateFrequency);
-        Assert.Equal(persistent,
-            configuration.DataStorageConfiguration?.DefaultDataRegionConfiguration?.PersistenceEnabled == true);
+        Assert.Equal(
+            persistent,
+            configuration.DataStorageConfiguration?.DefaultDataRegionConfiguration?.PersistenceEnabled == true
+        );
     }
 
     [Fact]
@@ -49,12 +56,14 @@ public sealed class IgniteConfigurationFactoryTests
         );
 
         Assert.Equal(TimeSpan.FromSeconds(42), configuration.NetworkTimeout);
-        Assert.Equal(["-Dx=1"], configuration.JvmOptions);
+        Assert.Equal(["-Dx=1",], configuration.JvmOptions);
         Assert.Equal(TimeSpan.FromSeconds(30), configuration.FailureDetectionTimeout);
         Assert.Equal(PeerAssemblyLoadingMode.Disabled, configuration.PeerAssemblyLoadingMode);
-        Assert.Contains(sink.Events,
+        Assert.Contains(
+            sink.Events,
             logEvent => logEvent.Level == LogEventLevel.Warning &&
-                        logEvent.RenderMessage().Contains("PEER_ASSEMBLY_LOADING"));
+                        logEvent.RenderMessage().Contains("PEER_ASSEMBLY_LOADING")
+        );
     }
 
     [Fact]
@@ -63,7 +72,7 @@ public sealed class IgniteConfigurationFactoryTests
         IgniteConfiguration configuration = new()
         {
             MetricsUpdateFrequency = TimeSpan.FromSeconds(60),
-            ClientFailureDetectionTimeout = TimeSpan.FromSeconds(30)
+            ClientFailureDetectionTimeout = TimeSpan.FromSeconds(30),
         };
 
         IgniteConfigurationFactory.EnsureConsistentTimeouts(configuration, Logger.None);
@@ -79,7 +88,7 @@ public sealed class IgniteConfigurationFactoryTests
             {
                 JvmMaxMetaspaceMb = 512,
                 JvmMaxDirectMemoryMb = 2960,
-                ExtraJvmOptions = ["-Dfoo=bar", "-Xrs"],
+                ExtraJvmOptions = ["-Dfoo=bar", "-Xrs",],
                 NetworkTimeout = TimeSpan.FromSeconds(5),
                 PublicThreadPoolSize = 16,
                 StripedThreadPoolSize = 8,
@@ -87,7 +96,7 @@ public sealed class IgniteConfigurationFactoryTests
                 WalPath = "/wal",
                 WalArchivePath = "/wal/archive",
                 WalCompactionEnabled = true,
-                WalMode = WalMode.LogOnly
+                WalMode = WalMode.LogOnly,
             },
             Logger.None
         );
@@ -121,8 +130,12 @@ public sealed class IgniteConfigurationFactoryTests
             var classpath = IgniteConfigurationFactory.ExpandClasspath($"{directory.FullName}:/opt/x.jar");
 
             Assert.Equal(
-                string.Join(Path.PathSeparator, Path.Combine(directory.FullName, "a.jar"),
-                    Path.Combine(directory.FullName, "b.jar"), "/opt/x.jar"),
+                string.Join(
+                    Path.PathSeparator,
+                    Path.Combine(directory.FullName, "a.jar"),
+                    Path.Combine(directory.FullName, "b.jar"),
+                    "/opt/x.jar"
+                ),
                 classpath
             );
         }
@@ -141,24 +154,27 @@ public sealed class IgniteConfigurationFactoryTests
         );
         Assert.Equal(
             0,
-            IgniteConfigurationFactory.Create(new IgniteServerRunnerOptions { SqlQueryHistorySize = 0 }, Logger.None)
+            IgniteConfigurationFactory.Create(
+                    new IgniteServerRunnerOptions
+                    {
+                        SqlQueryHistorySize = 0,
+                    },
+                    Logger.None
+                )
                 .SqlQueryHistorySize
         );
     }
 
     [Fact]
-    public void DefaultConfiguration_LogsSegmentation()
-    {
-        Assert.Contains(EventType.NodeSegmented, IgniteConfigurationFactory.CreateDefault().IncludedEventTypes);
-    }
+    public void DefaultConfiguration_LogsSegmentation() => Assert.Contains(
+        EventType.NodeSegmented,
+        IgniteConfigurationFactory.CreateDefault().IncludedEventTypes
+    );
 
     private sealed class CollectingSink : ILogEventSink
     {
         public List<LogEvent> Events { get; } = [];
 
-        public void Emit(LogEvent logEvent)
-        {
-            Events.Add(logEvent);
-        }
+        public void Emit(LogEvent logEvent) => Events.Add(logEvent);
     }
 }

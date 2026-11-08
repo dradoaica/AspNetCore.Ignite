@@ -5,9 +5,11 @@ namespace AspNetCore.IgniteServer;
 // SSL between nodes and for thin clients, and certificate rotation.
 internal sealed partial class IgniteServerSettings
 {
-    [ConfigurationKeyName("USE_SSL")] public bool UseSsl { get; set; }
+    [ConfigurationKeyName("USE_SSL")]
+    public bool UseSsl { get; set; }
 
-    [ConfigurationKeyName("SSL_PROTOCOL")] public string SslProtocol { get; set; } = "TLS";
+    [ConfigurationKeyName("SSL_PROTOCOL")]
+    public string SslProtocol { get; set; } = "TLS";
 
     [ConfigurationKeyName("SSL_KEY_STORE_TYPE")]
     public string SslKeyStoreType { get; set; } = "JKS";

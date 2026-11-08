@@ -53,7 +53,7 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
                     ["ASPNETCORE_IGNITE_ENDPOINT"] = fixture.Endpoint,
                     ["ASPNETCORE_IGNITE_USER_NAME"] = IgniteServerFixture.UserName,
                     ["ASPNETCORE_IGNITE_PASSWORD"] = IgniteServerFixture.Password,
-                    ["ASPNETCORE_IGNITE_ENABLE_CLUSTER_DISCOVERY"] = "false"
+                    ["ASPNETCORE_IGNITE_ENABLE_CLUSTER_DISCOVERY"] = "false",
                 }
             )
             .Build();
@@ -78,7 +78,7 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
         services.AddLogging();
         services.AddIgnite(options =>
             {
-                options.Endpoints = [fixture.Endpoint];
+                options.Endpoints = [fixture.Endpoint,];
                 options.UserName = IgniteServerFixture.UserName;
                 options.Password = IgniteServerFixture.Password;
                 options.EnableClusterDiscovery = false;
@@ -103,8 +103,10 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
 
         // environment variables (IGNITE_USER_PASSWORD, SSL_*_PASSWORD) and system properties are not published
         Assert.DoesNotContain(attributes.Keys, name => name.Contains("PASSWORD", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(attributes.Values,
-            value => value is string text && text.Contains(IgniteServerFixture.Password, StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            attributes.Values,
+            value => value is string text && text.Contains(IgniteServerFixture.Password, StringComparison.Ordinal)
+        );
     }
 
     [SkippableFact]
@@ -126,8 +128,11 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
         {
         }
 
-        var ex = Assert.Throws<IgniteClientException>(() =>
-            Connect(IgniteServerFixture.GetEndpoint(rotated), "first-password"));
+        var ex = Assert.Throws<IgniteClientException>(() => Connect(
+                IgniteServerFixture.GetEndpoint(rotated),
+                "first-password"
+            )
+        );
         Assert.Equal(ClientStatusCode.AuthenticationFailed, ex.StatusCode);
     }
 
@@ -144,19 +149,27 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
         var cache = igniteClient.GetOrCreateCache<int, int>("history");
 
         // neither the ALTER USER of the password change (with the password) nor this query are kept
-        cache.Query(new SqlFieldsQuery("SELECT 1") { Schema = "PUBLIC" }).GetAll();
-        var history = cache.Query(new SqlFieldsQuery("SELECT SQL FROM SYS.SQL_QUERIES_HISTORY") { Schema = "PUBLIC" })
+        cache.Query(
+                new SqlFieldsQuery("SELECT 1")
+                {
+                    Schema = "PUBLIC",
+                }
+            )
+            .GetAll();
+        var history = cache.Query(
+                new SqlFieldsQuery("SELECT SQL FROM SYS.SQL_QUERIES_HISTORY")
+                {
+                    Schema = "PUBLIC",
+                }
+            )
             .GetAll();
 
         Assert.Empty(history);
     }
 
-    private static IIgniteClient Connect(string endpoint, string password)
-    {
-        return CacheFactory.ConnectAsClient(
-            IgniteServerFixture.ClientConfiguration(endpoint, IgniteServerFixture.UserName, password)
-        );
-    }
+    private static IIgniteClient Connect(string endpoint, string password) => CacheFactory.ConnectAsClient(
+        IgniteServerFixture.ClientConfiguration(endpoint, IgniteServerFixture.UserName, password)
+    );
 
     private IContainer PersistentNode(IVolume volume, string password, string? previousPassword)
     {
@@ -166,8 +179,7 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
             .WithEnvironment("DEFAULT_CONSISTENT_ID", "rotation")
             .WithEnvironment("IGNITE_USER_PASSWORD", password)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage));
-        return previousPassword == null
-            ? builder.Build()
+        return previousPassword == null ? builder.Build()
             : builder.WithEnvironment("IGNITE_USER_PREVIOUS_PASSWORD", previousPassword).Build();
     }
 }

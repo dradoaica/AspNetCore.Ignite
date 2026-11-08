@@ -1,12 +1,12 @@
+using Apache.Ignite.Core;
+using Apache.Ignite.Core.Cluster;
+using Apache.Ignite.Core.Events;
+using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using Apache.Ignite.Core;
-using Apache.Ignite.Core.Cluster;
-using Apache.Ignite.Core.Events;
-using Serilog;
 
 namespace AspNetCore.IgniteServer.Listeners;
 
@@ -18,8 +18,8 @@ namespace AspNetCore.IgniteServer.Listeners;
 ///     loss, the oldest server node resets: off the Ignite thread that reports it, once per batch of losses, and again
 ///     whenever a node joins.
 /// </summary>
-internal sealed class LostPartitionsListener
-    : IEventListener<CacheRebalancingEvent>, IEventListener<DiscoveryEvent>, IDisposable
+internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEvent>, IEventListener<DiscoveryEvent>,
+    IDisposable
 {
     private static readonly TimeSpan Debounce = TimeSpan.FromSeconds(1);
 
@@ -33,27 +33,45 @@ internal sealed class LostPartitionsListener
     private readonly ITimer timer;
     private int disposed;
 
-    public LostPartitionsListener(IIgnite ignite, ILogger logger, bool autoReset, bool persistent,
-        TimeProvider? timeProvider = null)
+    public LostPartitionsListener(
+        IIgnite ignite,
+        ILogger logger,
+        bool autoReset,
+        bool persistent,
+        TimeProvider? timeProvider = null
+    )
     {
         this.ignite = ignite;
         this.logger = logger;
         this.autoReset = autoReset;
         this.persistent = persistent;
-        timer = (timeProvider ?? TimeProvider.System).CreateTimer(_ => Reset(), null, Timeout.InfiniteTimeSpan,
-            Timeout.InfiniteTimeSpan);
+        timer = (timeProvider ?? TimeProvider.System).CreateTimer(
+            _ => Reset(),
+            null,
+            Timeout.InfiniteTimeSpan,
+            Timeout.InfiniteTimeSpan
+        );
     }
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref disposed, 1) == 0) timer.Dispose();
+        if (Interlocked.Exchange(ref disposed, 1) == 0)
+        {
+            timer.Dispose();
+        }
     }
 
     public bool Invoke(CacheRebalancingEvent evt)
     {
         if (evt.Type == EventType.CacheRebalancePartDataLost)
-            OnPartitionLost(evt.CacheName ?? string.Empty, evt.DiscoveryEventName, evt.DiscoveryNode.Addresses,
-                evt.DiscoveryNode.HostNames);
+        {
+            OnPartitionLost(
+                evt.CacheName ?? string.Empty,
+                evt.DiscoveryEventName,
+                evt.DiscoveryNode.Addresses,
+                evt.DiscoveryNode.HostNames
+            );
+        }
 
         return true;
     }
@@ -64,11 +82,16 @@ internal sealed class LostPartitionsListener
         return true;
     }
 
-    internal void OnPartitionLost(string cacheName, string? discoveryEventName, IEnumerable<string> addresses,
-        IEnumerable<string> hostNames)
+    internal void OnPartitionLost(
+        string cacheName,
+        string? discoveryEventName,
+        IEnumerable<string> addresses,
+        IEnumerable<string> hostNames
+    )
     {
         // one event per lost partition: the first one of the cache is logged
         if (lost.AddOrUpdate(cacheName, 1, (_, count) => count + 1) == 1)
+        {
             logger.Error(
                 "Partition data lost: CacheName: {CacheName}; DiscoveryEventName: {DiscoveryEventName}; DiscoveryNodeAddresses: {DiscoveryNodeAddresses}; DiscoveryHostNames: {DiscoveryHostNames}",
                 cacheName,
@@ -76,6 +99,7 @@ internal sealed class LostPartitionsListener
                 string.Join(",", addresses),
                 string.Join(",", hostNames)
             );
+        }
 
         ScheduleReset();
     }
@@ -83,18 +107,27 @@ internal sealed class LostPartitionsListener
     internal void OnNodeJoined()
     {
         // a node that owns lost partitions may be back
-        if (!lost.IsEmpty) ScheduleReset();
+        if (!lost.IsEmpty)
+        {
+            ScheduleReset();
+        }
     }
 
     private void ScheduleReset()
     {
-        if (autoReset && Volatile.Read(ref disposed) == 0) timer.Change(Debounce, Timeout.InfiniteTimeSpan);
+        if (autoReset && Volatile.Read(ref disposed) == 0)
+        {
+            timer.Change(Debounce, Timeout.InfiniteTimeSpan);
+        }
     }
 
     private void Reset()
     {
         var caches = lost.Keys.ToArray();
-        if (caches.Length == 0 || Volatile.Read(ref disposed) == 1) return;
+        if (caches.Length == 0 || Volatile.Read(ref disposed) == 1)
+        {
+            return;
+        }
 
         try
         {
@@ -105,11 +138,16 @@ internal sealed class LostPartitionsListener
                 return;
             }
 
-            if (!persistent) DropDepartedBaselineNodes(cluster);
+            if (!persistent)
+            {
+                DropDepartedBaselineNodes(cluster);
+            }
 
             ignite.ResetLostPartitions(caches);
             foreach (var cacheName in caches)
+            {
                 if (lost.TryRemove(cacheName, out var partitions))
+                {
                     logger.Warning(
                         persistent
                             ? "The {Partitions} lost partitions of cache {CacheName} were reset, with the data of the nodes that returned."
@@ -117,6 +155,8 @@ internal sealed class LostPartitionsListener
                         partitions,
                         cacheName
                     );
+                }
+            }
         }
         catch (ClusterTopologyException ex)
         {
@@ -128,19 +168,26 @@ internal sealed class LostPartitionsListener
         }
         catch (Exception ex)
         {
-            logger.Warning(ex, "Failed to reset the lost partitions of caches {CacheNames}.", string.Join(", ", caches));
+            logger.Warning(
+                ex,
+                "Failed to reset the lost partitions of caches {CacheNames}.",
+                string.Join(", ", caches)
+            );
         }
     }
 
     /// <summary>
-    ///     The baseline follows the topology now rather than after the auto-adjust timeout, which does not change it while
-    ///     partitions are lost: the departed in-memory nodes hold no data to come back with.
+    ///     The baseline follows the topology now rather than after the auto-adjust timeout, which does not change it
+    ///     while partitions are lost: the departed in-memory nodes hold no data to come back with.
     /// </summary>
     private void DropDepartedBaselineNodes(ICluster cluster)
     {
         var online = cluster.ForServers().GetNodes().Select(node => node.ConsistentId).ToHashSet();
         if (IgniteServerRunner.GetBaselineTopology(cluster) is not { } baseline ||
-            baseline.All(node => online.Contains(node.ConsistentId))) return;
+            baseline.All(node => online.Contains(node.ConsistentId)))
+        {
+            return;
+        }
 
         // Ignite changes the baseline by hand only without auto-adjust
         cluster.SetBaselineAutoAdjustEnabledFlag(false);

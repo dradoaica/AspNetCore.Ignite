@@ -10,7 +10,10 @@ internal static class DockerSupport
         try
         {
             var dockerEndpointAuthConfig = TestcontainersSettings.OS.DockerEndpointAuthConfig;
-            if (dockerEndpointAuthConfig == null) return false;
+            if (dockerEndpointAuthConfig == null)
+            {
+                return false;
+            }
 
             using var dockerClient = dockerEndpointAuthConfig.GetDockerClientBuilder(Guid.NewGuid()).Build();
             using CancellationTokenSource cts = new(TimeSpan.FromSeconds(10));

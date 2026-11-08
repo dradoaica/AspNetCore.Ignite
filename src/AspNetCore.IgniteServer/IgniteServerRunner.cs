@@ -1,9 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Apache.Ignite.Core;
 using Apache.Ignite.Core.Cluster;
 using Apache.Ignite.Core.Common;
@@ -13,6 +7,12 @@ using Apache.Ignite.Core.Events;
 using AspNetCore.IgniteServer.Listeners;
 using Serilog;
 using Serilog.Core;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace AspNetCore.IgniteServer;
 
@@ -40,9 +40,9 @@ internal sealed class IgniteServerRunner : IDisposable
             .. Configuration.LocalEventListeners ?? [],
             new LocalEventListener<CacheRebalancingEvent>
             {
-                EventTypes = [EventType.CacheRebalanceStarted, EventType.CacheRebalanceStopped],
-                Listener = RebalanceTracker
-            }
+                EventTypes = [EventType.CacheRebalanceStarted, EventType.CacheRebalanceStopped,],
+                Listener = RebalanceTracker,
+            },
         ];
     }
 
@@ -58,12 +58,17 @@ internal sealed class IgniteServerRunner : IDisposable
     ///     True once the node is running, its cluster is active and (with ReadyWhenRebalanced) it has caught up after its
     ///     start (received its partitions), until it stops.
     /// </summary>
-    public bool IsReady => ready && Node is { } node &&
-                           !(options.ReadyWhenRebalanced && RebalanceTracker.IsCatchingUp(() => IsInBaseline(node)));
+    public bool IsReady =>
+        ready &&
+        Node is { } node &&
+        !(options.ReadyWhenRebalanced && RebalanceTracker.IsCatchingUp(() => IsInBaseline(node)));
 
     public void Dispose()
     {
-        if (disposed) return;
+        if (disposed)
+        {
+            return;
+        }
 
         stopRequested = true;
         StopNode(true);
@@ -75,7 +80,7 @@ internal sealed class IgniteServerRunner : IDisposable
         EnsureNotRunning();
         GetOrCreateDiscoverySpi().IpFinder = new TcpDiscoveryStaticIpFinder
         {
-            Endpoints = values
+            Endpoints = values,
         };
     }
 
@@ -116,7 +121,10 @@ internal sealed class IgniteServerRunner : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
         TaskCompletionSource<string?> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        if (stopRequested) return;
+        if (stopRequested)
+        {
+            return;
+        }
 
         logger.Information("Starting Ignite server runner...");
         RebalanceTracker.Reset();
@@ -131,16 +139,24 @@ internal sealed class IgniteServerRunner : IDisposable
         };
         if (stopRequested)
             // Stop() ran while starting, before this node could be stopped
+        {
             StopNode(false);
+        }
 
         if (!ReferenceEquals(Volatile.Read(ref ignite), current))
             // stopped before the handler was attached
+        {
             tcs.TrySetResult(current.Name);
+        }
 
         var cluster = current.GetCluster();
         var persistenceEnabled = Configuration.DataStorageConfiguration?.DefaultDataRegionConfiguration
-            ?.PersistenceEnabled == true;
-        if (persistenceEnabled) await WaitForServerNodes(cluster, tcs.Task).ConfigureAwait(false);
+                                     ?.PersistenceEnabled ==
+                                 true;
+        if (persistenceEnabled)
+        {
+            await WaitForServerNodes(cluster, tcs.Task).ConfigureAwait(false);
+        }
 
         if (tcs.Task.IsCompleted)
         {
@@ -153,15 +169,19 @@ internal sealed class IgniteServerRunner : IDisposable
         if (!cluster.IsActive())
         {
             cluster.SetActive(true);
-            logger.Information("The cluster was activated ({ServerNodes} server nodes).",
-                cluster.ForServers().GetNodes().Count);
+            logger.Information(
+                "The cluster was activated ({ServerNodes} server nodes).",
+                cluster.ForServers().GetNodes().Count
+            );
         }
 
         cluster.SetBaselineAutoAdjustEnabledFlag(true);
         cluster.SetBaselineAutoAdjustTimeout(
-            (long)options.GetBaselineAutoAdjustTimeout(persistenceEnabled).TotalMilliseconds);
+            (long)options.GetBaselineAutoAdjustTimeout(persistenceEnabled).TotalMilliseconds
+        );
         // users exist only with authentication (which implies persistence); without it there is no password to set
         if (Configuration.AuthenticationEnabled && !string.IsNullOrWhiteSpace(options.IgniteUserPassword))
+        {
             try
             {
                 new IgniteUserPasswordManager(options, logger).Apply(current, options.IgniteUserPassword, newCluster);
@@ -171,10 +191,15 @@ internal sealed class IgniteServerRunner : IDisposable
                 // the node keeps running with the current password, as without IGNITE_USER_PASSWORD
                 logger.Error(ex, "IGNITE_USER_PASSWORD was not applied.");
             }
+        }
 
         // disposed once this run's node stopped
-        using LostPartitionsListener lostPartitions = new(current, logger, options.AutoResetLostPartitions,
-            persistenceEnabled);
+        using LostPartitionsListener lostPartitions = new(
+            current,
+            logger,
+            options.AutoResetLostPartitions,
+            persistenceEnabled
+        );
         current.GetEvents().LocalListen<CacheRebalancingEvent>(lostPartitions, EventType.CacheRebalancePartDataLost);
         current.GetEvents().LocalListen<DiscoveryEvent>(lostPartitions, EventType.NodeJoined);
         current.GetEvents()
@@ -199,8 +224,8 @@ internal sealed class IgniteServerRunner : IDisposable
 
     /// <summary>
     ///     Stops the node gracefully so that <see cref="Run" /> can start it again (e.g., with renewed certificates).
-    ///     Returns false when the node did not stop within <paramref name="timeout" /> (e.g., a single node whose caches
-    ///     have backups, which the GRACEFUL shutdown policy waits for).
+    ///     Returns false when the node did not stop within <paramref name="timeout" /> (e.g., a single node whose caches have
+    ///     backups, which the GRACEFUL shutdown policy waits for).
     /// </summary>
     public bool Restart(TimeSpan timeout)
     {
@@ -210,9 +235,9 @@ internal sealed class IgniteServerRunner : IDisposable
 
     /// <summary>
     ///     Stops the node gracefully; afterward, <see cref="Run" /> does not start it again. Returns false when the node
-    ///     did not stop within <paramref name="timeout" />: the GRACEFUL shutdown policy waits until the node's
-    ///     partitions have copies on other nodes, which never happens when the whole cluster stops; the node then stops
-    ///     with the process. The cluster's last server node deactivates the cluster first, so it stops at once.
+    ///     did not stop within <paramref name="timeout" />: the GRACEFUL shutdown policy waits until the node's partitions
+    ///     have copies on other nodes, which never happens when the whole cluster stops; the node then stops with the process.
+    ///     The cluster's last server node deactivates the cluster first, so it stops at once.
     /// </summary>
     public bool Stop(TimeSpan timeout)
     {
@@ -237,23 +262,31 @@ internal sealed class IgniteServerRunner : IDisposable
 
     /// <summary>
     ///     No other node can take over the partitions of the cluster's last server node, which the GRACEFUL shutdown
-    ///     policy would wait for until the timeout: that node deactivates the cluster (a persistent one checkpoints its
-    ///     data, and the next start activates it again).
+    ///     policy would wait for until the timeout: that node deactivates the cluster (a persistent one checkpoints its data,
+    ///     and the next start activates it again).
     /// </summary>
     private void DeactivateIfLastServerNode(TimeSpan timeout)
     {
-        if (Node is not { } node) return;
+        if (Node is not { } node)
+        {
+            return;
+        }
 
         try
         {
             var cluster = node.GetCluster();
-            if (!cluster.IsActive() || cluster.ForServers().GetNodes().Count > 1) return;
+            if (!cluster.IsActive() || cluster.ForServers().GetNodes().Count > 1)
+            {
+                return;
+            }
 
             logger.Information(
                 "The node is the cluster's last server node: deactivating the cluster so that it stops at once."
             );
             if (!Task.Run(() => cluster.SetActive(false)).Wait(timeout))
+            {
                 logger.Warning("The cluster was not deactivated within {Timeout}.", timeout);
+            }
         }
         catch (Exception ex) when (ex is IgniteException or InvalidOperationException or AggregateException)
         {
@@ -279,7 +312,10 @@ internal sealed class IgniteServerRunner : IDisposable
         while (!stopped.IsCompleted && !cluster.IsActive())
         {
             var serverNodes = cluster.ForServers().GetNodes();
-            if (serverNodes.Count >= options.ActivationMinServerNodes) return;
+            if (serverNodes.Count >= options.ActivationMinServerNodes)
+            {
+                return;
+            }
 
             logger.Information(
                 "Waiting for {ActivationMinServerNodes} server nodes before activating the cluster ({ServerNodes} joined: {JoinedNodes})...",
@@ -327,7 +363,10 @@ internal sealed class IgniteServerRunner : IDisposable
     {
         ready = false;
         var current = Interlocked.Exchange(ref ignite, null);
-        if (current == null) return false;
+        if (current == null)
+        {
+            return false;
+        }
 
         Ignition.Stop(current.Name, cancel);
         return true;
@@ -352,6 +391,9 @@ internal sealed class IgniteServerRunner : IDisposable
 
     private void EnsureNotRunning()
     {
-        if (ignite != null) throw new InvalidOperationException("Cannot configure running instances.");
+        if (ignite != null)
+        {
+            throw new InvalidOperationException("Cannot configure running instances.");
+        }
     }
 }

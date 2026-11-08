@@ -1,5 +1,5 @@
-using System.Collections.Generic;
 using Apache.Ignite.Core;
+using System.Collections.Generic;
 
 namespace AspNetCore.IgniteServer;
 
@@ -20,8 +20,5 @@ internal sealed class IgniteNodeState
     /// <summary>The caches the node is rebalancing (receiving partitions of).</summary>
     public IReadOnlyCollection<string> RebalancingCaches => runner?.RebalanceTracker.RebalancingCaches ?? [];
 
-    internal void SetRunner(IgniteServerRunner? value)
-    {
-        runner = value;
-    }
+    internal void SetRunner(IgniteServerRunner? value) => runner = value;
 }

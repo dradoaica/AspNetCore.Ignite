@@ -1,15 +1,15 @@
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Primitives;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Primitives;
 
 namespace AspNetCore.IgniteServer.Utils;
 
 /// <summary>
-///     Watches files and invokes a callback once they have settled: after <c>debounce</c> without further changes, plus a
-///     random delay of up to <c>maxJitter</c> so that nodes whose certificates are rotated at the same time do not
+///     Watches files and invokes a callback once they have settled: after <c>debounce</c> without further changes,
+///     plus a random delay of up to <c>maxJitter</c> so that nodes whose certificates are rotated at the same time do not
 ///     restart at the same time.
 /// </summary>
 internal sealed class FileChangeWatcher : IDisposable
@@ -42,7 +42,10 @@ internal sealed class FileChangeWatcher : IDisposable
             Timeout.InfiniteTimeSpan,
             Timeout.InfiniteTimeSpan
         );
-        if (!watchFiles) return;
+        if (!watchFiles)
+        {
+            return;
+        }
 
         foreach (var filePath in filePaths)
         {
@@ -51,7 +54,7 @@ internal sealed class FileChangeWatcher : IDisposable
             {
                 // polling also sees changes on mounted volumes (e.g., Kubernetes secrets) that raise no inotify events
                 UseActivePolling = true,
-                UsePollingFileWatcher = true
+                UsePollingFileWatcher = true,
             };
             registrations.Add(physicalFileProvider);
             registrations.Add(
@@ -65,7 +68,10 @@ internal sealed class FileChangeWatcher : IDisposable
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref disposed, 1) == 1) return;
+        if (Interlocked.Exchange(ref disposed, 1) == 1)
+        {
+            return;
+        }
 
         timer.Dispose();
         registrations.ForEach(registration => registration.Dispose());
@@ -74,7 +80,10 @@ internal sealed class FileChangeWatcher : IDisposable
     /// <summary>Records a change; every change restarts the debounce.</summary>
     public void NotifyChanged()
     {
-        if (Volatile.Read(ref disposed) == 1) return;
+        if (Volatile.Read(ref disposed) == 1)
+        {
+            return;
+        }
 
         var jitter = TimeSpan.FromMilliseconds(random.NextDouble() * maxJitter.TotalMilliseconds);
         PendingDelay = debounce + jitter;
@@ -84,6 +93,9 @@ internal sealed class FileChangeWatcher : IDisposable
     private void OnSettled()
     {
         PendingDelay = null;
-        if (Volatile.Read(ref disposed) == 0) onChanged();
+        if (Volatile.Read(ref disposed) == 0)
+        {
+            onChanged();
+        }
     }
 }

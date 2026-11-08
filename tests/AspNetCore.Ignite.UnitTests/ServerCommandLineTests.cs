@@ -6,7 +6,8 @@ namespace AspNetCore.Ignite.UnitTests;
 public sealed class ServerCommandLineTests
 {
     private static async Task<(int ExitCode, IReadOnlyDictionary<string, string?>? Overrides)> InvokeAsync(
-        params string[] args)
+        params string[] args
+    )
     {
         IReadOnlyDictionary<string, string?>? overrides = null;
         ServerCommandLine commandLine = new(values =>
@@ -23,8 +24,21 @@ public sealed class ServerCommandLineTests
     public async Task Options_OverrideTheirSettings()
     {
         var (exitCode, overrides) = await InvokeAsync(
-            "-OnHeap", "512", "-OffHeap", "256", "-SpiPort", "47600", "-ConfigFile", "config/persistent-config.xml",
-            "-ConsistentId", "node-1", "-PersistenceEnabled", "-Cluster", "a:47500", "-Cluster", "b:47500"
+            "-OnHeap",
+            "512",
+            "-OffHeap",
+            "256",
+            "-SpiPort",
+            "47600",
+            "-ConfigFile",
+            "config/persistent-config.xml",
+            "-ConsistentId",
+            "node-1",
+            "-PersistenceEnabled",
+            "-Cluster",
+            "a:47500",
+            "-Cluster",
+            "b:47500"
         );
 
         Assert.Equal(0, exitCode);
@@ -38,7 +52,7 @@ public sealed class ServerCommandLineTests
                 ["DEFAULT_CONSISTENT_ID"] = "node-1",
                 ["PERSISTENCE_ENABLED"] = "true",
                 ["CLUSTER_ENDPOINTS:0"] = "a:47500",
-                ["CLUSTER_ENDPOINTS:1"] = "b:47500"
+                ["CLUSTER_ENDPOINTS:1"] = "b:47500",
             },
             overrides
         );

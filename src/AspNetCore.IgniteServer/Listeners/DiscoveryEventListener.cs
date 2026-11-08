@@ -12,12 +12,12 @@ internal sealed class DiscoveryEventListener(ILogger logger) : IEventListener<Di
     public bool Invoke(DiscoveryEvent evt)
     {
         LogEventLevel? level = evt.Type == EventType.NodeJoined ? LogEventLevel.Information
-            : evt.Type == EventType.NodeLeft ? LogEventLevel.Warning
-            : evt.Type == EventType.NodeFailed ? LogEventLevel.Error
+            : evt.Type == EventType.NodeLeft ? LogEventLevel.Warning : evt.Type == EventType.NodeFailed
+                ? LogEventLevel.Error
                 // the local node was cut off from the cluster: it stops, and so does the server (exit code 1)
-            : evt.Type == EventType.NodeSegmented ? LogEventLevel.Error
-            : null;
+                : evt.Type == EventType.NodeSegmented ? LogEventLevel.Error : null;
         if (level.HasValue)
+        {
             logger.Write(
                 level.Value,
                 MessageTemplate,
@@ -25,6 +25,7 @@ internal sealed class DiscoveryEventListener(ILogger logger) : IEventListener<Di
                 string.Join(",", evt.EventNode.Addresses),
                 string.Join(",", evt.EventNode.HostNames)
             );
+        }
 
         return true;
     }

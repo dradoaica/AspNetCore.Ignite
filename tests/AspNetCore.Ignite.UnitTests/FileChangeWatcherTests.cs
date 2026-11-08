@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using AspNetCore.IgniteServer.Utils;
 using Microsoft.Extensions.Time.Testing;
+using System.Diagnostics;
 using Xunit;
 
 namespace AspNetCore.Ignite.UnitTests;
@@ -14,8 +14,14 @@ public sealed class FileChangeWatcherTests
     {
         FakeTimeProvider time = new();
         var invocations = 0;
-        using FileChangeWatcher watcher = new([], () => invocations++, Debounce, TimeSpan.Zero, time,
-            watchFiles: false);
+        using FileChangeWatcher watcher = new(
+            [],
+            () => invocations++,
+            Debounce,
+            TimeSpan.Zero,
+            time,
+            watchFiles: false
+        );
 
         watcher.NotifyChanged();
         time.Advance(TimeSpan.FromSeconds(9));
@@ -38,8 +44,15 @@ public sealed class FileChangeWatcherTests
         FakeTimeProvider time = new();
         var invocations = 0;
         var maxJitter = TimeSpan.FromSeconds(60);
-        using FileChangeWatcher watcher = new([], () => invocations++, Debounce, maxJitter, time, new Random(42),
-            false);
+        using FileChangeWatcher watcher = new(
+            [],
+            () => invocations++,
+            Debounce,
+            maxJitter,
+            time,
+            new Random(42),
+            false
+        );
 
         watcher.NotifyChanged();
         var delay = watcher.PendingDelay!.Value;
@@ -74,7 +87,7 @@ public sealed class FileChangeWatcherTests
             var file = Path.Combine(directory.FullName, "server.jks");
             await File.WriteAllTextAsync(file, "1");
             TaskCompletionSource changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            using FileChangeWatcher watcher = new([file], () => changed.TrySetResult(), TimeSpan.Zero, TimeSpan.Zero);
+            using FileChangeWatcher watcher = new([file,], () => changed.TrySetResult(), TimeSpan.Zero, TimeSpan.Zero);
 
             await Task.Delay(TimeSpan.FromSeconds(1));
             await File.WriteAllTextAsync(file, "2");
@@ -92,7 +105,10 @@ public sealed class FileChangeWatcherTests
     [Fact]
     public async Task KubernetesSecretUpdate_IsSeen()
     {
-        if (OperatingSystem.IsWindows()) return;
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
 
         var directory = Directory.CreateTempSubdirectory("k8s-secret");
         try
@@ -100,11 +116,13 @@ public sealed class FileChangeWatcherTests
             var first = Directory.CreateDirectory(Path.Combine(directory.FullName, "..2026_01"));
             await File.WriteAllTextAsync(Path.Combine(first.FullName, "server.jks"), "1");
             File.CreateSymbolicLink(Path.Combine(directory.FullName, "..data"), first.Name);
-            File.CreateSymbolicLink(Path.Combine(directory.FullName, "server.jks"),
-                Path.Combine("..data", "server.jks"));
+            File.CreateSymbolicLink(
+                Path.Combine(directory.FullName, "server.jks"),
+                Path.Combine("..data", "server.jks")
+            );
             TaskCompletionSource changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
             using FileChangeWatcher watcher = new(
-                [Path.Combine(directory.FullName, "server.jks")],
+                [Path.Combine(directory.FullName, "server.jks"),],
                 () => changed.TrySetResult(),
                 TimeSpan.Zero,
                 TimeSpan.Zero
@@ -115,10 +133,13 @@ public sealed class FileChangeWatcherTests
             await File.WriteAllTextAsync(Path.Combine(second.FullName, "server.jks"), "2");
             File.CreateSymbolicLink(Path.Combine(directory.FullName, "..data_tmp"), second.Name);
             // an atomic rename(2) of the new symlink over ..data, as the kubelet does
-            using (var mv = Process.Start("mv",
-                   [
-                       "-Tf", Path.Combine(directory.FullName, "..data_tmp"), Path.Combine(directory.FullName, "..data")
-                   ])!)
+            using (var mv = Process.Start(
+                       "mv",
+                       [
+                           "-Tf", Path.Combine(directory.FullName, "..data_tmp"),
+                           Path.Combine(directory.FullName, "..data"),
+                       ]
+                   )!)
             {
                 await mv.WaitForExitAsync();
                 Assert.Equal(0, mv.ExitCode);

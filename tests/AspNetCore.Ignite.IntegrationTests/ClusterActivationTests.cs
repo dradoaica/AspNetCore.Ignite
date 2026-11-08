@@ -1,4 +1,3 @@
-using System.Net;
 using Apache.Ignite.Core.Cache.Configuration;
 using Apache.Ignite.Core.Client;
 using Apache.Ignite.Core.Client.Cache;
@@ -6,6 +5,7 @@ using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
 using DotNet.Testcontainers.Volumes;
+using System.Net;
 using Xunit;
 
 namespace AspNetCore.Ignite.IntegrationTests;
@@ -40,8 +40,12 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
         // alone, the first node waits instead of activating a one-node baseline
         await node1.StartAsync();
         await node2.StartAsync();
-        await TestContainerLogs.WaitForMessageAsync(node1, IgniteServerFixture.RunningMessage, 1,
-            TimeSpan.FromSeconds(60));
+        await TestContainerLogs.WaitForMessageAsync(
+            node1,
+            IgniteServerFixture.RunningMessage,
+            1,
+            TimeSpan.FromSeconds(60)
+        );
 
         using var igniteClient = CacheFactory.ConnectAsClient(
             IgniteServerFixture.ClientConfiguration(
@@ -64,13 +68,14 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
         const string clusterEndpoints = "ignite-a:47500,ignite-b:47500";
         await using var nodeA = InMemoryNode(network, "ignite-a", clusterEndpoints);
         await nodeA.StartAsync();
-        using (var igniteClient =
-               CacheFactory.ConnectAsClient(
-                   IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeA))))
+        using (var igniteClient = CacheFactory.ConnectAsClient(
+                   IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeA))
+               ))
         {
             var cache = CacheFactory.GetOrCreateCacheClient<int, string>(igniteClient, "rebalanced");
             cache.PutAll(
-                Enumerable.Range(0, 20_000).Select(i => new KeyValuePair<int, string>(i, new string('x', 100))));
+                Enumerable.Range(0, 20_000).Select(i => new KeyValuePair<int, string>(i, new string('x', 100)))
+            );
         }
 
         await using var nodeB = InMemoryNode(network, "ignite-b", clusterEndpoints);
@@ -111,11 +116,17 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
                   HttpStatusCode.OK,
             TimeSpan.FromSeconds(90)
         );
-        using var igniteClient =
-            CacheFactory.ConnectAsClient(IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeX)));
+        using var igniteClient = CacheFactory.ConnectAsClient(
+            IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeX))
+        );
         // without backups, the partitions of a node that leaves are lost; the safe policy blocks them until reset
         var cache = igniteClient.GetOrCreateCache<int, int>(
-            new CacheClientConfiguration("lossy") { Backups = 0, PartitionLossPolicy = PartitionLossPolicy.ReadWriteSafe });
+            new CacheClientConfiguration("lossy")
+            {
+                Backups = 0,
+                PartitionLossPolicy = PartitionLossPolicy.ReadWriteSafe,
+            }
+        );
         var entries = Enumerable.Range(0, 1000).Select(i => new KeyValuePair<int, int>(i, i)).ToList();
         cache.PutAll(entries);
 
@@ -123,7 +134,12 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
 
         // the departed in-memory node is dropped from the baseline, so the partitions can be reset (empty)
         await TestContainerLogs.WaitForMessageAsync(nodeX, "Partition data lost", 1, TimeSpan.FromSeconds(60));
-        await TestContainerLogs.WaitForMessageAsync(nodeX, "were reset; their data is gone", 1, TimeSpan.FromSeconds(60));
+        await TestContainerLogs.WaitForMessageAsync(
+            nodeX,
+            "were reset; their data is gone",
+            1,
+            TimeSpan.FromSeconds(60)
+        );
         await WaitUntilAsync(() => Succeeds(() => cache.PutAll(entries)), TimeSpan.FromSeconds(30));
         Assert.Equal(entries.Count, cache.GetSize());
     }
@@ -141,25 +157,38 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Waiting for 2 server nodes"))
             .Build();
         await nodeP.StartAsync();
-        List<KeyValuePair<int, int>> entries = [.. Enumerable.Range(0, 1000).Select(i => new KeyValuePair<int, int>(i, i))];
+        List<KeyValuePair<int, int>> entries =
+            [.. Enumerable.Range(0, 1000).Select(i => new KeyValuePair<int, int>(i, i)),];
         await using (var nodeQ = PersistentNode(network, "ignite-q", clusterEndpoints, volume).Build())
         {
             await nodeQ.StartAsync();
-            await TestContainerLogs.WaitForMessageAsync(nodeP, IgniteServerFixture.RunningMessage, 1,
-                TimeSpan.FromSeconds(60));
-            using var igniteClient =
-                CacheFactory.ConnectAsClient(
-                    IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeP)));
+            await TestContainerLogs.WaitForMessageAsync(
+                nodeP,
+                IgniteServerFixture.RunningMessage,
+                1,
+                TimeSpan.FromSeconds(60)
+            );
+            using var igniteClient = CacheFactory.ConnectAsClient(
+                IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeP))
+            );
             igniteClient.GetOrCreateCache<int, int>(
                     new CacheClientConfiguration("durable")
-                        { Backups = 0, PartitionLossPolicy = PartitionLossPolicy.ReadWriteSafe })
+                    {
+                        Backups = 0,
+                        PartitionLossPolicy = PartitionLossPolicy.ReadWriteSafe,
+                    }
+                )
                 .PutAll(entries);
         }
 
         // the partitions of the departed node stay lost (its data is on its volume), and are not reset meanwhile
         await TestContainerLogs.WaitForMessageAsync(nodeP, "Partition data lost", 1, TimeSpan.FromSeconds(60));
-        await TestContainerLogs.WaitForMessageAsync(nodeP, "once a node that owns them returns", 1,
-            TimeSpan.FromSeconds(30));
+        await TestContainerLogs.WaitForMessageAsync(
+            nodeP,
+            "once a node that owns them returns",
+            1,
+            TimeSpan.FromSeconds(30)
+        );
         using HttpClient http = new();
         var lost = await http.GetStringAsync(IgniteServerFixture.GetManagementUri(nodeP, "/metrics"));
         Assert.Matches(@"ignite_cluster_lost_partitions [1-9]", lost);
@@ -167,17 +196,22 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
         await using var returned = PersistentNode(network, "ignite-q", clusterEndpoints, volume).Build();
         await returned.StartAsync();
 
-        await TestContainerLogs.WaitForMessageAsync(nodeP, "with the data of the nodes that returned", 1,
-            TimeSpan.FromSeconds(60));
-        using var client =
-            CacheFactory.ConnectAsClient(IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeP)));
+        await TestContainerLogs.WaitForMessageAsync(
+            nodeP,
+            "with the data of the nodes that returned",
+            1,
+            TimeSpan.FromSeconds(60)
+        );
+        using var client = CacheFactory.ConnectAsClient(
+            IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeP))
+        );
         var cache = client.GetCache<int, int>("durable");
         await WaitUntilAsync(() => Succeeds(() => cache.GetSize()), TimeSpan.FromSeconds(30));
         Assert.Equal(entries.Count, cache.GetSize());
         // a scrape may still see the snapshot of the second before
         await WaitUntilAsync(
-            () => http.GetStringAsync(IgniteServerFixture.GetManagementUri(nodeP, "/metrics")).Result
-                .Contains("ignite_cluster_lost_partitions 0", StringComparison.Ordinal),
+            () => http.GetStringAsync(IgniteServerFixture.GetManagementUri(nodeP, "/metrics"))
+                .Result.Contains("ignite_cluster_lost_partitions 0", StringComparison.Ordinal),
             TimeSpan.FromSeconds(10)
         );
     }
@@ -200,7 +234,10 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
         var deadline = DateTime.UtcNow + timeout;
         while (!condition())
         {
-            if (DateTime.UtcNow > deadline) throw new TimeoutException($"The condition was not met within {timeout}.");
+            if (DateTime.UtcNow > deadline)
+            {
+                throw new TimeoutException($"The condition was not met within {timeout}.");
+            }
 
             await Task.Delay(TimeSpan.FromSeconds(1));
         }
@@ -226,19 +263,13 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
         return volume == null ? builder : builder.WithVolumeMount(volume, "/app/work");
     }
 
-    private IContainer InMemoryNode(
-        INetwork network,
-        string alias,
-        string clusterEndpoints
-    )
-    {
-        return fixture.CreateNodeBuilder()
-            .WithNetwork(network)
-            .WithNetworkAliases(alias)
-            .WithEnvironment("ENABLE_AUTHENTICATION", "false")
-            .WithEnvironment("DEFAULT_CONSISTENT_ID", alias)
-            .WithEnvironment("CLUSTER_ENDPOINTS", clusterEndpoints)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
-            .Build();
-    }
+    private IContainer InMemoryNode(INetwork network, string alias, string clusterEndpoints) => fixture
+        .CreateNodeBuilder()
+        .WithNetwork(network)
+        .WithNetworkAliases(alias)
+        .WithEnvironment("ENABLE_AUTHENTICATION", "false")
+        .WithEnvironment("DEFAULT_CONSISTENT_ID", alias)
+        .WithEnvironment("CLUSTER_ENDPOINTS", clusterEndpoints)
+        .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
+        .Build();
 }

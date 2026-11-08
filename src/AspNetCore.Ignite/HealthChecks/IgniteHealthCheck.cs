@@ -1,8 +1,8 @@
+using AspNetCore.Ignite.Abstractions;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using AspNetCore.Ignite.Abstractions;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace AspNetCore.Ignite.HealthChecks;
 
@@ -14,7 +14,8 @@ public sealed class IgniteHealthCheck(IIgniteManager igniteManager, TimeSpan tim
 
     /// <summary>A health check with <see cref="DefaultTimeout" />.</summary>
     /// <param name="igniteManager">The connection to check.</param>
-    public IgniteHealthCheck(IIgniteManager igniteManager) : this(igniteManager, DefaultTimeout)
+    public IgniteHealthCheck(IIgniteManager igniteManager)
+        : this(igniteManager, DefaultTimeout)
     {
     }
 
@@ -43,9 +44,10 @@ public sealed class IgniteHealthCheck(IIgniteManager igniteManager, TimeSpan tim
                 throw new TimeoutException($"The Ignite cluster did not answer within {timeout}.");
             }
 
-            return active
-                ? HealthCheckResult.Healthy("The Ignite cluster is active.")
-                : new HealthCheckResult(context.Registration.FailureStatus, "The Ignite cluster is not active.");
+            return active ? HealthCheckResult.Healthy("The Ignite cluster is active.") : new HealthCheckResult(
+                context.Registration.FailureStatus,
+                "The Ignite cluster is not active."
+            );
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {

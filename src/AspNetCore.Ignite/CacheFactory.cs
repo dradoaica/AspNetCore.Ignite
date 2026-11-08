@@ -1,7 +1,4 @@
-﻿using System;
-using System.Linq;
-using System.Security.Authentication;
-using Apache.Ignite.Core;
+﻿using Apache.Ignite.Core;
 using Apache.Ignite.Core.Cache;
 using Apache.Ignite.Core.Cache.Configuration;
 using Apache.Ignite.Core.Client;
@@ -9,6 +6,9 @@ using Apache.Ignite.Core.Client.Cache;
 using Apache.Ignite.Core.Log;
 using AspNetCore.Ignite.Options;
 using AspNetCore.Ignite.Utils;
+using System;
+using System.Linq;
+using System.Security.Authentication;
 
 namespace AspNetCore.Ignite;
 
@@ -38,47 +38,53 @@ public static class CacheFactory
         bool skipServerCertificateValidation = false,
         bool checkCertificateRevocation = true,
         ILogger? logger = null
-    )
-    {
-        return GetIgniteClientConfiguration(
-            new IgniteClientOptions
-            {
-                Endpoints = string.IsNullOrWhiteSpace(endpoint) ? [] : [endpoint!],
-                UserName = userName,
-                Password = password,
-                UseSsl = useSsl,
-                SslCertificatePath = certificatePath,
-                SslCertificatePassword = certificatePassword,
-                SslSkipServerCertificateValidation = skipServerCertificateValidation,
-                SslCheckCertificateRevocation = checkCertificateRevocation
-            },
-            logger
-        );
-    }
+    ) => GetIgniteClientConfiguration(
+        new IgniteClientOptions
+        {
+            Endpoints = string.IsNullOrWhiteSpace(endpoint) ? [] : [endpoint!,],
+            UserName = userName,
+            Password = password,
+            UseSsl = useSsl,
+            SslCertificatePath = certificatePath,
+            SslCertificatePassword = certificatePassword,
+            SslSkipServerCertificateValidation = skipServerCertificateValidation,
+            SslCheckCertificateRevocation = checkCertificateRevocation,
+        },
+        logger
+    );
 
     /// <summary>A thin client configuration from <paramref name="options" />.</summary>
     /// <param name="options">The options.</param>
     /// <param name="logger">The Ignite logger of the client (none when null).</param>
-    public static IgniteClientConfiguration GetIgniteClientConfiguration(IgniteClientOptions options,
-        ILogger? logger = null)
+    public static IgniteClientConfiguration GetIgniteClientConfiguration(
+        IgniteClientOptions options,
+        ILogger? logger = null
+    )
     {
         var endpoints = options.Endpoints.Where(endpoint => !string.IsNullOrWhiteSpace(endpoint)).ToList();
         IgniteClientConfiguration igniteClientConfiguration = new()
         {
-            Endpoints = endpoints.Count > 0 ? endpoints : [DefaultEndpoint],
+            Endpoints = endpoints.Count > 0 ? endpoints : [DefaultEndpoint,],
             RetryPolicy = new ClientRetryReadPolicy(),
             RetryLimit = options.RetryLimit,
             SocketTimeout = options.SocketTimeout,
             EnablePartitionAwareness = true,
             EnableClusterDiscovery = options.EnableClusterDiscovery,
             EnableHeartbeats = true,
-            Logger = logger
+            Logger = logger,
         };
-        if (!string.IsNullOrWhiteSpace(options.UserName)) igniteClientConfiguration.UserName = options.UserName;
+        if (!string.IsNullOrWhiteSpace(options.UserName))
+        {
+            igniteClientConfiguration.UserName = options.UserName;
+        }
 
-        if (!string.IsNullOrWhiteSpace(options.Password)) igniteClientConfiguration.Password = options.Password;
+        if (!string.IsNullOrWhiteSpace(options.Password))
+        {
+            igniteClientConfiguration.Password = options.Password;
+        }
 
         if (options.UseSsl)
+        {
             igniteClientConfiguration.SslStreamFactory = new SslStreamFactory
             {
                 CertificatePath = options.SslCertificatePath,
@@ -86,8 +92,9 @@ public static class CacheFactory
                 CheckCertificateRevocation = options.SslCheckCertificateRevocation,
                 SkipServerCertificateValidation = options.SslSkipServerCertificateValidation,
                 // None lets the OS choose the best protocol it supports (TLS 1.3 included), as Microsoft recommends
-                SslProtocols = SslProtocols.None
+                SslProtocols = SslProtocols.None,
             };
+        }
 
         return igniteClientConfiguration;
     }
@@ -103,10 +110,8 @@ public static class CacheFactory
 
     /// <summary>Connects a thin client.</summary>
     /// <param name="igniteClientConfiguration">The thin client configuration.</param>
-    public static IIgniteClient ConnectAsClient(IgniteClientConfiguration igniteClientConfiguration)
-    {
-        return Ignition.StartClient(igniteClientConfiguration);
-    }
+    public static IIgniteClient ConnectAsClient(IgniteClientConfiguration igniteClientConfiguration) =>
+        Ignition.StartClient(igniteClientConfiguration);
 
     /// <summary>Gets or creates a partitioned cache through a thick client or server node.</summary>
     /// <param name="ignite">The node.</param>
@@ -133,11 +138,11 @@ public static class CacheFactory
                 new QueryEntity
                 {
                     KeyType = typeof(TKey),
-                    ValueType = typeof(TData)
-                }
+                    ValueType = typeof(TData),
+                },
             ],
             Backups = cacheOptions.Backups,
-            PlatformCacheConfiguration = GetPlatformCacheConfiguration<TKey, TData>(cacheOptions)
+            PlatformCacheConfiguration = GetPlatformCacheConfiguration<TKey, TData>(cacheOptions),
         };
         extendConfigurationAction?.Invoke(cacheCfg);
 
@@ -162,7 +167,7 @@ public static class CacheFactory
         CacheClientConfiguration cacheCfg = new(
             new CacheConfiguration
             {
-                PlatformCacheConfiguration = GetPlatformCacheConfiguration<TKey, TData>(cacheOptions)
+                PlatformCacheConfiguration = GetPlatformCacheConfiguration<TKey, TData>(cacheOptions),
             },
             true
         )
@@ -175,31 +180,24 @@ public static class CacheFactory
                 new QueryEntity
                 {
                     KeyType = typeof(TKey),
-                    ValueType = typeof(TData)
-                }
+                    ValueType = typeof(TData),
+                },
             ],
-            Backups = cacheOptions.Backups
+            Backups = cacheOptions.Backups,
         };
         extendConfigurationAction?.Invoke(cacheCfg);
 
         return ignite.GetOrCreateCache<TKey, TData>(cacheCfg);
     }
 
-    internal static string? GetGroupName<TData>(IgniteCacheOptions cacheOptions)
-    {
-        return cacheOptions.GroupByValueType ? typeof(TData).FullNameWithoutAssemblyInfo() : null;
-    }
+    internal static string? GetGroupName<TData>(IgniteCacheOptions cacheOptions) =>
+        cacheOptions.GroupByValueType ? typeof(TData).FullNameWithoutAssemblyInfo() : null;
 
     internal static PlatformCacheConfiguration? GetPlatformCacheConfiguration<TKey, TData>(
         IgniteCacheOptions cacheOptions
-    )
+    ) => cacheOptions.EnablePlatformCache ? new PlatformCacheConfiguration
     {
-        return cacheOptions.EnablePlatformCache
-            ? new PlatformCacheConfiguration
-            {
-                KeyTypeName = typeof(TKey).FullNameWithoutAssemblyInfo(),
-                ValueTypeName = typeof(TData).FullNameWithoutAssemblyInfo()
-            }
-            : null;
-    }
+        KeyTypeName = typeof(TKey).FullNameWithoutAssemblyInfo(),
+        ValueTypeName = typeof(TData).FullNameWithoutAssemblyInfo(),
+    } : null;
 }

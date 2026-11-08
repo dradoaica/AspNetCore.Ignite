@@ -5,7 +5,8 @@ namespace AspNetCore.IgniteServer;
 // Health, metrics, REST, readiness and shutdown.
 internal sealed partial class IgniteServerSettings
 {
-    [ConfigurationKeyName("REST_ENABLED")] public bool RestEnabled { get; set; }
+    [ConfigurationKeyName("REST_ENABLED")]
+    public bool RestEnabled { get; set; }
 
     [ConfigurationKeyName("READY_WHEN_REBALANCED")]
     public bool ReadyWhenRebalanced { get; set; } = true;

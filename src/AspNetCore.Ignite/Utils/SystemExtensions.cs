@@ -12,10 +12,8 @@ public static partial class SystemExtensions
     /// </summary>
     /// <param name="type">Type to get the full name for.</param>
     /// <returns>Full name of the specified type without additional info of the assembly.</returns>
-    public static string FullNameWithoutAssemblyInfo(this Type type)
-    {
-        return type.FullName is { } fullName ? AssemblyVersionInfo().Replace(fullName, string.Empty) : type.Name;
-    }
+    public static string FullNameWithoutAssemblyInfo(this Type type) => type.FullName is { } fullName
+        ? AssemblyVersionInfo().Replace(fullName, string.Empty) : type.Name;
 
     // ", Version=..., Culture=..., PublicKeyToken=..." of every type argument, up to its closing bracket
     [GeneratedRegex(@", Version=[^\]]*")]

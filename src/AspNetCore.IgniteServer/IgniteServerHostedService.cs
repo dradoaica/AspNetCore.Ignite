@@ -1,3 +1,6 @@
+using AspNetCore.IgniteServer.Utils;
+using Microsoft.Extensions.Hosting;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -5,9 +8,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Linq;
-using AspNetCore.IgniteServer.Utils;
-using Microsoft.Extensions.Hosting;
-using Serilog;
 
 namespace AspNetCore.IgniteServer;
 
@@ -27,10 +27,10 @@ internal sealed class IgniteServerHostedService(
     private volatile bool stopping;
 
     // Ignition.Start blocks, so run the node off the host's startup path
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        return Task.Run(() => RunAsync(stoppingToken), CancellationToken.None);
-    }
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.Run(
+        () => RunAsync(stoppingToken),
+        CancellationToken.None
+    );
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
@@ -56,18 +56,30 @@ internal sealed class IgniteServerHostedService(
     {
         igniteServerRunner.SetOffHeapMemoryLimit(settings.OffHeapMemory);
         igniteServerRunner.SetOnHeapMemoryLimit(settings.OnHeapMemory);
-        if (settings.SpiPort.HasValue) igniteServerRunner.SetServerPort(settings.SpiPort.Value);
+        if (settings.SpiPort.HasValue)
+        {
+            igniteServerRunner.SetServerPort(settings.SpiPort.Value);
+        }
 
         if (settings.ClusterEndpoints.Count > 0)
+        {
             igniteServerRunner.SetClusterEndpoints(settings.ClusterEndpoints);
+        }
         else if (settings.UseTcpDiscoveryStaticIpFinder)
             // resolved only when needed: a failing DNS lookup must not break nodes that do not use it
-            igniteServerRunner.SetClusterEndpoints([$"{getLocalIpAddress()}:{DefaultDiscoveryPort}"]);
+        {
+            igniteServerRunner.SetClusterEndpoints([$"{getLocalIpAddress()}:{DefaultDiscoveryPort}",]);
+        }
 
         if (!string.IsNullOrWhiteSpace(settings.ConsistentId))
+        {
             igniteServerRunner.SetConsistentId(settings.ConsistentId);
+        }
 
-        if (settings.PersistenceEnabled) igniteServerRunner.SetPersistence(true);
+        if (settings.PersistenceEnabled)
+        {
+            igniteServerRunner.SetPersistence(true);
+        }
     }
 
     private async Task RunAsync(CancellationToken stoppingToken)
@@ -75,19 +87,25 @@ internal sealed class IgniteServerHostedService(
         try
         {
             if (settings.EnableAuthentication && string.IsNullOrWhiteSpace(settings.IgniteUserPassword))
+            {
                 logger.Warning(
                     "Authentication is enabled but IGNITE_USER_PASSWORD is not set: the default 'ignite' user keeps its well-known password."
                 );
+            }
 
             if (!settings.UseSsl)
+            {
                 logger.Warning(
                     "USE_SSL is disabled: nodes join the cluster unauthenticated and unencrypted, so restrict the discovery and communication ports (47500, 47100) to the cluster's nodes, e.g., with a NetworkPolicy."
                 );
+            }
 
             if (settings.PeerAssemblyLoading)
+            {
                 logger.Warning(
                     "PEER_ASSEMBLY_LOADING is enabled: this node loads and runs .NET assemblies sent by any node of the cluster."
                 );
+            }
 
             var springConfigPath = await SpringConfigRenderer.RenderToFileAsync(
                     Path.Combine(
@@ -153,9 +171,15 @@ internal sealed class IgniteServerHostedService(
             sslFiles.Add(settings.SslTrustStoreFilePath!);
         }
 
-        if (settings.UseClientSsl) sslFiles.Add(settings.SslClientCertificatePath!);
+        if (settings.UseClientSsl)
+        {
+            sslFiles.Add(settings.SslClientCertificatePath!);
+        }
 
-        if (sslFiles.Count == 0) return null;
+        if (sslFiles.Count == 0)
+        {
+            return null;
+        }
 
         if (!settings.RestartOnSslFileChange)
         {
@@ -175,12 +199,18 @@ internal sealed class IgniteServerHostedService(
 
     private void OnSslFilesChanged()
     {
-        if (stopping || lifetime.ApplicationStopping.IsCancellationRequested) return;
+        if (stopping || lifetime.ApplicationStopping.IsCancellationRequested)
+        {
+            return;
+        }
 
         logger.Information("SSL files changed, restarting the Ignite node...");
         restartRequested = true;
         var timeout = TimeSpan.FromSeconds(settings.GracefulStopTimeoutInSeconds);
-        if (runner?.Restart(timeout) != false) return;
+        if (runner?.Restart(timeout) != false)
+        {
+            return;
+        }
 
         // it would wait forever: the server exits instead, and its container restarts with the renewed files
         logger.Error(

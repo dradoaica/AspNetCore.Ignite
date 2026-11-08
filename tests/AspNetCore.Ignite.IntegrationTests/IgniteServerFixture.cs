@@ -1,16 +1,16 @@
-using System.Runtime.InteropServices;
 using Apache.Ignite.Core.Client;
 using AspNetCore.Ignite.Options;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Images;
+using System.Runtime.InteropServices;
 using Xunit;
 
 namespace AspNetCore.Ignite.IntegrationTests;
 
 /// <summary>
-///     The server image for the nodes of a test collection: a prebuilt one (e.g., built once by CI), or the repository
-///     Dockerfile, built once for every collection (Testcontainers removes it after the run).
+///     The server image for the nodes of a test collection: a prebuilt one (e.g., built once by CI), or the
+///     repository Dockerfile, built once for every collection (Testcontainers removes it after the run).
 /// </summary>
 public abstract class IgniteNodesFixture : IAsyncLifetime
 {
@@ -23,42 +23,37 @@ public abstract class IgniteNodesFixture : IAsyncLifetime
     private static string BuildPlatform => RuntimeInformation.OSArchitecture switch
     {
         Architecture.Arm64 => "linux/arm64",
-        _ => "linux/amd64"
+        _ => "linux/amd64",
     };
 
     /// <summary>A prebuilt server image to test (e.g., built once by CI); otherwise the Dockerfile is built.</summary>
     public static string? PrebuiltImage => Environment.GetEnvironmentVariable("IGNITE_SERVER_IMAGE") is
-        { Length: > 0 } name
-        ? name
-        : null;
+        { Length: > 0, } name ? name : null;
 
-    public virtual async Task InitializeAsync()
-    {
-        image = await ServerImage.Value;
-    }
+    public virtual async Task InitializeAsync() => image = await ServerImage.Value;
 
-    public virtual Task DisposeAsync()
-    {
-        return Task.CompletedTask;
-    }
+    public virtual Task DisposeAsync() => Task.CompletedTask;
 
     /// <summary>A node of the server image with small memory settings and the thin client port published.</summary>
-    public ContainerBuilder CreateNodeBuilder()
-    {
-        return new ContainerBuilder(image!)
-            .WithPortBinding(IgniteServerFixture.ThinClientPort, true)
-            .WithPortBinding(IgniteServerFixture.ManagementPort, true)
-            .WithEnvironment("DEFAULT_ON_HEAP_MEMORY", "512")
-            .WithEnvironment("DEFAULT_OFF_HEAP_MEMORY", "256")
-            .WithEnvironment("IGNITE_USER_PASSWORD", IgniteServerFixture.Password);
-    }
+    public ContainerBuilder CreateNodeBuilder() => new ContainerBuilder(image!)
+        .WithPortBinding(IgniteServerFixture.ThinClientPort, true)
+        .WithPortBinding(IgniteServerFixture.ManagementPort, true)
+        .WithEnvironment("DEFAULT_ON_HEAP_MEMORY", "512")
+        .WithEnvironment("DEFAULT_OFF_HEAP_MEMORY", "256")
+        .WithEnvironment("IGNITE_USER_PASSWORD", IgniteServerFixture.Password);
 
     /// <summary>The image, or null without Docker.</summary>
     private static async Task<IImage?> LoadImageAsync()
     {
-        if (!await DockerSupport.IsDockerAvailableAsync()) return null;
+        if (!await DockerSupport.IsDockerAvailableAsync())
+        {
+            return null;
+        }
 
-        if (PrebuiltImage is { } prebuiltImage) return new DockerImage(prebuiltImage);
+        if (PrebuiltImage is { } prebuiltImage)
+        {
+            return new DockerImage(prebuiltImage);
+        }
 
         var built = new ImageFromDockerfileBuilder()
             .WithDockerfileDirectory(CommonDirectoryPath.GetGitDirectory(), string.Empty)
@@ -75,8 +70,8 @@ public abstract class IgniteNodesFixture : IAsyncLifetime
 
 /// <summary>
 ///     Runs one node (authentication and persistence on, the defaults) for every test of
-///     <see cref="IgniteServerCollection" />; scenarios that need other settings start their own nodes from the same
-///     image (<see cref="IgniteNodesFixture.CreateNodeBuilder" />).
+///     <see cref="IgniteServerCollection" />; scenarios that need other settings start their own nodes from the same image
+///     (<see cref="IgniteNodesFixture.CreateNodeBuilder" />).
 /// </summary>
 public sealed class IgniteServerFixture : IgniteNodesFixture
 {
@@ -107,7 +102,10 @@ public sealed class IgniteServerFixture : IgniteNodesFixture
     public override async Task InitializeAsync()
     {
         await base.InitializeAsync();
-        if (!IsDockerAvailable) return;
+        if (!IsDockerAvailable)
+        {
+            return;
+        }
 
         container = CreateNodeBuilder()
             .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(RunningMessage))
@@ -117,33 +115,34 @@ public sealed class IgniteServerFixture : IgniteNodesFixture
 
     public override async Task DisposeAsync()
     {
-        if (container != null) await container.DisposeAsync();
+        if (container != null)
+        {
+            await container.DisposeAsync();
+        }
     }
 
-    public static string GetEndpoint(IContainer node)
-    {
-        return $"{node.Hostname}:{node.GetMappedPublicPort(ThinClientPort)}";
-    }
+    public static string GetEndpoint(IContainer node) => $"{node.Hostname}:{node.GetMappedPublicPort(ThinClientPort)}";
 
     /// <summary>
     ///     A thin client configuration that uses only <paramref name="endpoint" />: the container addresses it would
     ///     discover are not reachable from every Docker host (e.g., Docker Desktop), and waiting for them slows the tests.
     /// </summary>
-    public static IgniteClientConfiguration ClientConfiguration(string endpoint, string? userName = null,
-        string? password = null)
-    {
-        return CacheFactory.GetIgniteClientConfiguration(
-            new IgniteClientOptions
-            {
-                Endpoints = [endpoint], UserName = userName, Password = password, EnableClusterDiscovery = false
-            }
-        );
-    }
+    public static IgniteClientConfiguration ClientConfiguration(
+        string endpoint,
+        string? userName = null,
+        string? password = null
+    ) => CacheFactory.GetIgniteClientConfiguration(
+        new IgniteClientOptions
+        {
+            Endpoints = [endpoint,],
+            UserName = userName,
+            Password = password,
+            EnableClusterDiscovery = false,
+        }
+    );
 
-    public static Uri GetManagementUri(IContainer node, string path)
-    {
-        return new Uri($"http://{node.Hostname}:{node.GetMappedPublicPort(ManagementPort)}{path}");
-    }
+    public static Uri GetManagementUri(IContainer node, string path) =>
+        new($"http://{node.Hostname}:{node.GetMappedPublicPort(ManagementPort)}{path}");
 }
 
 /// <summary>For the tests that start clusters of their own: they run beside those of the shared node.</summary>

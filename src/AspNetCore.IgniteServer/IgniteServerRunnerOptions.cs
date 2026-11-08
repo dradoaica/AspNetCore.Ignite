@@ -1,6 +1,6 @@
+using Apache.Ignite.Core.Configuration;
 using System;
 using System.Collections.Generic;
-using Apache.Ignite.Core.Configuration;
 
 namespace AspNetCore.IgniteServer;
 
@@ -31,8 +31,7 @@ internal sealed record IgniteServerRunnerOptions
 
     /// <summary>
     ///     How long the baseline waits for a stable topology before following it; when not set, 5 minutes with
-    ///     persistence (a restarted node returns with its data, which is then not moved away and back) and 30 seconds
-    ///     without.
+    ///     persistence (a restarted node returns with its data, which is then not moved away and back) and 30 seconds without.
     /// </summary>
     public TimeSpan? BaselineAutoAdjustTimeout { get; init; }
 
@@ -88,8 +87,8 @@ internal sealed record IgniteServerRunnerOptions
     public DataPageEvictionMode? PageEvictionMode { get; init; }
     public int? SqlQueryHistorySize { get; init; }
 
-    internal TimeSpan GetBaselineAutoAdjustTimeout(bool persistenceEnabled)
-    {
-        return BaselineAutoAdjustTimeout ?? (persistenceEnabled ? TimeSpan.FromMinutes(5) : TimeSpan.FromSeconds(30));
-    }
+    internal TimeSpan GetBaselineAutoAdjustTimeout(bool persistenceEnabled) => BaselineAutoAdjustTimeout ??
+                                                                               (persistenceEnabled
+                                                                                   ? TimeSpan.FromMinutes(5)
+                                                                                   : TimeSpan.FromSeconds(30));
 }

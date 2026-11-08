@@ -24,15 +24,17 @@ internal static class SpringConfigRenderer
     {
         xmlPlaceholders ??= new Dictionary<string, string?>();
         var names = placeholders.Keys.Concat(xmlPlaceholders.Keys).ToList();
-        if (names.Count == 0) return template;
+        if (names.Count == 0)
+        {
+            return template;
+        }
 
         // the longest name first, should one contain another
         var pattern = string.Join('|', names.OrderByDescending(name => name.Length).Select(Regex.Escape));
         return Regex.Replace(
             template,
             pattern,
-            match => xmlPlaceholders.TryGetValue(match.Value, out var xml)
-                ? xml ?? string.Empty
+            match => xmlPlaceholders.TryGetValue(match.Value, out var xml) ? xml ?? string.Empty
                 : SecurityElement.Escape(placeholders[match.Value] ?? string.Empty)
         );
     }
@@ -58,17 +60,25 @@ internal static class SpringConfigRenderer
         else
         {
             // the rendered file may contain keystore passwords
-            Directory.CreateDirectory(outputDirectory,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            if (File.Exists(outputPath)) File.Delete(outputPath);
+            Directory.CreateDirectory(
+                outputDirectory,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+            );
+            if (File.Exists(outputPath))
+            {
+                File.Delete(outputPath);
+            }
         }
 
         FileStreamOptions options = new()
         {
             Mode = FileMode.Create,
-            Access = FileAccess.Write
+            Access = FileAccess.Write,
         };
-        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        if (!OperatingSystem.IsWindows())
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
 
         await using StreamWriter writer = new(outputPath, Encoding.UTF8, options);
         await writer.WriteAsync(Render(template, placeholders, xmlPlaceholders)).ConfigureAwait(false);
