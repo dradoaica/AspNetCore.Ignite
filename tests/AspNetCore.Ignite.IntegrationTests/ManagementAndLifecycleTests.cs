@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using Apache.Ignite.Core.Cache.Query;
 using DotNet.Testcontainers.Builders;
@@ -183,6 +184,37 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
     }
 
     [SkippableFact]
+    public async Task Metrics_ArePushedToAnOpenTelemetryCollector()
+    {
+        Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
+        // a collector of the test, which the node reaches through the Docker host
+        var port = FreePort();
+        using HttpListener collector = new();
+        collector.Prefixes.Add($"http://*:{port}/");
+        collector.Start();
+        await using var node = fixture.CreateNodeBuilder()
+            .WithEnvironment("ENABLE_AUTHENTICATION", "false")
+            .WithExtraHost("collector", "host-gateway")
+            .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", $"http://collector:{port}")
+            .WithEnvironment("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf")
+            .WithEnvironment("OTEL_METRIC_EXPORT_INTERVAL", "1000")
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
+            .Build();
+        await node.StartAsync();
+
+        var context = await collector.GetContextAsync().WaitAsync(TimeSpan.FromSeconds(60));
+        using MemoryStream body = new();
+        await context.Request.InputStream.CopyToAsync(body);
+        context.Response.Close();
+
+        Assert.Equal("/v1/metrics", context.Request.Url!.AbsolutePath);
+        // the names of the protobuf message are UTF-8
+        var text = Encoding.UTF8.GetString(body.ToArray());
+        Assert.Contains("node_ready", text);
+        Assert.Contains("aspnetcore-ignite-server", text);
+    }
+
+    [SkippableFact]
     public void PeerClassLoading_IsOffByDefault()
     {
         Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
@@ -239,5 +271,12 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
     {
         var result = await node.ExecAsync(command);
         return (result.ExitCode ?? -1, result.Stdout, result.Stderr);
+    }
+
+    private static int FreePort()
+    {
+        using TcpListener listener = new(IPAddress.Loopback, 0);
+        listener.Start();
+        return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 }

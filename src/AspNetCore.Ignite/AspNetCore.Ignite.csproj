@@ -17,11 +17,11 @@
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <!-- breaking changes of the version are in docs/upgrading.md -->
         <PackageReleaseNotes>Upgrading (breaking changes): https://github.com/dradoaica/AspNetCore.Ignite/blob/main/docs/upgrading.md</PackageReleaseNotes>
-        <!-- SourceLink is built into the .NET SDK; ship symbols and embed untracked sources for debugging -->
+        <!-- SourceLink is built into the .NET SDK; the PDB is embedded in the assembly (GitHub Packages takes no symbol
+             packages), with the untracked sources, for debugging -->
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
-        <IncludeSymbols>true</IncludeSymbols>
-        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <DebugType>embedded</DebugType>
         <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
     </PropertyGroup>
 

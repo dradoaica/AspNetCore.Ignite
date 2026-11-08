@@ -11,6 +11,8 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 using Prometheus;
 using Serilog;
 
@@ -97,6 +99,12 @@ static IHost BuildWithManagement(IConfiguration configuration, IgniteServerSetti
     AddServerServices(builder.Services, settings);
     builder.Services.AddSingleton(sp =>
         new IgniteNodeMetrics(sp.GetRequiredService<IgniteNodeState>(), settings.MetricsPerCache));
+    // the instruments of /metrics pushed to an OpenTelemetry collector too, as the OTEL_* settings say
+    if (!string.IsNullOrWhiteSpace(configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
+        builder.Services.AddOpenTelemetry()
+            .ConfigureResource(resource =>
+                resource.AddService(configuration["OTEL_SERVICE_NAME"] ?? "aspnetcore-ignite-server"))
+            .WithMetrics(metrics => metrics.AddMeter(IgniteNodeMetrics.MeterName).AddOtlpExporter());
     builder.Services.AddHealthChecks()
         .AddCheck<IgniteNodeHealthCheck>("ignite-node", tags: ["ready"])
         .AddCheck<IgniteNodeStartedHealthCheck>("ignite-node-started", tags: ["started"])

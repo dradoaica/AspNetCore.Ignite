@@ -7,7 +7,8 @@ REST API, JSON and the control utility, with the runtime dependencies their Mave
 `src/AspNetCore.IgniteServer/JavaLibs.props`: the build downloads them from Maven Central, verifies their SHA-256 and
 copies them to `libs/` (not in IDE design-time builds). When upgrading Ignite (`IgniteVersion` in
 `Directory.Packages.props`), run `scripts/update-java-libs.sh`: it derives the dependencies of the Ignite modules listed
-there from their POMs again (without what the package contains) and updates the hashes.
+there from their POMs again (without what the package contains) and updates the hashes. An entry with an `Override`
+attribute keeps its version (e.g., Jackson 2.21.7 instead of the 2.19.0 Ignite declares, for its fixed vulnerabilities).
 
 Dependabot bumps `Apache.Ignite`; the Ignite Upgrade workflow then runs the script on its branch and pushes the updated
 modules. Dependabot stops rebasing a pull request once someone else pushed to it (merge or close it, and let it open a
@@ -32,9 +33,16 @@ CI reports the unit test coverage and the image's vulnerabilities with a fix (Tr
 the job summary, and tests the image with its
 [Helm chart](https://github.com/dradoaica/helm-charts/tree/main/charts/aspnetcore-ignite-server): a two-node persistent
 cluster in kind, checked by the chart's probes and `helm test` (the `helm-charts-ref` input selects the chart revision).
-A release opens a pull request on the chart repository that moves it to the released image (with a
-`HELM_CHARTS_TOKEN` secret). Run by hand (Run workflow), the Release workflow is a dry run: it builds the package and
-the image for every platform, and publishes nothing.
+Run by hand (Run workflow), the Release workflow is a dry run: it builds the package and the image for every
+platform, and publishes nothing.
+
+## Release
+
+Merge the release branches of both repositories into `main` (the chart's first), then publish a GitHub release whose
+tag is the version (e.g., `2.19.0`). The Release workflow tests once more, publishes the package and the image (also
+tagged `2.19`, `2` and `latest`), and, for a patch release of the image, opens a pull request on the chart repository
+that moves the chart to it (with a `HELM_CHARTS_TOKEN` secret): on the chart's branch of the same version if there is
+one, otherwise `main`. A new minor version of the image needs the chart released with it, so it opens none then.
 
 ## Build aspnetcore.ignite-server
 

@@ -18,9 +18,9 @@
         <JavaLib Include="org.apache.ignite:ignite-json" Version="$(IgniteVersion)" Sha256="aabd0247e547fbf6019a4e03cb0a07e3677449e60d820beda45f40fb8d3ec0e1"/>
         <JavaLib Include="org.apache.ignite:ignite-kubernetes" Version="$(IgniteVersion)" Sha256="1d2442c976013ed9e7559f518fa58e4cce9a9e1b04c4dd42fe11162605240403"/>
         <JavaLib Include="org.apache.ignite:ignite-rest-http" Version="$(IgniteVersion)" Sha256="53c209aabdb45aa49f62bfa67a01ffff974d0f9f0f8a2bc768e2bcd07018e8bf"/>
-        <JavaLib Include="com.fasterxml.jackson.core:jackson-annotations" Version="2.19.0" Sha256="ead60e9cac0e42b57092b9e2d087ff43536e9477d4486ba393037a8cc156cda7"/>
-        <JavaLib Include="com.fasterxml.jackson.core:jackson-core" Version="2.19.0" Sha256="da8e859bac94874528116a25f20c68560e4287acbf27628711b8a4f96b028430"/>
-        <JavaLib Include="com.fasterxml.jackson.core:jackson-databind" Version="2.19.0" Sha256="ceda311f476c3b18e1d2b240c94e2dcb9c8d44e70f8afa9facab88bac4ddc03a"/>
+        <JavaLib Include="com.fasterxml.jackson.core:jackson-annotations" Version="2.21" Sha256="53ca085f4a150f703f49e1aabd935bd03b43e1ea3d55d135438292af22cef56b" Override="fixes the high CVEs of 2.19.0, the version Ignite declares"/>
+        <JavaLib Include="com.fasterxml.jackson.core:jackson-core" Version="2.21.7" Sha256="8c5623b98f32d5f7e1287ff61ed50e08ab7b11381e991fff89327faabba42261" Override="fixes the high CVEs of 2.19.0, the version Ignite declares"/>
+        <JavaLib Include="com.fasterxml.jackson.core:jackson-databind" Version="2.21.7" Sha256="1290c2795e93e8a6861a6c4d9ff0d844d32f5ea178362cb2721edf5561e828b1" Override="fixes the high CVEs of 2.19.0, the version Ignite declares"/>
         <JavaLib Include="org.eclipse.jetty:jetty-http" Version="11.0.24" Sha256="64e3686347f60fb1aa025013821547995a708e61a89967c0386ad3adc9fad11f"/>
         <JavaLib Include="org.eclipse.jetty:jetty-io" Version="11.0.24" Sha256="379a04193b4e666d7900478f602d12bd4e3d91abd3b5f64434d92927b04720f9"/>
         <JavaLib Include="org.eclipse.jetty.toolchain:jetty-jakarta-servlet-api" Version="5.0.2" Sha256="efb20997729f32bfa6c8a8319037c353f7ad460d5d49f336bf232998ea2358db"/>

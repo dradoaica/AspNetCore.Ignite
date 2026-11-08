@@ -2,9 +2,10 @@
 # Updates the Java modules of src/AspNetCore.IgniteServer/JavaLibs.props after a version change (e.g., IgniteVersion in
 # Directory.Packages.props): the Ignite modules listed there are kept, and the other entries are derived again from
 # their Maven POMs (which list every compile and runtime dependency, with its version), without what the Apache.Ignite
-# NuGet package already contains (ignite-core, ignite-spring, ignite-indexing and their dependencies). Every jar is
-# downloaded from Maven Central and its SHA-256 written back. Review the diff before committing: a hash change without
-# a version change means the artifact changed upstream. Needs python3.
+# NuGet package already contains (ignite-core, ignite-spring, ignite-indexing and their dependencies). An entry with an
+# Override attribute (its reason) keeps its version instead of the one the POMs declare (e.g., a fixed vulnerability).
+# Every jar is downloaded from Maven Central and its SHA-256 written back. Review the diff before committing: a hash
+# change without a version change means the artifact changed upstream. Needs python3.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -47,8 +48,12 @@ packaged = {(IGNITE, module) for module in PACKAGED_MODULES}
 for module in PACKAGED_MODULES:
     packaged |= {(group, artifact) for group, artifact, _ in dependencies(module)}
 
-entry = re.compile(r'^[ \t]*<JavaLib Include="([^":]+):([^"]+)" Version="([^"]+)" Sha256="([0-9a-f]{64})"/>\n', re.M)
-previous = {(group, artifact): (version, sha256) for group, artifact, version, sha256 in entry.findall(props)}
+entry = re.compile(
+    r'^[ \t]*<JavaLib Include="([^":]+):([^"]+)" Version="([^"]+)" Sha256="([0-9a-f]{64})"(?: Override="([^"]*)")?/>\n',
+    re.M)
+previous = {(group, artifact): (version, sha256) for group, artifact, version, sha256, _ in entry.findall(props)}
+overrides = {(group, artifact): (version, reason)
+             for group, artifact, version, _, reason in entry.findall(props) if reason}
 libs, pending = {}, [artifact for group, artifact in previous if group == IGNITE]
 while pending:
     module = pending.pop()
@@ -68,6 +73,13 @@ while pending:
             libs[(group, artifact)] = version
 
 lines = []
+for (group, artifact), (version, reason) in overrides.items():
+    if (group, artifact) in libs:
+        print(f"OVERRIDE  {group}:{artifact}: {version} instead of {libs[(group, artifact)]} ({reason})")
+        libs[(group, artifact)] = version
+    else:
+        print(f"WARNING   {group}:{artifact} is no longer a dependency: its override is dropped")
+
 for (group, artifact), version in sorted(libs.items(), key=lambda item: (item[0][1], item[0][0])):
     with urllib.request.urlopen(url(group, artifact, version, "jar")) as response:
         sha256 = hashlib.sha256(response.read()).hexdigest()
@@ -77,7 +89,8 @@ for (group, artifact), version in sorted(libs.items(), key=lambda item: (item[0]
               else "UPDATED  " if old_sha256 != sha256 else "unchanged")
     print(f"{status} {group}:{artifact}:{version}")
     shown = "$(IgniteVersion)" if group == IGNITE else version
-    lines.append(f'        <JavaLib Include="{group}:{artifact}" Version="{shown}" Sha256="{sha256}"/>\n')
+    override = f' Override="{overrides[(group, artifact)][1]}"' if (group, artifact) in overrides else ""
+    lines.append(f'        <JavaLib Include="{group}:{artifact}" Version="{shown}" Sha256="{sha256}"{override}/>\n')
 for group, artifact in sorted(set(previous) - set(libs)):
     print(f"REMOVED   {group}:{artifact}")
 

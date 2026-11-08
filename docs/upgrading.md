@@ -54,6 +54,17 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
     and `<fullname>-ssl`); `secrets.*` and most `env` keys are gone.
   * `authentication.igniteUserPassword` is empty by default: set it. A new password applies to the whole cluster as soon
     as the first restarted node sets it, so change the clients' password together with the rollout.
+  * The client Service has the thin client and management ports (and REST); the discovery and communication ports are
+    on the headless Service only.
   * The root file system is read-only, a PodDisruptionBudget is created for more than one replica, the termination grace
     period is 300 seconds, a node is ready only once it holds its data after starting, and the pods spread across
     Kubernetes nodes (`topologySpreadConstraints`).
+
+## Moving to Apache Ignite 2.19.0
+
+Once Apache Ignite 2.19.0 is released, `IgniteVersion` moves to it (with `scripts/update-java-libs.sh`), and its upgrade
+notes apply. Ignite 2.19 introduces rolling upgrades (`control.sh --rolling-upgrade`) and checks the features of a
+joining node during the discovery handshake (IGNITE-28969): plan the move from Ignite 2.18 as a full cluster restart
+(stop every node cleanly, then start them on the new image) unless its notes say that 2.18 nodes support the rolling
+upgrade. It also moves Jetty (REST) to 11.0.25, whose request smuggling fix is still past it (keep REST off).
+

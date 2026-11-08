@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # the Apache.Ignite package id also has the client of Ignite 3 (3.x), another product than Ignite 2
+      - dependency-name: Apache.Ignite*
+        update-types: [ "version-update:semver-major" ]
     groups:
       # released together: the Ignite packages and the Java modules of JavaLibs.props move as one (the Ignite Upgrade
       # workflow updates the modules)
