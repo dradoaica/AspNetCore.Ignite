@@ -63,6 +63,8 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
       grace
       period is 300 seconds, a node is ready only once it holds its data after starting, and the pods spread across
       Kubernetes nodes (`topologySpreadConstraints`).
+    * The nodes keep no SQL query history (`sqlQueryHistorySize: 0`): a node that applies a new password would keep it
+      there, readable by every SQL user. Set it empty for Ignite's default.
 
 ## Moving to Apache Ignite 2.19.0
 
