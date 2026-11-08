@@ -81,6 +81,35 @@ jobs:
           path: ${{ runner.temp }}/image.tar
           retention-days: 1
 
+  # the arm64 image, released next to the amd64 one that the other jobs test: built natively, started, stopped
+  image-arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Build Image
+        run: docker build -t aspnetcore.ignite-server:arm64 .
+
+      - name: Smoke Test
+        run: |
+          set -euo pipefail
+          docker run -d --name node -p 9464:9464 -e IGNITE_USER_PASSWORD=smoke-secret \
+            -e DEFAULT_ON_HEAP_MEMORY=512 -e DEFAULT_OFF_HEAP_MEMORY=256 aspnetcore.ignite-server:arm64
+          for attempt in $(seq 1 120); do
+            curl -sf http://127.0.0.1:9464/health/readiness > /dev/null && break
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:9464/health/readiness
+          docker exec node control.sh --state | grep 'Cluster state: ACTIVE'
+          docker stop -t 60 node
+          test "$(docker inspect -f '{{.State.ExitCode}}' node)" = 0
+
+      - name: Diagnostics
+        if: failure()
+        run: docker logs node --tail 200 || true
+
   tests:
     needs: image
     runs-on: ubuntu-24.04
