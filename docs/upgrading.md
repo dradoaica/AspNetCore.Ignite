@@ -28,4 +28,15 @@ Apache Ignite 2.19.0 and is built on Apache Ignite 2.18.0 until 2.19.0 is releas
   helm upgrade <release> <chart> --set persistence.storageVolume.claimName=persistence ...
   ```
 
-  The `chart-upgrade` job of the Tests workflow (`upgrade-test` input) runs these steps with data.
+  The `chart-upgrade` job of the Tests workflow (`upgrade-test` input) runs these steps with data. The chart's values
+  also change:
+  * The probes use `/health/startup`, `/health/liveness` and `/health/readiness` on the management port (9464).
+  * `container.ports`/`service.ports`: `thinClients` (10800) replaces `sql`, `management` is new, `rest` and `restTcp`
+    (11211, was `jdbc`) exist only with `rest.enabled`, and `jmx` and 10900 are gone.
+  * The values follow the ignite chart: `persistence.storageVolume` (`/app/work`) and `persistence.walVolume` (`/wal`),
+    `memory.*`, `authentication.*`, `timeouts.*`, `threadPools.*`, `dataStorage.*` and `ssl.*` (Secrets `<fullname>-auth`
+    and `<fullname>-ssl`); `secrets.*` and most `env` keys are gone.
+  * `authentication.igniteUserPassword` is empty by default: set it. A new password applies to the whole cluster as soon
+    as the first restarted node sets it, so change the clients' password together with the rollout.
+  * The root file system is read-only, a PodDisruptionBudget is created for more than one replica, the termination grace
+    period is 300 seconds, and a node is ready only once it has rebalanced.
