@@ -54,7 +54,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <None Update="appsettings.json;serilog.config.json">
+        <None Update="appsettings.json;serilog.config.json;control.sh">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
         <None Update="config\default-config.xml;config\persistent-config.xml;config\spring-config.xml;config\spring-config-client-with-ssl.xml">

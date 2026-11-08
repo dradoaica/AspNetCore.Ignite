@@ -44,7 +44,7 @@ public sealed class ClusterActivationTests(IgniteServerFixture fixture)
             TimeSpan.FromSeconds(60));
 
         using var igniteClient = CacheFactory.ConnectAsClient(
-            CacheFactory.GetIgniteClientConfiguration(
+            IgniteServerFixture.ClientConfiguration(
                 IgniteServerFixture.GetEndpoint(node1),
                 IgniteServerFixture.UserName,
                 IgniteServerFixture.Password
@@ -66,7 +66,7 @@ public sealed class ClusterActivationTests(IgniteServerFixture fixture)
         await nodeA.StartAsync();
         using (var igniteClient =
                CacheFactory.ConnectAsClient(
-                   CacheFactory.GetIgniteClientConfiguration(IgniteServerFixture.GetEndpoint(nodeA))))
+                   IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeA))))
         {
             var cache = CacheFactory.GetOrCreateCacheClient<int, string>(igniteClient, "rebalanced");
             cache.PutAll(
@@ -112,7 +112,7 @@ public sealed class ClusterActivationTests(IgniteServerFixture fixture)
             TimeSpan.FromSeconds(90)
         );
         using var igniteClient =
-            CacheFactory.ConnectAsClient(CacheFactory.GetIgniteClientConfiguration(IgniteServerFixture.GetEndpoint(nodeX)));
+            CacheFactory.ConnectAsClient(IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeX)));
         // without backups, the partitions of a node that leaves are lost; the safe policy blocks them until reset
         var cache = igniteClient.GetOrCreateCache<int, int>(
             new CacheClientConfiguration("lossy") { Backups = 0, PartitionLossPolicy = PartitionLossPolicy.ReadWriteSafe });
@@ -149,7 +149,7 @@ public sealed class ClusterActivationTests(IgniteServerFixture fixture)
                 TimeSpan.FromSeconds(60));
             using var igniteClient =
                 CacheFactory.ConnectAsClient(
-                    CacheFactory.GetIgniteClientConfiguration(IgniteServerFixture.GetEndpoint(nodeP)));
+                    IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeP)));
             igniteClient.GetOrCreateCache<int, int>(
                     new CacheClientConfiguration("durable")
                         { Backups = 0, PartitionLossPolicy = PartitionLossPolicy.ReadWriteSafe })
@@ -160,16 +160,26 @@ public sealed class ClusterActivationTests(IgniteServerFixture fixture)
         await TestContainerLogs.WaitForMessageAsync(nodeP, "Partition data lost", 1, TimeSpan.FromSeconds(60));
         await TestContainerLogs.WaitForMessageAsync(nodeP, "once a node that owns them returns", 1,
             TimeSpan.FromSeconds(30));
+        using HttpClient http = new();
+        var lost = await http.GetStringAsync(IgniteServerFixture.GetManagementUri(nodeP, "/metrics"));
+        Assert.Matches(@"ignite_cluster_lost_partitions [1-9]", lost);
+        Assert.Matches(@"ignite_cache_lost_partitions\{cache=""durable""\} [1-9]", lost);
         await using var returned = PersistentNode(network, "ignite-q", clusterEndpoints, volume).Build();
         await returned.StartAsync();
 
         await TestContainerLogs.WaitForMessageAsync(nodeP, "with the data of the nodes that returned", 1,
             TimeSpan.FromSeconds(60));
         using var client =
-            CacheFactory.ConnectAsClient(CacheFactory.GetIgniteClientConfiguration(IgniteServerFixture.GetEndpoint(nodeP)));
+            CacheFactory.ConnectAsClient(IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeP)));
         var cache = client.GetCache<int, int>("durable");
         await WaitUntilAsync(() => Succeeds(() => cache.GetSize()), TimeSpan.FromSeconds(30));
         Assert.Equal(entries.Count, cache.GetSize());
+        // a scrape may still see the snapshot of the second before
+        await WaitUntilAsync(
+            () => http.GetStringAsync(IgniteServerFixture.GetManagementUri(nodeP, "/metrics")).Result
+                .Contains("ignite_cluster_lost_partitions 0", StringComparison.Ordinal),
+            TimeSpan.FromSeconds(10)
+        );
     }
 
     private static bool Succeeds(Action action)

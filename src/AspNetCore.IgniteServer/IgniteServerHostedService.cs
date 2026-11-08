@@ -107,7 +107,8 @@ internal sealed class IgniteServerHostedService(
             do
             {
                 restartRequested = false;
-                await runner.Run().ConfigureAwait(false);
+                // a node that cannot stop must not keep the host from stopping
+                await runner.Run().WaitAsync(stoppingToken).ConfigureAwait(false);
             } while (restartRequested && !stopping && !stoppingToken.IsCancellationRequested);
 
             if (!stopping && !stoppingToken.IsCancellationRequested)
@@ -115,6 +116,10 @@ internal sealed class IgniteServerHostedService(
                 logger.Error("The Ignite node stopped unexpectedly, stopping the server.");
                 Fail();
             }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // the host stops, and the node with the process
         }
         catch (Exception ex) when (!stopping)
         {
@@ -174,7 +179,15 @@ internal sealed class IgniteServerHostedService(
 
         logger.Information("SSL files changed, restarting the Ignite node...");
         restartRequested = true;
-        runner?.Restart();
+        var timeout = TimeSpan.FromSeconds(settings.GracefulStopTimeoutInSeconds);
+        if (runner?.Restart(timeout) != false) return;
+
+        // it would wait forever: the server exits instead, and its container restarts with the renewed files
+        logger.Error(
+            "The Ignite node did not stop gracefully within {Timeout} to restart with the renewed SSL files; the server stops so that its container restarts with them.",
+            timeout
+        );
+        Fail();
     }
 
     private void Fail()

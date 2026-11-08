@@ -41,14 +41,16 @@ WORKDIR /app
 COPY --from=build /app/publish .
 
 # work/ (persistence, WAL) is pre-created so that volumes mounted there are writable by the non-root user (and its group
-# 0, for arbitrary user ids); the application itself stays read-only for it
-RUN mkdir -p /app/work && chown 1001:0 /app/work && chmod g=u /app/work
+# 0, for arbitrary user ids); the application itself stays read-only for it. control.sh is Ignite's control utility.
+RUN mkdir -p /app/work && chown 1001:0 /app/work && chmod g=u /app/work \
+    && chmod 755 /app/control.sh && ln -s /app/control.sh /usr/local/bin/control.sh
 
 USER 1001
 
-# outside Kubernetes (which uses its own probes): /health/liveness on the management port, with bash only (no curl here)
+# outside Kubernetes (which uses its own probes): /health/liveness on the management port, with bash only (no curl
+# here); healthy without the management endpoints (MANAGEMENT_ENABLED=false)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/${MANAGEMENT_PORT:-9464} && printf 'GET /health/liveness HTTP/1.0\\r\\n\\r\\n' >&3 && head -n 1 <&3 | grep -q ' 200 '"]
+    CMD ["bash", "-c", "[ \"${MANAGEMENT_ENABLED,,}\" = false ] || { exec 3<>/dev/tcp/127.0.0.1/${MANAGEMENT_PORT:-9464} && printf 'GET /health/liveness HTTP/1.0\\r\\n\\r\\n' >&3 && head -n 1 <&3 | grep -q ' 200 '; }"]
 
 ENTRYPOINT ["dotnet", "AspNetCore.IgniteServer.dll"]
 

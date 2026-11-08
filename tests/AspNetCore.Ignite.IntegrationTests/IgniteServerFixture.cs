@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using Apache.Ignite.Core.Client;
+using AspNetCore.Ignite.Options;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Images;
@@ -100,6 +102,21 @@ public sealed class IgniteServerFixture : IAsyncLifetime
     public static string GetEndpoint(IContainer node)
     {
         return $"{node.Hostname}:{node.GetMappedPublicPort(ThinClientPort)}";
+    }
+
+    /// <summary>
+    ///     A thin client configuration that uses only <paramref name="endpoint" />: the container addresses it would
+    ///     discover are not reachable from every Docker host (e.g., Docker Desktop), and waiting for them slows the tests.
+    /// </summary>
+    public static IgniteClientConfiguration ClientConfiguration(string endpoint, string? userName = null,
+        string? password = null)
+    {
+        return CacheFactory.GetIgniteClientConfiguration(
+            new IgniteClientOptions
+            {
+                Endpoints = [endpoint], UserName = userName, Password = password, EnableClusterDiscovery = false
+            }
+        );
     }
 
     public static Uri GetManagementUri(IContainer node, string path)

@@ -50,5 +50,7 @@ public sealed class IgniteNodeMetricsTests
 
         Assert.DoesNotContain(instruments, name => name.StartsWith("cache_", StringComparison.Ordinal));
         Assert.Contains("node_ready", instruments);
+        // data loss is reported without the per-cache series too
+        Assert.Contains("cluster_lost_partitions", instruments);
     }
 }

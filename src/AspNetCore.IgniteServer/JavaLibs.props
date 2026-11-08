@@ -1,10 +1,11 @@
 <Project>
 
     <!--
-      Java modules loaded next to the Ignite core jars of the Apache.Ignite package: Kubernetes discovery, REST API and
-      JSON (with their runtime dependencies, as their Maven POMs declare). They are downloaded from Maven Central on build and
-      verified against these SHA-256 hashes, then copied to libs/ of the build and publish output.
-      When IgniteVersion changes, run scripts/update-java-libs.sh to update the hashes.
+      Java modules loaded next to the Ignite core jars of the Apache.Ignite package: Kubernetes discovery, REST API, JSON
+      and the control utility (control.sh), with their runtime dependencies, as their Maven POMs declare. They are
+      downloaded from Maven Central on build and verified against these SHA-256 hashes, then copied to libs/ of the build
+      and publish output. When IgniteVersion changes, run scripts/update-java-libs.sh: it derives the dependencies of the
+      Ignite modules listed here again, and updates the hashes.
     -->
     <PropertyGroup>
         <JavaLibsMavenRepositoryUrl>https://repo1.maven.org/maven2</JavaLibsMavenRepositoryUrl>
@@ -13,6 +14,7 @@
 
     <ItemGroup>
         <JavaLib Include="commons-lang:commons-lang" Version="2.6" Sha256="50f11b09f877c294d56f24463f47d28f929cf5044f648661c0f0cfbae9a2f49c"/>
+        <JavaLib Include="org.apache.ignite:ignite-control-utility" Version="$(IgniteVersion)" Sha256="ac1ef7658c7fe874de6b31fd1e421fc8553b21e83d9362c52a939049df671b50"/>
         <JavaLib Include="org.apache.ignite:ignite-json" Version="$(IgniteVersion)" Sha256="aabd0247e547fbf6019a4e03cb0a07e3677449e60d820beda45f40fb8d3ec0e1"/>
         <JavaLib Include="org.apache.ignite:ignite-kubernetes" Version="$(IgniteVersion)" Sha256="1d2442c976013ed9e7559f518fa58e4cce9a9e1b04c4dd42fe11162605240403"/>
         <JavaLib Include="org.apache.ignite:ignite-rest-http" Version="$(IgniteVersion)" Sha256="53c209aabdb45aa49f62bfa67a01ffff974d0f9f0f8a2bc768e2bcd07018e8bf"/>

@@ -1,4 +1,3 @@
-using System.Reflection;
 using Apache.Ignite.Core.Client;
 using Apache.Ignite.Core.Client.Cache;
 using AspNetCore.Ignite.Abstractions;
@@ -32,11 +31,13 @@ public sealed class IgniteClientOptionsTests
                     ["ASPNETCORE_IGNITE_USER_NAME"] = "user",
                     ["ASPNETCORE_IGNITE_PASSWORD"] = "secret",
                     ["ASPNETCORE_IGNITE_USE_SSL"] = "True",
-                    ["ASPNETCORE_IGNITE_SSL_CHECK_CERTIFICATE_REVOCATION"] = "false"
+                    ["ASPNETCORE_IGNITE_SSL_CHECK_CERTIFICATE_REVOCATION"] = "false",
+                    ["ASPNETCORE_IGNITE_ENABLE_CLUSTER_DISCOVERY"] = "false"
                 }
             )
         );
 
+        Assert.False(options.EnableClusterDiscovery);
         Assert.Equal(["a:10800", "b:10800"], options.Endpoints);
         Assert.Equal("user", options.UserName);
         Assert.Equal("secret", options.Password);
@@ -131,9 +132,15 @@ public sealed class IgniteClientOptionsTests
     [Fact]
     public async Task HealthCheck_HangingCluster_TimesOut()
     {
-        var cluster = DispatchProxy.Create<IClientCluster, HangingClusterProxy>();
-        var client = DispatchProxy.Create<IIgniteClient, ClientProxy>();
-        ((ClientProxy)(object)client).Cluster = cluster;
+        using ManualResetEventSlim release = new();
+        var cluster = Fake.Of<IClientCluster>((_, _) =>
+        {
+            // IsActive blocks, as when the cluster does not answer
+            release.Wait();
+            return true;
+        });
+        var client = Fake.Of<IIgniteClient>((name, _) =>
+            name == nameof(IIgniteClient.GetCluster) ? cluster : throw new NotSupportedException(name));
         IgniteHealthCheck healthCheck = new(new FakeIgniteManager(Task.FromResult(client)), TimeSpan.FromMilliseconds(100));
         try
         {
@@ -146,7 +153,7 @@ public sealed class IgniteClientOptionsTests
         }
         finally
         {
-            ((HangingClusterProxy)(object)cluster).Release.Set();
+            release.Set();
         }
     }
 
@@ -200,30 +207,6 @@ public sealed class IgniteClientOptionsTests
         public void DestroyCache(string cacheName)
         {
             throw new NotSupportedException();
-        }
-    }
-
-    public class HangingClusterProxy : DispatchProxy
-    {
-        public ManualResetEventSlim Release { get; } = new();
-
-        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
-        {
-            // IsActive blocks, as when the cluster does not answer
-            Release.Wait();
-            return true;
-        }
-    }
-
-    public class ClientProxy : DispatchProxy
-    {
-        public IClientCluster? Cluster { get; set; }
-
-        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
-        {
-            return targetMethod?.Name == nameof(IIgniteClient.GetCluster)
-                ? Cluster
-                : throw new NotSupportedException(targetMethod?.Name);
         }
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Apache.Ignite.Core;
@@ -50,29 +51,39 @@ internal sealed class LostPartitionsListener
 
     public bool Invoke(CacheRebalancingEvent evt)
     {
-        if (evt.Type != EventType.CacheRebalancePartDataLost) return true;
+        if (evt.Type == EventType.CacheRebalancePartDataLost)
+            OnPartitionLost(evt.CacheName ?? string.Empty, evt.DiscoveryEventName, evt.DiscoveryNode.Addresses,
+                evt.DiscoveryNode.HostNames);
 
-        var cacheName = evt.CacheName ?? string.Empty;
-        // one event per lost partition: the first one of the cache is logged
-        if (lost.AddOrUpdate(cacheName, 1, (_, count) => count + 1) == 1)
-            logger.Error(
-                "Partition data lost: CacheName: {CacheName}; DiscoveryEventName: {DiscoveryEventName}; DiscoveryNodeAddresses: {DiscoveryNodeAddresses}; DiscoveryHostNames: {DiscoveryHostNames}",
-                cacheName,
-                evt.DiscoveryEventName,
-                string.Join(",", evt.DiscoveryNode.Addresses),
-                string.Join(",", evt.DiscoveryNode.HostNames)
-            );
-
-        ScheduleReset();
         return true;
     }
 
     public bool Invoke(DiscoveryEvent evt)
     {
+        OnNodeJoined();
+        return true;
+    }
+
+    internal void OnPartitionLost(string cacheName, string? discoveryEventName, IEnumerable<string> addresses,
+        IEnumerable<string> hostNames)
+    {
+        // one event per lost partition: the first one of the cache is logged
+        if (lost.AddOrUpdate(cacheName, 1, (_, count) => count + 1) == 1)
+            logger.Error(
+                "Partition data lost: CacheName: {CacheName}; DiscoveryEventName: {DiscoveryEventName}; DiscoveryNodeAddresses: {DiscoveryNodeAddresses}; DiscoveryHostNames: {DiscoveryHostNames}",
+                cacheName,
+                discoveryEventName,
+                string.Join(",", addresses),
+                string.Join(",", hostNames)
+            );
+
+        ScheduleReset();
+    }
+
+    internal void OnNodeJoined()
+    {
         // a node that owns lost partitions may be back
         if (!lost.IsEmpty) ScheduleReset();
-
-        return true;
     }
 
     private void ScheduleReset()
@@ -80,7 +91,7 @@ internal sealed class LostPartitionsListener
         if (autoReset && Volatile.Read(ref disposed) == 0) timer.Change(Debounce, Timeout.InfiniteTimeSpan);
     }
 
-    internal void Reset()
+    private void Reset()
     {
         var caches = lost.Keys.ToArray();
         if (caches.Length == 0 || Volatile.Read(ref disposed) == 1) return;

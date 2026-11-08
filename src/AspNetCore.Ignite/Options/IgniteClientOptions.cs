@@ -32,6 +32,12 @@ public sealed class IgniteClientOptions
     /// <summary>Checks the revocation of the server certificate.</summary>
     public bool SslCheckCertificateRevocation { get; set; } = true;
 
+    /// <summary>
+    ///     Discovers the other server nodes of the cluster and connects to them too (partition awareness); turn it off
+    ///     when their addresses are not reachable from the client (e.g., through a load balancer or port forwarding).
+    /// </summary>
+    public bool EnableClusterDiscovery { get; set; } = true;
+
     /// <summary>Retries of failed read operations by the thin client itself.</summary>
     public int RetryLimit { get; set; } = 5;
 
@@ -69,6 +75,8 @@ public sealed class IgniteClientOptions
             SslSkipServerCertificateValidation;
         SslCheckCertificateRevocation = GetBool(configuration, "ASPNETCORE_IGNITE_SSL_CHECK_CERTIFICATE_REVOCATION") ??
                                         SslCheckCertificateRevocation;
+        EnableClusterDiscovery = GetBool(configuration, "ASPNETCORE_IGNITE_ENABLE_CLUSTER_DISCOVERY") ??
+                                 EnableClusterDiscovery;
     }
 
     private static bool? GetBool(IConfiguration configuration, string key)

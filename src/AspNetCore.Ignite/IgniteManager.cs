@@ -182,8 +182,11 @@ public class IgniteManager : IIgniteManager, IDisposable
     {
         return ex switch
         {
-            IgniteClientException icex => icex.StatusCode is not (ClientStatusCode.AuthenticationFailed
-                or ClientStatusCode.SecurityViolation),
+            // a failed connection (with its socket, IO or timeout exception), or a cluster that is not active (yet); the
+            // other answers of the server (e.g., an invalid cache configuration) do not change on retry
+            IgniteClientException { StatusCode: ClientStatusCode.InvalidNodeState } => true,
+            IgniteClientException { InnerException: { } inner } => IsTransient(inner),
+            IgniteClientException => false,
             AggregateException aex => aex.InnerExceptions.Count > 0 && aex.InnerExceptions.All(IsTransient),
             SocketException or IOException or TimeoutException => true,
             _ => false

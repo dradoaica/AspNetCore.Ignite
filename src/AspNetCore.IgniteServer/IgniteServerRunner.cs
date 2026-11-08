@@ -196,11 +196,17 @@ internal sealed class IgniteServerRunner : IDisposable
         logger.Information("'{IgniteInstance}' stopped.", stoppedInstance);
     }
 
-    /// <summary>Stops the node gracefully so that <see cref="Run" /> can start it again (e.g., with renewed certificates).</summary>
-    public void Restart()
+    /// <summary>
+    ///     Stops the node gracefully so that <see cref="Run" /> can start it again (e.g., with renewed certificates).
+    ///     Returns false when the node did not stop within <paramref name="timeout" /> (e.g., a single node whose caches
+    ///     have backups, which the GRACEFUL shutdown policy waits for).
+    /// </summary>
+    public bool Restart(TimeSpan timeout)
     {
         logger.Information("Restarting Ignite server runner...");
-        StopNode(false);
+        ready = false;
+        var current = Interlocked.Exchange(ref ignite, null);
+        return current == null || Task.Run(() => Ignition.Stop(current.Name, false)).Wait(timeout);
     }
 
     /// <summary>

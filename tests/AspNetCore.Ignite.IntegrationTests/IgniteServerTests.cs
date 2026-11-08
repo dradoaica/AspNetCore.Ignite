@@ -22,7 +22,7 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
         Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
 
         using (var igniteClient = CacheFactory.ConnectAsClient(
-                   CacheFactory.GetIgniteClientConfiguration(
+                   IgniteServerFixture.ClientConfiguration(
                        fixture.Endpoint,
                        IgniteServerFixture.UserName,
                        IgniteServerFixture.Password
@@ -33,7 +33,7 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
         }
 
         var ex = Assert.Throws<IgniteClientException>(() => CacheFactory.ConnectAsClient(
-                CacheFactory.GetIgniteClientConfiguration(
+                IgniteServerFixture.ClientConfiguration(
                     fixture.Endpoint,
                     IgniteServerFixture.UserName,
                     IgniteServerFixture.DefaultPassword
@@ -52,7 +52,8 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
                 {
                     ["ASPNETCORE_IGNITE_ENDPOINT"] = fixture.Endpoint,
                     ["ASPNETCORE_IGNITE_USER_NAME"] = IgniteServerFixture.UserName,
-                    ["ASPNETCORE_IGNITE_PASSWORD"] = IgniteServerFixture.Password
+                    ["ASPNETCORE_IGNITE_PASSWORD"] = IgniteServerFixture.Password,
+                    ["ASPNETCORE_IGNITE_ENABLE_CLUSTER_DISCOVERY"] = "false"
                 }
             )
             .Build();
@@ -80,6 +81,7 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
                 options.Endpoints = [fixture.Endpoint];
                 options.UserName = IgniteServerFixture.UserName;
                 options.Password = IgniteServerFixture.Password;
+                options.EnableClusterDiscovery = false;
             }
         );
         services.AddHealthChecks().AddIgnite();
@@ -152,7 +154,7 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
     private static IIgniteClient Connect(string endpoint, string password)
     {
         return CacheFactory.ConnectAsClient(
-            CacheFactory.GetIgniteClientConfiguration(endpoint, IgniteServerFixture.UserName, password)
+            IgniteServerFixture.ClientConfiguration(endpoint, IgniteServerFixture.UserName, password)
         );
     }
 

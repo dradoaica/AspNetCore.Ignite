@@ -1,10 +1,16 @@
 name: Release
 
 # a published GitHub release (tag e.g. 2.19.0): tests once, then the NuGet package and the server image, both versioned
-# by the tag
+# by the tag; run by hand, a dry run that builds them both (for every platform) and publishes nothing
 on:
   release:
     types: [ published ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build (the dry run publishes nothing)
+        type: string
+        default: 0.0.0-dryrun
 
 env:
   DOTNET_NOLOGO: true
@@ -27,7 +33,7 @@ jobs:
       - id: version
         run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.event.release.tag_name || inputs.version }}
 
       # GHCR requires lowercase names
       - id: image
@@ -63,6 +69,7 @@ jobs:
 
       # the .nupkg and its symbols (.snupkg)
       - name: Push to GitHub Packages
+        if: github.event_name == 'release'
         run: >-
           dotnet nuget push "artifacts/package/release/*.nupkg"
           --api-key "${{ secrets.GITHUB_TOKEN }}"
@@ -92,6 +99,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Login to GHCR
+        if: github.event_name == 'release'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -113,14 +121,15 @@ jobs:
           platforms: ${{ matrix.platform }}
           build-args: VERSION=${{ needs.version.outputs.version }}
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=${{ needs.version.outputs.image }},push-by-digest=true,name-canonical=true,push=true
-          # SBOM and provenance attestations attached to the image
-          sbom: true
-          provenance: mode=max
+          outputs: type=image,name=${{ needs.version.outputs.image }},push-by-digest=true,name-canonical=true,push=${{ github.event_name == 'release' }}
+          # SBOM and provenance attestations attached to the (pushed) image
+          sbom: ${{ github.event_name == 'release' }}
+          provenance: ${{ github.event_name == 'release' && 'mode=max' || 'false' }}
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
 
       - name: Export Digest
+        if: github.event_name == 'release'
         run: |
           mkdir -p "${RUNNER_TEMP}/digests"
           touch "${RUNNER_TEMP}/digests/${DIGEST#sha256:}"
@@ -128,6 +137,7 @@ jobs:
           DIGEST: ${{ steps.build.outputs.digest }}
 
       - name: Upload Digest
+        if: github.event_name == 'release'
         uses: actions/upload-artifact@v7
         with:
           name: digest-${{ strategy.job-index }}
@@ -135,6 +145,7 @@ jobs:
           if-no-files-found: error
 
   image-manifest:
+    if: github.event_name == 'release'
     needs: [ image, version ]
     permissions:
       contents: read

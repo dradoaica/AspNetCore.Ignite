@@ -21,7 +21,7 @@ on:
         type: string
         default: ""
       upgrade-test:
-        description: Also test the upgrade from chart 2.18.2 (image 2.18.0) with its data
+        description: Also test the upgrade from chart 2.18.2 with its data
         type: boolean
         default: false
 
@@ -50,6 +50,26 @@ jobs:
         run: |
           docker build -t ghcr.io/dradoaica/aspnetcore.ignite-server:e2e .
           docker save ghcr.io/dradoaica/aspnetcore.ignite-server:e2e -o "${RUNNER_TEMP}/image.tar"
+
+      # the OS packages, the Java runtime and jars, and the .NET dependencies of the image: the vulnerabilities with a fix
+      # (high and critical) are listed in the summary, and a critical one fails the build
+      - name: Scan Image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ghcr.io/dradoaica/aspnetcore.ignite-server:e2e
+          scanners: vuln
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          format: table
+          output: trivy.txt
+
+      - name: Scan Summary
+        run: |
+          { echo '### Image vulnerabilities with a fix (high, critical)'; echo '```'; cat trivy.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          if grep -q -E 'CRITICAL: [1-9]' trivy.txt; then
+            echo "::error::The image has critical vulnerabilities with a fix (see the summary)."
+            exit 1
+          fi
 
       - name: Upload Image
         uses: actions/upload-artifact@v7
@@ -221,8 +241,9 @@ jobs:
           kubectl describe pods
           kubectl logs -l app.kubernetes.io/name=aspnetcore-ignite-server --all-containers --tail=200
 
-  # the documented upgrade from chart 2.18.2 (image 2.18.0, REST on, one "persistence" volume): data written before it is
-  # read after it; on demand, as it needs the published 2.18.0 image
+  # the documented upgrade from chart 2.18.2 (REST probes, one "persistence" volume with the WAL in it): data written
+  # before it is read after it. The published 2.17.0 and 2.18.0 images do not start (their -server JVM option), so the
+  # old chart runs this image too; on demand
   chart-upgrade:
     if: ${{ inputs.upgrade-test }}
     needs: image
@@ -279,8 +300,7 @@ jobs:
       - name: Import Images
         run: |
           docker load -i "${RUNNER_TEMP}/image.tar"
-          docker pull "$IMAGE:2.18.0"
-          kind load docker-image "$IMAGE:e2e" "$IMAGE:2.18.0" --name upgrade
+          kind load docker-image "$IMAGE:e2e" --name upgrade
 
       - name: Set up Helm
         uses: azure/setup-helm@v5
@@ -288,12 +308,13 @@ jobs:
       - name: Install Chart 2.18.2
         run: >-
           helm install "$RELEASE" helm-charts-old/charts/aspnetcore-ignite-server
-          --set image.tag=2.18.0 --set image.pullPolicy=Never --set persistence.size=1Gi
+          --set image.tag=e2e --set image.pullPolicy=Never --set persistence.size=1Gi
+          --set env.REST_ENABLED=true --set env.DEFAULT_ON_HEAP_MEMORY=512 --set env.DEFAULT_OFF_HEAP_MEMORY=256
           --set resources.requests.cpu=500m --set resources.limits.cpu=1
           --set resources.requests.memory=3Gi --set resources.limits.memory=3Gi
           --wait --timeout 10m
 
-      - name: Write Data (REST of the 2.18.0 image)
+      - name: Write Data (REST)
         run: |
           set -euo pipefail
           kubectl run rest --image=curlimages/curl:8.17.0 --restart=Never --command -- sleep 3600
@@ -303,7 +324,7 @@ jobs:
           rest --data-urlencode cmd=put --data-urlencode cacheName=upgrade --data-urlencode key=k --data-urlencode val=survived | grep -q '"successStatus":0'
 
       # the documented steps: stop the cluster cleanly (checkpoint), remove the StatefulSet (its spec cannot change), and
-      # upgrade with the old volume claim name, so the data volume is reused
+      # upgrade with the old volume claim name, so the data volume is reused with the WAL in it
       - name: Upgrade
         run: |
           set -euo pipefail
@@ -313,7 +334,7 @@ jobs:
           helm upgrade "$RELEASE" helm-charts/charts/aspnetcore-ignite-server \
             --set image.tag=e2e --set image.pullPolicy=Never \
             --set persistence.storageVolume.claimName=persistence --set persistence.storageVolume.size=1Gi \
-            --set persistence.walVolume.size=1Gi --set rest.enabled=true \
+            --set persistence.walVolume.enabled=false --set rest.enabled=true \
             --set resources.requests.cpu=500m --set resources.limits.cpu=1 \
             --set resources.requests.memory=3Gi --set resources.limits.memory=3Gi \
             --set memory.onHeapMB=512 --set memory.offHeapMB=256 --set memory.maxDirectMemorySizeMB=1024 \

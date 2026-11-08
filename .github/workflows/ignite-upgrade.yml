@@ -1,7 +1,7 @@
 name: Ignite Upgrade
 
-# Dependabot bumps Apache.Ignite (IgniteVersion in Directory.Packages.props), but the hashes of the Java modules
-# (JavaLibs.props) must follow, or the build fails: this workflow updates them on Dependabot's branch.
+# Dependabot bumps Apache.Ignite (IgniteVersion in Directory.Packages.props), but the Java modules (JavaLibs.props: their
+# dependencies and hashes) must follow, or the build fails: this workflow updates them on Dependabot's branch.
 # A push with GITHUB_TOKEN does not start new workflow runs: re-run the Tests workflow of the pull request, or set a
 # DEPENDABOT_PUSH_TOKEN secret (a token with contents:write, as a Dependabot secret) whose pushes do start them.
 on:
@@ -24,7 +24,7 @@ jobs:
           ref: ${{ github.head_ref }}
           token: ${{ secrets.DEPENDABOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - name: Update Java Module Hashes
+      - name: Update Java Modules
         run: ./scripts/update-java-libs.sh
 
       - name: Push
@@ -36,5 +36,5 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "Update the Java module hashes for $(sed -n -E 's/.*<IgniteVersion>(.*)<\/IgniteVersion>.*/\1/p' Directory.Packages.props)"
+          git commit -am "Update the Java modules for $(sed -n -E 's/.*<IgniteVersion>(.*)<\/IgniteVersion>.*/\1/p' Directory.Packages.props)"
           git push

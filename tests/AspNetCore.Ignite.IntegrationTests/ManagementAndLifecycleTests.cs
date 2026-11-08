@@ -29,6 +29,7 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
         Assert.Contains("ignite_node_ready 1", metrics);
         Assert.Contains("ignite_cluster_active 1", metrics);
         Assert.Contains("ignite_cluster_server_nodes 1", metrics);
+        Assert.Contains("ignite_cluster_lost_partitions 0", metrics);
         Assert.Matches(@"ignite_node_heap_used_bytes [1-9]", metrics);
         Assert.Contains("ignite_data_region_off_heap_size_bytes{region=\"default\"}", metrics);
     }
@@ -134,7 +135,7 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
 
         using var igniteClient =
             CacheFactory.ConnectAsClient(
-                CacheFactory.GetIgniteClientConfiguration(IgniteServerFixture.GetEndpoint(node)));
+                IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(node)));
         var attributes = igniteClient.GetCluster().ForServers().GetNodes().Single().Attributes;
         var sql = igniteClient.GetCache<int, int>("fromSpring");
 
@@ -165,11 +166,25 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
     }
 
     [SkippableFact]
+    public async Task ControlUtility_ManagesTheNode()
+    {
+        Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
+
+        var result = await fixture.Node.ExecAsync([
+            "control.sh", "--user", IgniteServerFixture.UserName, "--password", IgniteServerFixture.Password, "--baseline"
+        ]);
+
+        Assert.True(result.ExitCode == 0, result.Stdout + result.Stderr);
+        Assert.Contains("Cluster state: ACTIVE", result.Stdout);
+        Assert.Contains("State=ONLINE", result.Stdout);
+    }
+
+    [SkippableFact]
     public void PeerClassLoading_IsOffByDefault()
     {
         Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
         using var igniteClient = CacheFactory.ConnectAsClient(
-            CacheFactory.GetIgniteClientConfiguration(fixture.Endpoint, IgniteServerFixture.UserName,
+            IgniteServerFixture.ClientConfiguration(fixture.Endpoint, IgniteServerFixture.UserName,
                 IgniteServerFixture.Password)
         );
 

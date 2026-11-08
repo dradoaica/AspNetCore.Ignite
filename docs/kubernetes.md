@@ -16,6 +16,9 @@ a StatefulSet. A deployment should:
 * spread the pods across Kubernetes nodes (a soft `topologySpreadConstraints` by `kubernetes.io/hostname`), so that a
   Kubernetes node failure takes as few Ignite nodes, and copies of the same partitions, as possible,
 * add a PodDisruptionBudget (`maxUnavailable: 1`) so that drains evict one node at a time,
+* alert on `ignite_cluster_lost_partitions` above 0 (data loss), and use the image's control utility for the baseline
+  and lost partitions (`kubectl exec <pod> -- control.sh --user ignite --password <password> --baseline`): a persistent
+  node that never returns has to be removed from the baseline (`--baseline remove`) before its partitions are reset,
 * give `helm upgrade --wait` a `--timeout` above its 5 minute default: a rolling restart waits for each node to
   rebalance, up to `REBALANCE_READINESS_MAX_WAIT_IN_SECONDS` per node (e.g., `--timeout 60m` for 5 nodes and the
   default 10 minutes; less with little data),

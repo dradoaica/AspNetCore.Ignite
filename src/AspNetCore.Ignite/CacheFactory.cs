@@ -70,6 +70,7 @@ public static class CacheFactory
             RetryLimit = options.RetryLimit,
             SocketTimeout = options.SocketTimeout,
             EnablePartitionAwareness = true,
+            EnableClusterDiscovery = options.EnableClusterDiscovery,
             EnableHeartbeats = true,
             Logger = logger
         };

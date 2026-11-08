@@ -15,7 +15,9 @@ public sealed class CacheFactoryTests
         { new IOException(), true },
         { new TimeoutException(), true },
         { new AggregateException(new SocketException(), new IOException()), true },
-        { new IgniteClientException("x", null, ClientStatusCode.Fail), true },
+        { new IgniteClientException("x", new AggregateException(new SocketException()), ClientStatusCode.Fail), true },
+        { new IgniteClientException("x", null, ClientStatusCode.InvalidNodeState), true },
+        { new IgniteClientException("invalid cache configuration", null, ClientStatusCode.Fail), false },
         { new IgniteClientException("x", null, ClientStatusCode.AuthenticationFailed), false },
         { new IgniteClientException("x", null, ClientStatusCode.SecurityViolation), false },
         { new AggregateException(new SocketException(), new ArgumentException()), false },
@@ -33,6 +35,12 @@ public sealed class CacheFactoryTests
         Assert.Null(cfg.Password);
         Assert.Null(cfg.SslStreamFactory);
         Assert.Null(cfg.Logger);
+        Assert.True(cfg.EnablePartitionAwareness);
+        Assert.True(cfg.EnableClusterDiscovery);
+        Assert.False(
+            CacheFactory.GetIgniteClientConfiguration(new IgniteClientOptions { EnableClusterDiscovery = false })
+                .EnableClusterDiscovery
+        );
     }
 
     [Theory]

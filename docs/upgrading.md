@@ -4,6 +4,10 @@
 Apache Ignite 2.19.0 and is built on Apache Ignite 2.18.0 until 2.19.0 is released (`IgniteVersion` in
 `Directory.Packages.props`); the data format, the client protocol and the cluster are those of Ignite 2.18.0.
 
+The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do not start: their JVM options include
+`-server`, which the JVM embedded in the server rejects (`Unrecognized option: -server`, `JNI_CreateJavaVM failed`).
+2.19.0 is the first image that runs; the steps below concern clusters of images built otherwise.
+
 * SSL (`USE_SSL`, `USE_CLIENT_SSL`) is off by default, there are no default passwords or consistent id, and the image
   no longer contains the sample keystores: set these explicitly.
 * The client validates the server certificate by default (`ASPNETCORE_IGNITE_SSL_SKIP_SERVER_CERTIFICATE_VALIDATION`
@@ -12,6 +16,8 @@ Apache Ignite 2.19.0 and is built on Apache Ignite 2.18.0 until 2.19.0 is releas
   keep using 2.18.x.
 * `IIgniteManager` has new `Client` and `GetClientAsync` members (implementations outside this library must add them),
   and the library no longer depends on `Apache.Ignite.Linq` (add it for LINQ queries).
+* The client retries only transient failures, a lost connection or a cluster that is not active (yet): other errors of
+  the server (e.g., an invalid cache configuration) surface at once instead of after the retries.
 * The server image no longer contains the Ignite binary distribution (`IGNITE_HOME`): the jars are in `/app/libs`.
 * REST (8080) and the TCP binary protocol (11211) are off (`REST_ENABLED`), peer assembly loading is off
   (`PEER_ASSEMBLY_LOADING`), and OpenCensus metrics are replaced by `/metrics` on port 9464 (`MANAGEMENT_PORT`).
@@ -27,13 +33,15 @@ Apache Ignite 2.19.0 and is built on Apache Ignite 2.18.0 until 2.19.0 is releas
   versions: new caches of such types may join another group than the existing ones, which keep theirs.
 * With the Helm chart, the StatefulSet has to be recreated (its pod management policy and volume claims change). Stop
   the cluster cleanly (so the WAL is checkpointed), delete the StatefulSet, and upgrade with
-  `persistence.storageVolume.claimName=persistence`, so the existing data volumes are reused (only the WAL volume is
-  new):
+  `persistence.storageVolume.claimName=persistence`, so the existing data volumes are reused, and
+  `persistence.walVolume.enabled=false`, so that their WAL stays in them (a node whose data volume is mounted without
+  its WAL does not recover, even after a clean stop):
 
   ```
   kubectl scale statefulset <fullname>-cluster --replicas=0
   kubectl delete statefulset <fullname>-cluster --cascade=orphan
-  helm upgrade <release> <chart> --set persistence.storageVolume.claimName=persistence ...
+  helm upgrade <release> <chart> --set persistence.storageVolume.claimName=persistence \
+    --set persistence.walVolume.enabled=false ...
   ```
 
   The `chart-upgrade` job of the Tests workflow (`upgrade-test` input) runs these steps with data. The chart's values

@@ -111,12 +111,25 @@ them; `scripts/ssl/ssl.ps1` shows how such a set (CA, key store, trust store, cl
 
 With `MANAGEMENT_ENABLED` (the default), the server listens on `MANAGEMENT_PORT` (9464):
 
-| Endpoint            |                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-|---------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `/health/liveness`  | `200` while the process runs (liveness probe).                                                                                                                                                                                                                                                                                                                                                                                       |
-| `/health/startup`   | `200` once the node runs, also while it waits for activation (startup probe).                                                                                                                                                                                                                                                                                                                                                        |
-| `/health/readiness` | `200` when the node is running, its cluster is active and, after its start, it holds its data (`READY_WHEN_REBALANCED`); `503` while starting, waiting for activation, joining the baseline, receiving its data, restarting or stopping (readiness probe). Later rebalances do not make a ready node unready, so the cluster stays reachable while it rebalances.                                                                    |
-| `/metrics`          | Prometheus metrics: `ignite_node_*` (heap, CPU, threads, jobs, traffic), `ignite_cluster_*` (active, server and baseline nodes), `ignite_data_region_*` (off-heap, RAM, checkpoint buffer, dirty pages, fill factor, evictions; by `region`), `ignite_cache_local_entries` and `ignite_cache_rebalancing` (by `cache`), `ignite_node_rebalancing_caches`, the health checks, and the .NET runtime. The node is read once per scrape. |
+| Endpoint            |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+|---------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `/health/liveness`  | `200` while the process runs (liveness probe).                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `/health/startup`   | `200` once the node runs, also while it waits for activation (startup probe).                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `/health/readiness` | `200` when the node is running, its cluster is active and, after its start, it holds its data (`READY_WHEN_REBALANCED`); `503` while starting, waiting for activation, joining the baseline, receiving its data, restarting or stopping (readiness probe). Later rebalances do not make a ready node unready, so the cluster stays reachable while it rebalances.                                                                                                                     |
+| `/metrics`          | Prometheus metrics: `ignite_node_*` (heap, CPU, threads, jobs, traffic), `ignite_cluster_*` (active, server and baseline nodes, lost partitions), `ignite_data_region_*` (off-heap, RAM, checkpoint buffer, dirty pages, fill factor, evictions; by `region`), `ignite_cache_local_entries`, `ignite_cache_lost_partitions` and `ignite_cache_rebalancing` (by `cache`), `ignite_node_rebalancing_caches`, the health checks, and the .NET runtime. The node is read once per scrape. |
+
+### Control utility
+
+The image contains Ignite's control utility (`control.sh`, on the path), which connects to the node of its container:
+
+```
+control.sh --user ignite --password <password> --state
+control.sh --user ignite --password <password> --baseline
+control.sh --user ignite --password <password> --cache reset_lost_partitions <cache>
+```
+
+It runs in a JVM of its own (heap up to 256 MB); where the memory of the node's container is tight, run it in another
+container of the image (`--host` and `--port` select the node).
 
 ### Logging
 
@@ -157,7 +170,10 @@ The node that applies a new password keeps its `ALTER USER` statement, password 
 
 When SSL is enabled, the key store, trust store and client certificate files are watched (by polling, so changes of
 mounted Kubernetes secrets are seen too). Once they have not changed for 10 seconds, plus a random delay of up to
-`SSL_RESTART_MAX_JITTER_IN_SECONDS`, the node restarts gracefully and picks up the renewed certificates.
+`SSL_RESTART_MAX_JITTER_IN_SECONDS`, the node restarts gracefully and picks up the renewed certificates. A node that
+cannot stop gracefully within `GRACEFUL_STOP_TIMEOUT_IN_SECONDS` (e.g., a single node whose caches have backups, which
+the `GRACEFUL` shutdown policy waits for) makes the server exit with `1` instead, and its container restarts with the
+renewed files.
 
 The jitter spreads the restarts of nodes whose certificates are renewed at the same time (e.g., by cert-manager), but
 it does not guarantee that they do not overlap. For in-memory clusters, where nodes restarting together lose data,

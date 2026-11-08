@@ -43,6 +43,8 @@ internal sealed class IgniteNodeMetrics : IDisposable
         Gauge("cluster_active", s => s.ClusterActive ? 1 : 0, null, "1 when the cluster is active.");
         Gauge("cluster_server_nodes", s => s.ServerNodes, null, "Server nodes in the topology.");
         Gauge("cluster_baseline_nodes", s => s.BaselineNodes, null, "Nodes of the baseline topology.");
+        Gauge("cluster_lost_partitions", s => s.LostPartitions.Values.Sum(), null,
+            "Lost partitions of all caches (their data is gone until reset, or until the nodes that own them return).");
 
         Gauge("node_heap_used_bytes", s => s.Local.HeapMemoryUsed, "bytes", "JVM heap in use.");
         Gauge("node_heap_committed_bytes", s => s.Local.HeapMemoryCommitted, "bytes", "JVM heap committed.");
@@ -83,6 +85,11 @@ internal sealed class IgniteNodeMetrics : IDisposable
             "cache_local_entries",
             () => Read(s => s.CacheEntries.Select(entry => new Measurement<long>(entry.Value, Cache(entry.Key)))),
             description: "Entries of the cache on this node (primary and backup)."
+        );
+        meter.CreateObservableGauge(
+            "cache_lost_partitions",
+            () => Read(s => s.LostPartitions.Select(entry => new Measurement<int>(entry.Value, Cache(entry.Key)))),
+            description: "Lost partitions of the cache."
         );
         meter.CreateObservableGauge(
             "cache_rebalancing",
@@ -160,16 +167,23 @@ internal sealed class IgniteNodeMetrics : IDisposable
         int BaselineNodes,
         IClusterMetrics Local,
         IReadOnlyList<IDataRegionMetrics> Regions,
-        IReadOnlyDictionary<string, long> CacheEntries
+        IReadOnlyDictionary<string, long> CacheEntries,
+        IReadOnlyDictionary<string, int> LostPartitions
     )
     {
         public static NodeSnapshot Take(IIgnite node, bool perCache)
         {
             var cluster = node.GetCluster();
             Dictionary<string, long> cacheEntries = [];
-            foreach (var cacheName in perCache ? node.GetCacheNames() : [])
-                cacheEntries[cacheName] = node.GetCache<object, object>(cacheName)
-                    .GetLocalSizeLong(CachePeekMode.Primary, CachePeekMode.Backup);
+            Dictionary<string, int> lostPartitions = [];
+            // the lost partitions of every cache: their total is reported without METRICS_PER_CACHE too
+            foreach (var cacheName in node.GetCacheNames())
+            {
+                var cache = node.GetCache<object, object>(cacheName);
+                lostPartitions[cacheName] = cache.GetLostPartitions().Count;
+                if (perCache)
+                    cacheEntries[cacheName] = cache.GetLocalSizeLong(CachePeekMode.Primary, CachePeekMode.Backup);
+            }
 
             return new NodeSnapshot(
                 node,
@@ -179,7 +193,8 @@ internal sealed class IgniteNodeMetrics : IDisposable
                 // Ignite.NET reads the metrics once into this object (one call for all node metrics)
                 cluster.GetLocalNode().GetMetrics(),
                 node.GetDataRegionMetrics().ToList(),
-                cacheEntries
+                cacheEntries,
+                lostPartitions
             );
         }
     }
