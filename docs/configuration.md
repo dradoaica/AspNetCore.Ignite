@@ -120,16 +120,22 @@ With `MANAGEMENT_ENABLED` (the default), the server listens on `MANAGEMENT_PORT`
 
 ### Control utility
 
-The image contains Ignite's control utility (`control.sh`, on the path), which connects to the node of its container:
+The image contains Ignite's control utility (`control.sh`, on the path). It connects to the node of its container with
+the node's own credentials (`IGNITE_USER_PASSWORD`) and, with `USE_CLIENT_SSL`, its key and trust stores, unless
+`--user` and `--password`, or `--keystore` and `--truststore` (with their `-password` and `-type` options), are given:
 
 ```
-control.sh --user ignite --password <password> --state
-control.sh --user ignite --password <password> --baseline
-control.sh --user ignite --password <password> --cache reset_lost_partitions <cache>
+control.sh --state
+control.sh --baseline
+control.sh --cache reset_lost_partitions <cache>
+control.sh --snapshot create <snapshot> --sync
 ```
 
-It runs in a JVM of its own (heap up to 256 MB); where the memory of the node's container is tight, run it in another
-container of the image (`--host` and `--port` select the node).
+A snapshot is a consistent copy of the persistent caches, taken on every node into `/app/work/snapshots` (the data
+volume): copy it elsewhere for backups (e.g., `kubectl cp`), and restore it with `control.sh --snapshot restore
+<snapshot>` (into caches that do not exist). The control utility runs in a JVM of its own (heap up to 256 MB); where the
+memory of the node's container is tight, run it in another container of the image (`--host` and `--port` select the
+node).
 
 ### Logging
 

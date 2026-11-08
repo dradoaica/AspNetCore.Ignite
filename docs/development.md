@@ -25,7 +25,9 @@ dotnet test tests/AspNetCore.Ignite.IntegrationTests
 The integration tests build the server image from the `Dockerfile` and run it with Docker (via Testcontainers):
 authentication and password rotation, the client library and its health check, SSL with client certificates and
 certificate rotation, cluster activation, rebalancing and lost partitions (in-memory and persistent), the management
-endpoints, REST, the shipped configuration files, and the exit codes. They are skipped when Docker is not available.
+endpoints, the control utility, REST, the shipped configuration files, and the exit codes. Two collections run in
+parallel: the tests of one shared node, and those that start clusters of their own. They are skipped when Docker is not
+available.
 CI reports the unit test coverage and the image's vulnerabilities with a fix (Trivy; a critical one fails the build) in
 the job summary, and tests the image with its
 [Helm chart](https://github.com/dradoaica/helm-charts/tree/main/charts/aspnetcore-ignite-server): a two-node persistent

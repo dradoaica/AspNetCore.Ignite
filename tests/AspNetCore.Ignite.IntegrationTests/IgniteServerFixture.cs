@@ -9,11 +9,76 @@ using Xunit;
 namespace AspNetCore.Ignite.IntegrationTests;
 
 /// <summary>
-///     Builds the server image from the repository Dockerfile once, and runs one node (authentication and persistence
-///     on, the defaults) for every test of <see cref="IgniteServerCollection" />; scenarios that need other settings
-///     start their own nodes from the same image (<see cref="CreateNodeBuilder" />).
+///     The server image for the nodes of a test collection: a prebuilt one (e.g., built once by CI), or the repository
+///     Dockerfile, built once for every collection (Testcontainers removes it after the run).
 /// </summary>
-public sealed class IgniteServerFixture : IAsyncLifetime
+public abstract class IgniteNodesFixture : IAsyncLifetime
+{
+    private static readonly Lazy<Task<IImage?>> ServerImage = new(LoadImageAsync);
+
+    private IImage? image;
+
+    public bool IsDockerAvailable => image != null;
+
+    private static string BuildPlatform => RuntimeInformation.OSArchitecture switch
+    {
+        Architecture.Arm64 => "linux/arm64",
+        _ => "linux/amd64"
+    };
+
+    /// <summary>A prebuilt server image to test (e.g., built once by CI); otherwise the Dockerfile is built.</summary>
+    public static string? PrebuiltImage => Environment.GetEnvironmentVariable("IGNITE_SERVER_IMAGE") is
+        { Length: > 0 } name
+        ? name
+        : null;
+
+    public virtual async Task InitializeAsync()
+    {
+        image = await ServerImage.Value;
+    }
+
+    public virtual Task DisposeAsync()
+    {
+        return Task.CompletedTask;
+    }
+
+    /// <summary>A node of the server image with small memory settings and the thin client port published.</summary>
+    public ContainerBuilder CreateNodeBuilder()
+    {
+        return new ContainerBuilder(image!)
+            .WithPortBinding(IgniteServerFixture.ThinClientPort, true)
+            .WithPortBinding(IgniteServerFixture.ManagementPort, true)
+            .WithEnvironment("DEFAULT_ON_HEAP_MEMORY", "512")
+            .WithEnvironment("DEFAULT_OFF_HEAP_MEMORY", "256")
+            .WithEnvironment("IGNITE_USER_PASSWORD", IgniteServerFixture.Password);
+    }
+
+    /// <summary>The image, or null without Docker.</summary>
+    private static async Task<IImage?> LoadImageAsync()
+    {
+        if (!await DockerSupport.IsDockerAvailableAsync()) return null;
+
+        if (PrebuiltImage is { } prebuiltImage) return new DockerImage(prebuiltImage);
+
+        var built = new ImageFromDockerfileBuilder()
+            .WithDockerfileDirectory(CommonDirectoryPath.GetGitDirectory(), string.Empty)
+            .WithDockerfile("Dockerfile")
+            // the legacy builder Testcontainers uses does not set BUILDPLATFORM (BuildKit and buildx do)
+            .WithBuildArgument("BUILDPLATFORM", BuildPlatform)
+            .WithName($"aspnetcore.ignite-server:integration-tests-{Guid.NewGuid():N}")
+            .WithCleanUp(true)
+            .Build();
+        await built.CreateAsync();
+        return built;
+    }
+}
+
+/// <summary>
+///     Runs one node (authentication and persistence on, the defaults) for every test of
+///     <see cref="IgniteServerCollection" />; scenarios that need other settings start their own nodes from the same
+///     image (<see cref="IgniteNodesFixture.CreateNodeBuilder" />).
+/// </summary>
+public sealed class IgniteServerFixture : IgniteNodesFixture
 {
     public const string UserName = "ignite";
     public const string DefaultPassword = "ignite";
@@ -27,11 +92,6 @@ public sealed class IgniteServerFixture : IAsyncLifetime
     public const string RunningMessage = "Ignite server runner is running";
     private IContainer? container;
 
-    private IFutureDockerImage? image;
-    private IImage? imageName;
-
-    public bool IsDockerAvailable { get; private set; }
-
     public string Endpoint => GetEndpoint(container!);
 
     /// <summary>The sample keystores and certificates of the repository (password 123456).</summary>
@@ -42,44 +102,12 @@ public sealed class IgniteServerFixture : IAsyncLifetime
         "config"
     );
 
-    private static string BuildPlatform => RuntimeInformation.OSArchitecture switch
-    {
-        Architecture.Arm64 => "linux/arm64",
-        _ => "linux/amd64"
-    };
-
     public IContainer Node => container!;
 
-    /// <summary>A prebuilt server image to test (e.g., built once by CI); otherwise the Dockerfile is built.</summary>
-    public static string? PrebuiltImage => Environment.GetEnvironmentVariable("IGNITE_SERVER_IMAGE") is
-        { Length: > 0 } name
-        ? name
-        : null;
-
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        IsDockerAvailable = await DockerSupport.IsDockerAvailableAsync();
+        await base.InitializeAsync();
         if (!IsDockerAvailable) return;
-
-        if (PrebuiltImage is { } prebuiltImage)
-        {
-            imageName = new DockerImage(prebuiltImage);
-            container = CreateNodeBuilder()
-                .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(RunningMessage))
-                .Build();
-            await container.StartAsync();
-            return;
-        }
-
-        image = new ImageFromDockerfileBuilder()
-            .WithDockerfileDirectory(CommonDirectoryPath.GetGitDirectory(), string.Empty)
-            .WithDockerfile("Dockerfile")
-            // the legacy builder Testcontainers uses does not set BUILDPLATFORM (BuildKit and buildx do)
-            .WithBuildArgument("BUILDPLATFORM", BuildPlatform)
-            .WithName($"aspnetcore.ignite-server:integration-tests-{Guid.NewGuid():N}")
-            .WithCleanUp(true)
-            .Build();
-        await image.CreateAsync();
 
         container = CreateNodeBuilder()
             .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(RunningMessage))
@@ -87,16 +115,9 @@ public sealed class IgniteServerFixture : IAsyncLifetime
         await container.StartAsync();
     }
 
-    public async Task DisposeAsync()
+    public override async Task DisposeAsync()
     {
         if (container != null) await container.DisposeAsync();
-
-        if (image != null)
-        {
-            // the image is built per run, so do not leave it behind
-            await image.DeleteAsync();
-            await image.DisposeAsync();
-        }
     }
 
     public static string GetEndpoint(IContainer node)
@@ -123,21 +144,19 @@ public sealed class IgniteServerFixture : IAsyncLifetime
     {
         return new Uri($"http://{node.Hostname}:{node.GetMappedPublicPort(ManagementPort)}{path}");
     }
-
-    /// <summary>A node of the server image with small memory settings and the thin client port published.</summary>
-    public ContainerBuilder CreateNodeBuilder()
-    {
-        return new ContainerBuilder(imageName ?? image!)
-            .WithPortBinding(ThinClientPort, true)
-            .WithPortBinding(ManagementPort, true)
-            .WithEnvironment("DEFAULT_ON_HEAP_MEMORY", "512")
-            .WithEnvironment("DEFAULT_OFF_HEAP_MEMORY", "256")
-            .WithEnvironment("IGNITE_USER_PASSWORD", Password);
-    }
 }
+
+/// <summary>For the tests that start clusters of their own: they run beside those of the shared node.</summary>
+public sealed class IgniteClusterFixture : IgniteNodesFixture;
 
 [CollectionDefinition(Name)]
 public sealed class IgniteServerCollection : ICollectionFixture<IgniteServerFixture>
 {
     public const string Name = "Ignite server";
+}
+
+[CollectionDefinition(Name)]
+public sealed class IgniteClusterCollection : ICollectionFixture<IgniteClusterFixture>
+{
+    public const string Name = "Ignite clusters";
 }

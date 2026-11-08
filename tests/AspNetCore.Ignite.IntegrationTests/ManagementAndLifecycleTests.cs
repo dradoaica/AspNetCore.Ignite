@@ -170,13 +170,16 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
     {
         Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
 
-        var result = await fixture.Node.ExecAsync([
-            "control.sh", "--user", IgniteServerFixture.UserName, "--password", IgniteServerFixture.Password, "--baseline"
-        ]);
+        // with the node's own credentials (IGNITE_USER_PASSWORD, quotes and all)
+        var result = await fixture.Node.ExecAsync(["control.sh", "--baseline"]);
+        // the given ones win
+        var wrong = await fixture.Node.ExecAsync(
+            ["control.sh", "--user", IgniteServerFixture.UserName, "--password", "wrong", "--state"]);
 
         Assert.True(result.ExitCode == 0, result.Stdout + result.Stderr);
         Assert.Contains("Cluster state: ACTIVE", result.Stdout);
         Assert.Contains("State=ONLINE", result.Stdout);
+        Assert.NotEqual(0, wrong.ExitCode);
     }
 
     [SkippableFact]

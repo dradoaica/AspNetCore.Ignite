@@ -1,0 +1,7 @@
+# Vulnerabilities the image scan (Tests workflow) does not fail on, each until its expiry date (then reviewed again).
+
+# H2 1.4.197 comes with Ignite 2.x (ignite-indexing of the Apache.Ignite package), which cannot use H2 2.x. Both need
+# the H2 web console or an H2 JDBC URL from the attacker: Ignite starts no console and takes no H2 URLs (its SQL engine
+# is embedded; clients use Ignite's own protocols).
+CVE-2021-42392 exp:2027-05-01
+CVE-2022-23221 exp:2027-05-01

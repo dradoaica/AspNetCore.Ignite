@@ -1,8 +1,33 @@
 #!/bin/sh
-# Apache Ignite's control utility (cluster state, baseline, caches, ...) on the jars of this image, e.g.:
-#   control.sh --user ignite --password <password> --baseline
-# It connects to the node of this container unless --host and --port say otherwise. It runs in a JVM of its own (heap
-# up to 256 MB): where the memory of the node's container is tight, run it in another pod of this image.
+# Apache Ignite's control utility (cluster state, baseline, caches, snapshots, ...) on the jars of this image, e.g.:
+#   control.sh --baseline
+# It connects to the node of this container unless --host and --port say otherwise: as the ignite user with
+# IGNITE_USER_PASSWORD (with authentication) unless --user is given, and with the node's key and trust stores (with
+# USE_CLIENT_SSL) unless --keystore is given. It runs in a JVM of its own (heap up to 256 MB): where the memory of the
+# node's container is tight, run it in another pod of this image.
+lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+
+case " $* " in
+    *" --keystore "*) ;;
+    *)
+        if [ "$(lower "${USE_CLIENT_SSL:-false}")" = true ]; then
+            set -- --keystore "$SSL_KEY_STORE_FILE_PATH" --keystore-password "$SSL_KEY_STORE_PASSWORD" \
+                --keystore-type "${SSL_KEY_STORE_TYPE:-JKS}" --truststore "$SSL_TRUST_STORE_FILE_PATH" \
+                --truststore-password "$SSL_TRUST_STORE_PASSWORD" --truststore-type "${SSL_TRUST_STORE_TYPE:-JKS}" "$@"
+        fi
+        ;;
+esac
+
+case " $* " in
+    *" --user "*) ;;
+    *)
+        # the server keeps the default password without IGNITE_USER_PASSWORD
+        if [ "$(lower "${ENABLE_AUTHENTICATION:-true}")" != false ]; then
+            set -- --user ignite --password "${IGNITE_USER_PASSWORD:-ignite}" "$@"
+        fi
+        ;;
+esac
+
 exec "${JAVA_HOME:-/usr/lib/jvm/java-17}/bin/java" -Xms32m -Xmx256m -XX:+UseSerialGC -XX:TieredStopAtLevel=1 \
     -DIGNITE_HOME=/tmp/control-utility -DIGNITE_UPDATE_NOTIFIER=false \
     --add-opens=java.base/jdk.internal.access=ALL-UNNAMED --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED \

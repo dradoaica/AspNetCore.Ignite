@@ -22,9 +22,9 @@ Thin clients connect to port 10800 (user `ignite`); `/metrics` on port 9464 serv
 ## Documentation
 
 * [Configuration](docs/configuration.md): command line options, settings, authentication, SSL and certificate rotation,
-  health and metrics, logging, network security, persistence and memory
+  health and metrics, the control utility and snapshots, logging, network security, persistence and memory
 * [Client library](docs/client.md): `AspNetCore.Ignite` for ASP.NET Core applications
-* [Kubernetes](docs/kubernetes.md): deployment guidance and the
+* [Kubernetes](docs/kubernetes.md): deployment guidance, alerts and the
   [Helm chart](https://github.com/dradoaica/helm-charts/tree/main/charts/aspnetcore-ignite-server)
 * [Development](docs/development.md): Java modules, tests, building the image
 * [Upgrading to 2.19.0](docs/upgrading.md)

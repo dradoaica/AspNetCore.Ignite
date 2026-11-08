@@ -10,8 +10,8 @@ using Xunit;
 
 namespace AspNetCore.Ignite.IntegrationTests;
 
-[Collection(IgniteServerCollection.Name)]
-public sealed class ClusterActivationTests(IgniteServerFixture fixture)
+[Collection(IgniteClusterCollection.Name)]
+public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
 {
     [SkippableFact]
     public async Task PersistentCluster_IsActivatedOnceTheMinimumServerNodesJoined()

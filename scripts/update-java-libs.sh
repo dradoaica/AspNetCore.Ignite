@@ -39,7 +39,8 @@ def dependencies(module):
 
 
 def version_key(version):
-    return [int(part) if part.isdigit() else part for part in re.split(r"[.-]", version)]
+    # numbers as numbers, and a number before text where they differ (so that any two versions compare)
+    return [(0, int(part), "") if part.isdigit() else (1, 0, part) for part in re.split(r"[.-]", version)]
 
 
 packaged = {(IGNITE, module) for module in PACKAGED_MODULES}

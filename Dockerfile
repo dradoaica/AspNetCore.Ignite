@@ -1,8 +1,9 @@
 # The build stage runs on the build platform (the output is framework-dependent and portable), the other stages on the
 # target platform (linux/amd64, linux/arm64). BuildKit sets BUILDPLATFORM; the legacy builder needs
-# --build-arg BUILDPLATFORM=linux/amd64 (or linux/arm64).
+# --build-arg BUILDPLATFORM=linux/amd64 (or linux/arm64). The base images are pinned by digest, so that a build is
+# reproducible; Dependabot updates the digests.
 ARG BUILDPLATFORM
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-noble AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:212fe4cb74627d5adf9817a4088906ae3edff1bd853bb27565d4b46731efe61e AS build
 WORKDIR /src
 COPY ["NuGet.Config", "global.json", "Directory.Build.props", "Directory.Packages.props", "./"]
 COPY ["src/Directory.Build.props", "src/"]
@@ -19,7 +20,7 @@ RUN dotnet publish "src/AspNetCore.IgniteServer/AspNetCore.IgniteServer.csproj" 
 
 # A Java 17 runtime with just the modules Ignite needs (jlink): the standard java.* modules (java.se) and the JDK
 # modules for Unsafe (jdk.unsupported), management/metrics, TLS (jdk.crypto.ec) and DNS (Kubernetes discovery)
-FROM eclipse-temurin:17-jdk-noble AS jre
+FROM eclipse-temurin:17-jdk-noble@sha256:ec2c8050c856a00986776ddd94d4facc9e872430c27799108ca318a26f9f1887 AS jre
 RUN jlink \
         --add-modules java.se,jdk.unsupported,jdk.management,jdk.management.agent,jdk.internal.jvmstat,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.naming.dns,jdk.zipfs,jdk.httpserver,jdk.jfr \
         --strip-debug --no-man-pages --no-header-files --compress=2 \
@@ -27,7 +28,7 @@ RUN jlink \
 
 # Runtime image: ASP.NET Core runtime (Kestrel for the management endpoints) + the Java runtime above; the Ignite jars
 # come with the application (/app/libs)
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble@sha256:1a48394b6f29d3a32c79d9edecd4abda0ecbe8776d567dbfc4590ed6979c740c AS runtime
 
 COPY --from=jre /jre /usr/lib/jvm/java-17
 ENV JAVA_HOME=/usr/lib/jvm/java-17

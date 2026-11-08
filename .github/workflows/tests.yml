@@ -52,7 +52,8 @@ jobs:
           docker save ghcr.io/dradoaica/aspnetcore.ignite-server:e2e -o "${RUNNER_TEMP}/image.tar"
 
       # the OS packages, the Java runtime and jars, and the .NET dependencies of the image: the vulnerabilities with a fix
-      # (high and critical) are listed in the summary, and a critical one fails the build
+      # (high and critical) are listed in the log and the summary, and a critical one fails the build (but those of
+      # .trivyignore, each with its reason)
       - name: Scan Image
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -60,11 +61,13 @@ jobs:
           scanners: vuln
           ignore-unfixed: true
           severity: HIGH,CRITICAL
+          trivyignores: .trivyignore
           format: table
           output: trivy.txt
 
       - name: Scan Summary
         run: |
+          cat trivy.txt
           { echo '### Image vulnerabilities with a fix (high, critical)'; echo '```'; cat trivy.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           if grep -q -E 'CRITICAL: [1-9]' trivy.txt; then
             echo "::error::The image has critical vulnerabilities with a fix (see the summary)."

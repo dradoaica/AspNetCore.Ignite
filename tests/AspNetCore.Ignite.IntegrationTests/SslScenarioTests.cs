@@ -7,8 +7,8 @@ using Xunit;
 
 namespace AspNetCore.Ignite.IntegrationTests;
 
-[Collection(IgniteServerCollection.Name)]
-public sealed class SslScenarioTests(IgniteServerFixture fixture)
+[Collection(IgniteClusterCollection.Name)]
+public sealed class SslScenarioTests(IgniteClusterFixture fixture)
 {
     private const string CertificatesDirectory = "/certs";
     private const string SamplePassword = "123456";
@@ -37,6 +37,10 @@ public sealed class SslScenarioTests(IgniteServerFixture fixture)
         {
             Assert.True(igniteClient.GetCluster().IsActive());
         }
+
+        // the control utility connects with the node's key and trust stores (and credentials)
+        var (controlExitCode, controlStdout, controlStderr) = await ExecAsync(node, "control.sh", "--state");
+        Assert.True(controlExitCode == 0, controlStdout + controlStderr);
 
         // rotating a keystore restarts the node (after the 10 s debounce), which then serves clients again
         var (exitCode, _, stderr) = await ExecAsync(node, "touch", $"{CertificatesDirectory}/server.jks");

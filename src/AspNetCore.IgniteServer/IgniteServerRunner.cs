@@ -204,9 +204,7 @@ internal sealed class IgniteServerRunner : IDisposable
     public bool Restart(TimeSpan timeout)
     {
         logger.Information("Restarting Ignite server runner...");
-        ready = false;
-        var current = Interlocked.Exchange(ref ignite, null);
-        return current == null || Task.Run(() => Ignition.Stop(current.Name, false)).Wait(timeout);
+        return StopGracefully(timeout);
     }
 
     /// <summary>
@@ -219,12 +217,7 @@ internal sealed class IgniteServerRunner : IDisposable
     {
         stopRequested = true;
         logger.Information("Stopping Ignite server runner...");
-        var current = Interlocked.Exchange(ref ignite, null);
-        if (current == null) return true;
-
-        ready = false;
-        var stopping = Task.Run(() => Ignition.Stop(current.Name, false));
-        if (stopping.Wait(timeout))
+        if (StopGracefully(timeout))
         {
             logger.Information("Ignite server runner stopped.");
             return true;
@@ -235,6 +228,14 @@ internal sealed class IgniteServerRunner : IDisposable
             timeout
         );
         return false;
+    }
+
+    /// <summary>Stops the running node, if any, gracefully; false when it is still stopping after <paramref name="timeout" />.</summary>
+    private bool StopGracefully(TimeSpan timeout)
+    {
+        ready = false;
+        var current = Interlocked.Exchange(ref ignite, null);
+        return current == null || Task.Run(() => Ignition.Stop(current.Name, false)).Wait(timeout);
     }
 
     /// <summary>

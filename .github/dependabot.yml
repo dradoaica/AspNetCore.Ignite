@@ -5,7 +5,8 @@ updates:
     schedule:
       interval: weekly
     groups:
-      # released together: the Ignite packages and the Java modules of JavaLibs.props move as one (update the hashes)
+      # released together: the Ignite packages and the Java modules of JavaLibs.props move as one (the Ignite Upgrade
+      # workflow updates the modules)
       apache-ignite:
         patterns:
           - Apache.Ignite*
@@ -19,6 +20,7 @@ updates:
           - xunit*
           - Xunit.*
 
+  # the base images of the Dockerfile (pinned by digest)
   - package-ecosystem: docker
     directory: /
     schedule:

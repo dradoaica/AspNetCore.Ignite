@@ -16,9 +16,9 @@ a StatefulSet. A deployment should:
 * spread the pods across Kubernetes nodes (a soft `topologySpreadConstraints` by `kubernetes.io/hostname`), so that a
   Kubernetes node failure takes as few Ignite nodes, and copies of the same partitions, as possible,
 * add a PodDisruptionBudget (`maxUnavailable: 1`) so that drains evict one node at a time,
-* alert on `ignite_cluster_lost_partitions` above 0 (data loss), and use the image's control utility for the baseline
-  and lost partitions (`kubectl exec <pod> -- control.sh --user ignite --password <password> --baseline`): a persistent
-  node that never returns has to be removed from the baseline (`--baseline remove`) before its partitions are reset,
+* alert on data loss and missing nodes ([Alerts](#alerts)), and use the image's control utility for the baseline, lost
+  partitions and snapshots (`kubectl exec <pod> -- control.sh --baseline`): a persistent node that never returns has to
+  be removed from the baseline (`--baseline remove`) before its partitions are reset,
 * give `helm upgrade --wait` a `--timeout` above its 5 minute default: a rolling restart waits for each node to
   rebalance, up to `REBALANCE_READINESS_MAX_WAIT_IN_SECONDS` per node (e.g., `--timeout 60m` for 5 nodes and the
   default 10 minutes; less with little data),
@@ -52,6 +52,37 @@ spec:
         - port: 10800
         - port: 9464
 ```
+
+## Alerts
+
+Prometheus rules for the metrics of `/metrics`:
+
+```yaml
+groups:
+  - name: ignite
+    rules:
+      - alert: IgnitePartitionsLost
+        expr: max by (namespace) (ignite_cluster_lost_partitions) > 0
+        annotations:
+          summary: Partitions lost their data (reset once their nodes return, or by hand).
+      - alert: IgniteBaselineNodeOffline
+        expr: max by (namespace) (ignite_cluster_baseline_nodes) > max by (namespace) (ignite_cluster_server_nodes)
+        for: 10m
+        annotations:
+          summary: A baseline node is offline, so some partitions have fewer copies.
+      - alert: IgniteNodeNotReady
+        expr: ignite_node_ready == 0
+        for: 15m
+        annotations:
+          summary: A node is not ready (starting, joining the baseline, or receiving its data).
+      - alert: IgniteEvictingEntries
+        expr: ignite_data_region_eviction_rate > 0
+        for: 5m
+        annotations:
+          summary: An in-memory data region is full and evicts entries.
+```
+
+## Endpoints API
 
 The Kubernetes IP finder of Ignite 2.18 reads the `endpoints` of the headless service (the chart's role allows it).
 Kubernetes deprecates the Endpoints API in favor of EndpointSlices (warnings from 1.33); it still works, and is to be
