@@ -145,16 +145,26 @@ internal sealed class IgniteUserPasswordManager(IgniteServerRunnerOptions option
         return true;
     }
 
-    private IIgniteClient Connect(string endpoint, string password) => CacheFactory.ConnectAsClient(
+    private IIgniteClient Connect(string endpoint, string password) =>
+        CacheFactory.ConnectAsClient(GetClientConfiguration(endpoint, password));
+
+    /// <summary>
+    ///     A connection to this very node only: without cluster discovery, the client would also connect (and send the
+    ///     password) to every other server node, whose certificates it does not validate either.
+    /// </summary>
+    internal IgniteClientConfiguration GetClientConfiguration(string endpoint, string password) =>
         CacheFactory.GetIgniteClientConfiguration(
-            endpoint,
-            DefaultUserName,
-            password,
-            options.UseClientSsl,
-            options.SslClientCertificatePath,
-            options.SslClientCertificatePassword,
-            // loopback connection to this very node, whose certificate is not issued for 127.0.0.1
-            true
-        )
-    );
+            new IgniteClientOptions
+            {
+                Endpoints = [endpoint,],
+                UserName = DefaultUserName,
+                Password = password,
+                UseSsl = options.UseClientSsl,
+                SslCertificatePath = options.SslClientCertificatePath,
+                SslCertificatePassword = options.SslClientCertificatePassword,
+                // loopback connection to this very node, whose certificate is not issued for 127.0.0.1
+                SslSkipServerCertificateValidation = true,
+                EnableClusterDiscovery = false,
+            }
+        );
 }

@@ -1,3 +1,4 @@
+using Apache.Ignite.Core.Client;
 using Apache.Ignite.Core.Configuration;
 using Apache.Ignite.Core.Deployment;
 using Apache.Ignite.Core.Discovery.Tcp;
@@ -156,6 +157,28 @@ public sealed class IgniteServerRunnerTests
         );
 
         Assert.Equal([first, second,], manager.GetCurrentPasswordCandidates("new", newCluster));
+    }
+
+    [Fact]
+    public void PasswordClient_ConnectsToTheLocalNodeOnly()
+    {
+        IgniteUserPasswordManager manager = new(
+            new IgniteServerRunnerOptions
+            {
+                UseClientSsl = true,
+                SslClientCertificatePath = "client.pfx",
+            },
+            Logger.None
+        );
+
+        var cfg = manager.GetClientConfiguration("127.0.0.1:10800", "secret");
+
+        // the other nodes would get the password too, over connections whose certificates are not validated
+        Assert.False(cfg.EnableClusterDiscovery);
+        Assert.Equal(["127.0.0.1:10800",], cfg.Endpoints);
+        Assert.Equal(IgniteUserPasswordManager.DefaultUserName, cfg.UserName);
+        Assert.Equal("secret", cfg.Password);
+        Assert.Equal("client.pfx", Assert.IsType<SslStreamFactory>(cfg.SslStreamFactory).CertificatePath);
     }
 
     [Fact]

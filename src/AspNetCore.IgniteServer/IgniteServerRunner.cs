@@ -23,9 +23,16 @@ internal sealed class IgniteServerRunner : IDisposable
 
     private readonly ILogger logger;
     private readonly IgniteServerRunnerOptions options;
+
+    // guards starting and pendingRestartTimeout (and the assignment of ignite once started)
+    private readonly Lock startLock = new();
     private volatile bool disposed;
     private IIgnite? ignite;
+
+    // the timeout of a restart requested while Ignition.Start runs: the node restarts once started
+    private TimeSpan? pendingRestartTimeout;
     private volatile bool ready;
+    private bool starting;
     private volatile bool stopRequested;
 
     public IgniteServerRunner(IgniteServerRunnerOptions options, ILogger? logger = null)
@@ -126,12 +133,41 @@ internal sealed class IgniteServerRunner : IDisposable
             return;
         }
 
+        lock (startLock)
+        {
+            starting = true;
+        }
+
         logger.Information("Starting Ignite server runner...");
         RebalanceTracker.Reset();
         // persistence may have been enabled after the memory limits were set
         IgniteConfigurationFactory.SetPageEvictionMode(Configuration, options.PageEvictionMode);
-        var current = Ignition.Start(Configuration);
-        ignite = current;
+        IIgnite current;
+        try
+        {
+            current = Ignition.Start(Configuration);
+        }
+        catch
+        {
+            lock (startLock)
+            {
+                starting = false;
+                pendingRestartTimeout = null;
+            }
+
+            throw;
+        }
+
+        TimeSpan? restartTimeout;
+        lock (startLock)
+        {
+            // at once with the flag: a Restart() from now on stops this node
+            ignite = current;
+            starting = false;
+            restartTimeout = pendingRestartTimeout;
+            pendingRestartTimeout = null;
+        }
+
         current.Stopped += (s, _) =>
         {
             ready = false;
@@ -141,6 +177,20 @@ internal sealed class IgniteServerRunner : IDisposable
             // Stop() ran while starting, before this node could be stopped
         {
             StopNode(false);
+        }
+        else if (restartTimeout is { } timeout)
+        {
+            // Restart() ran while starting: this node may have read the files of before the change
+            logger.Information("Restarting Ignite server runner (requested while it started)...");
+            if (!StopNodeGracefully(timeout))
+            {
+                throw new TimeoutException(
+                    $"The Ignite node did not stop gracefully within {timeout} to restart with the renewed SSL files."
+                );
+            }
+
+            logger.Information("'{IgniteInstance}' stopped.", current.Name);
+            return;
         }
 
         if (!ReferenceEquals(Volatile.Read(ref ignite), current))
@@ -223,14 +273,26 @@ internal sealed class IgniteServerRunner : IDisposable
     }
 
     /// <summary>
-    ///     Stops the node gracefully so that <see cref="Run" /> can start it again (e.g., with renewed certificates).
-    ///     Returns false when the node did not stop within <paramref name="timeout" /> (e.g., a single node whose caches have
-    ///     backups, which the GRACEFUL shutdown policy waits for).
+    ///     Stops the node gracefully so that <see cref="Run" /> can start it again (e.g., with renewed certificates); a
+    ///     node that is still starting restarts once started. Returns false when the node did not stop within
+    ///     <paramref name="timeout" /> (the GRACEFUL shutdown policy waits until the node's partitions have copies on
+    ///     other nodes, e.g., while another node restarts). The cluster's last server node deactivates the cluster first,
+    ///     so it stops at once.
     /// </summary>
     public bool Restart(TimeSpan timeout)
     {
+        lock (startLock)
+        {
+            if (starting)
+            {
+                pendingRestartTimeout = timeout;
+                logger.Information("The Ignite node is starting: it restarts once started.");
+                return true;
+            }
+        }
+
         logger.Information("Restarting Ignite server runner...");
-        return StopGracefully(timeout);
+        return StopNodeGracefully(timeout);
     }
 
     /// <summary>
@@ -244,10 +306,7 @@ internal sealed class IgniteServerRunner : IDisposable
         stopRequested = true;
         ready = false;
         logger.Information("Stopping Ignite server runner...");
-        var stopping = Stopwatch.StartNew();
-        DeactivateIfLastServerNode(timeout);
-        var remaining = timeout - stopping.Elapsed;
-        if (StopGracefully(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero))
+        if (StopNodeGracefully(timeout))
         {
             logger.Information("Ignite server runner stopped.");
             return true;
@@ -258,6 +317,18 @@ internal sealed class IgniteServerRunner : IDisposable
             timeout
         );
         return false;
+    }
+
+    /// <summary>
+    ///     Stops the running node gracefully within <paramref name="timeout" />, the cluster's last server node after
+    ///     deactivating the cluster.
+    /// </summary>
+    private bool StopNodeGracefully(TimeSpan timeout)
+    {
+        var stopping = Stopwatch.StartNew();
+        DeactivateIfLastServerNode(timeout);
+        var remaining = timeout - stopping.Elapsed;
+        return StopGracefully(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero);
     }
 
     /// <summary>

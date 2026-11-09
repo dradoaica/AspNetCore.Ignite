@@ -179,9 +179,11 @@ The node that applies a new password keeps its `ALTER USER` statement, password 
 
 When SSL is enabled, the key store, trust store and client certificate files are watched (by polling, so changes of
 mounted Kubernetes secrets are seen too). Once they have not changed for 10 seconds, plus a random delay of up to
-`SSL_RESTART_MAX_JITTER_IN_SECONDS`, the node restarts gracefully and picks up the renewed certificates. A node that
-cannot stop gracefully within `GRACEFUL_STOP_TIMEOUT_IN_SECONDS` (e.g., a single node whose caches have backups, which
-the `GRACEFUL` shutdown policy waits for) makes the server exit with `1` instead, and its container restarts with the
+`SSL_RESTART_MAX_JITTER_IN_SECONDS`, the node restarts gracefully and picks up the renewed certificates (a node that is
+still starting restarts once started, as it may have read the previous files). The cluster's last server node
+deactivates the cluster first, so it restarts at once, and activates it again. A node that cannot stop gracefully within
+`GRACEFUL_STOP_TIMEOUT_IN_SECONDS` (the `GRACEFUL` shutdown policy waits until its partitions have copies on other
+nodes, e.g., while another node restarts) makes the server exit with `1` instead, and its container restarts with the
 renewed files.
 
 The jitter spreads the restarts of nodes whose certificates are renewed at the same time (e.g., by cert-manager), but

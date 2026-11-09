@@ -59,23 +59,23 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
     }
 
     [SkippableFact]
-    public async Task RotationOfANodeThatCannotStopGracefully_RestartsItsContainer()
+    public async Task RotationOfTheLastServerNode_DeactivatesTheCluster_AndRestartsAtOnce()
     {
         Skip.IfNot(fixture.IsDockerAvailable, "Docker is not available.");
+        // the restart would time out (and the server exit) if the node waited for the backups below
         await using var node = SslNode()
             .WithEnvironment("GRACEFUL_STOP_TIMEOUT_IN_SECONDS", "3")
             .WithEnvironment("SHUTDOWN_TIMEOUT_IN_SECONDS", "10")
             .Build();
         await node.StartAsync();
-        using (var igniteClient = CacheFactory.ConnectAsClient(
-                   IgniteServerFixture.ClientConfiguration(
-                       IgniteServerFixture.GetEndpoint(node),
-                       IgniteServerFixture.UserName,
-                       IgniteServerFixture.Password
-                   )
-               ))
+        var clientConfiguration = IgniteServerFixture.ClientConfiguration(
+            IgniteServerFixture.GetEndpoint(node),
+            IgniteServerFixture.UserName,
+            IgniteServerFixture.Password
+        );
+        using (var igniteClient = CacheFactory.ConnectAsClient(clientConfiguration))
         {
-            // alone, the node waits forever for the backups of this cache before it stops gracefully
+            // alone, the node would wait forever for the backups of this cache before it stops gracefully
             igniteClient.GetOrCreateCache<int, int>(
                     new CacheClientConfiguration("backed-up")
                     {
@@ -90,13 +90,27 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
 
         await TestContainerLogs.WaitForMessageAsync(
             node,
-            "to restart with the renewed SSL files",
+            "deactivating the cluster so that it stops at once",
             1,
             TimeSpan.FromSeconds(60)
         );
+        await TestContainerLogs.WaitForMessageAsync(
+            node,
+            IgniteServerFixture.RunningMessage,
+            2,
+            TimeSpan.FromSeconds(120)
+        );
 
-        // the server exits (it waits for the container to exit), and its container restarts with the renewed files
-        Assert.Equal(1, await node.GetExitCodeAsync().WaitAsync(TimeSpan.FromSeconds(60)));
+        // restarted in the process (which still runs), active again and with its (persistent) data
+        Assert.False(node.State == TestcontainersStates.Exited);
+        using (var igniteClient = CacheFactory.ConnectAsClient(clientConfiguration))
+        {
+            Assert.True(igniteClient.GetCluster().IsActive());
+            Assert.Equal(1, igniteClient.GetCache<int, int>("backed-up").Get(1));
+        }
+
+        var (stdout, _) = await node.GetLogsAsync();
+        Assert.DoesNotContain("to restart with the renewed SSL files", stdout);
     }
 
     /// <summary>A node with SSL between nodes, from the sample keystores.</summary>

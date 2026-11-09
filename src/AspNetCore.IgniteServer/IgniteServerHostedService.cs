@@ -212,7 +212,8 @@ internal sealed class IgniteServerHostedService(
             return;
         }
 
-        // it would wait forever: the server exits instead, and its container restarts with the renewed files
+        // it may wait long (e.g., for another node that restarts too): the server exits instead, and its container
+        // restarts with the renewed files
         logger.Error(
             "The Ignite node did not stop gracefully within {Timeout} to restart with the renewed SSL files; the server stops so that its container restarts with them.",
             timeout
