@@ -2,14 +2,15 @@
 
 ## Supported Versions
 
-AspNetCore.Ignite versions track the Apache Ignite version they are built against (e.g. `2.18.0` uses Apache Ignite
-`2.18.0`). Only the latest release receives security fixes. This applies to all artifacts produced by this repository:
+AspNetCore.Ignite versions track the Apache Ignite version they target (e.g. `2.19.0` targets Apache Ignite `2.19.0`,
+and is built on Apache Ignite `2.18.0` until `2.19.0` is released). Only the latest release receives security fixes.
+This applies to all artifacts produced by this repository:
 
-| Artifact                                                    | Supported     |
-|-------------------------------------------------------------|---------------|
-| `AspNetCore.Ignite` NuGet package (GitHub Packages)         | 2.18.x        |
-| `aspnetcore.ignite-server` Docker image (Docker Hub / GHCR) | 2.18.x        |
-| Older versions                                              | Not supported |
+| Artifact                                                       | Supported     |
+|----------------------------------------------------------------|---------------|
+| `AspNetCore.Ignite` NuGet package (nuget.org, GitHub Packages) | 2.19.x        |
+| `aspnetcore.ignite-server` Docker image (GHCR)                 | 2.19.x        |
+| Older versions                                                 | Not supported |
 
 If you find a security issue in an older version, please first check whether it still reproduces on the latest
 version. If you can't upgrade, let us know why so we can better understand your situation.
@@ -67,8 +68,10 @@ any shared or production environment:
 - **Set all passwords.** `appsettings.json` ships with empty `IGNITE_USER_PASSWORD` and `SSL_*_PASSWORD` settings (the
   default `ignite` user then keeps its well-known password `ignite`). Set them via environment variables or Kubernetes
   secrets.
-- **Keep authentication and SSL enabled** (`ENABLE_AUTHENTICATION`, `USE_SSL`, `USE_CLIENT_SSL`).
+- **Keep authentication enabled and enable SSL** (`ENABLE_AUTHENTICATION` is on by default; `USE_SSL` and
+  `USE_CLIENT_SSL` are off by default).
 - **Restrict network exposure.** The image exposes Ignite discovery/communication ports (`47500`, `47100`), the thin
-  client port (`10800`), the REST/HTTP ports (`8080`, `11211`) and other management ports. Only publish what your
-  clients need and keep cluster-internal ports on a private network.
+  client port (`10800`) and the management port (`9464`, health checks and `/metrics`); with `REST_ENABLED`, also the
+  REST/HTTP ports (`8080`, `11211`). Only publish what your clients need and keep cluster-internal ports on a private
+  network.
 - **Keep up to date** with the latest release of this project, which picks up Apache Ignite and .NET security fixes.
