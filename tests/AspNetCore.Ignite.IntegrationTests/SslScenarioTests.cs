@@ -3,6 +3,7 @@ using Apache.Ignite.Core.Client.Cache;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Containers;
+using DotNet.Testcontainers.Networks;
 using Xunit;
 
 namespace AspNetCore.Ignite.IntegrationTests;
@@ -113,8 +114,79 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
         Assert.DoesNotContain("to restart with the renewed SSL files", stdout);
     }
 
-    /// <summary>A node with SSL between nodes, from the sample keystores.</summary>
-    private ContainerBuilder SslNode()
+    [SkippableFact]
+    public async Task RotationOfTheLastServerNode_ActivatesTheClusterAgain_WithoutWaitingForTheMinimumServerNodes()
+    {
+        Skip.IfNot(fixture.IsDockerAvailable, "Docker is not available.");
+        await using var network = new NetworkBuilder().WithName($"ignite-{Guid.NewGuid():N}").Build();
+        await network.CreateAsync();
+        const string clusterEndpoints = "ssl-1:47500,ssl-2:47500";
+        await using var node1 = SslNode("Waiting for 2 server nodes")
+            .WithNetwork(network)
+            .WithNetworkAliases("ssl-1")
+            .WithEnvironment("DEFAULT_CONSISTENT_ID", "ssl-1")
+            .WithEnvironment("CLUSTER_ENDPOINTS", clusterEndpoints)
+            .WithEnvironment("ACTIVATION_MIN_SERVER_NODES", "2")
+            .WithEnvironment("GRACEFUL_STOP_TIMEOUT_IN_SECONDS", "3")
+            .WithEnvironment("SHUTDOWN_TIMEOUT_IN_SECONDS", "10")
+            .Build();
+        await using var node2 = SslNode()
+            .WithNetwork(network)
+            .WithNetworkAliases("ssl-2")
+            .WithEnvironment("DEFAULT_CONSISTENT_ID", "ssl-2")
+            .WithEnvironment("CLUSTER_ENDPOINTS", clusterEndpoints)
+            .WithEnvironment("ACTIVATION_MIN_SERVER_NODES", "2")
+            .Build();
+        await node1.StartAsync();
+        await node2.StartAsync();
+        await TestContainerLogs.WaitForMessageAsync(
+            node1,
+            IgniteServerFixture.RunningMessage,
+            1,
+            TimeSpan.FromSeconds(60)
+        );
+        var clientConfiguration = IgniteServerFixture.ClientConfiguration(
+            IgniteServerFixture.GetEndpoint(node1),
+            IgniteServerFixture.UserName,
+            IgniteServerFixture.Password
+        );
+        using (var igniteClient = CacheFactory.ConnectAsClient(clientConfiguration))
+        {
+            igniteClient.GetOrCreateCache<int, int>(
+                    new CacheClientConfiguration("backed-up")
+                    {
+                        Backups = 1,
+                    }
+                )
+                .Put(1, 1);
+        }
+
+        // the other node is down: the first one is the cluster's last server node when its keystore is rotated
+        await node2.StopAsync();
+        var (touched, _, stderr) = await ExecAsync(node1, "touch", $"{CertificatesDirectory}/server.jks");
+        Assert.True(touched == 0, stderr);
+
+        await TestContainerLogs.WaitForMessageAsync(
+            node1,
+            "activated again after the restart of its last server node",
+            1,
+            TimeSpan.FromSeconds(120)
+        );
+        await TestContainerLogs.WaitForMessageAsync(
+            node1,
+            IgniteServerFixture.RunningMessage,
+            2,
+            TimeSpan.FromSeconds(60)
+        );
+        using (var igniteClient = CacheFactory.ConnectAsClient(clientConfiguration))
+        {
+            Assert.True(igniteClient.GetCluster().IsActive());
+            Assert.Equal(1, igniteClient.GetCache<int, int>("backed-up").Get(1));
+        }
+    }
+
+    /// <summary>A node with SSL between nodes, from the sample keystores, started once it logs <paramref name="startedMessage" />.</summary>
+    private ContainerBuilder SslNode(string startedMessage = IgniteServerFixture.RunningMessage)
     {
         const UnixFileModes ownerReadWrite = UnixFileModes.UserRead | UnixFileModes.UserWrite;
         var builder = fixture.CreateNodeBuilder()
@@ -124,7 +196,7 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
             .WithEnvironment("SSL_TRUST_STORE_FILE_PATH", $"{CertificatesDirectory}/trust.jks")
             .WithEnvironment("SSL_TRUST_STORE_PASSWORD", SamplePassword)
             .WithEnvironment("SSL_RESTART_MAX_JITTER_IN_SECONDS", "0")
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage));
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(startedMessage));
         foreach (var file in new[]
                  {
                      "server.jks", "trust.jks", "thin-client-cert.pfx",

@@ -15,8 +15,9 @@ namespace AspNetCore.IgniteServer.Listeners;
 ///     caches become usable again. Ignite resets partitions only while a baseline node that owns them is online: a
 ///     persistent cluster waits for its nodes to return, with their data; an in-memory cluster, whose departed nodes took
 ///     their data with them, first drops them from the baseline (the lost data is NOT recovered). Every node reports the
-///     loss, the oldest server node resets: off the Ignite thread that reports it, once per batch of losses, and again
-///     whenever a node joins.
+///     loss (once per cache and batch of losses) and remembers it until the cache has no lost partitions any more, the
+///     oldest server node resets: off the Ignite thread that reports it, once per batch of losses, and again whenever a
+///     node joins or leaves (a node that owns them may be back, or this node may have become the oldest one).
 /// </summary>
 internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEvent>, IEventListener<DiscoveryEvent>,
     IDisposable
@@ -30,6 +31,9 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
     // the lost partitions of each cache, until they are reset
     private readonly ConcurrentDictionary<string, int> lost = new(StringComparer.Ordinal);
     private readonly bool persistent;
+
+    // the caches whose loss was logged in the current batch of losses
+    private readonly ConcurrentDictionary<string, byte> reported = new(StringComparer.Ordinal);
     private readonly ITimer timer;
     private int disposed;
 
@@ -46,7 +50,7 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
         this.autoReset = autoReset;
         this.persistent = persistent;
         timer = (timeProvider ?? TimeProvider.System).CreateTimer(
-            _ => Reset(),
+            _ => OnBatchEnded(),
             null,
             Timeout.InfiniteTimeSpan,
             Timeout.InfiniteTimeSpan
@@ -78,7 +82,7 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
 
     public bool Invoke(DiscoveryEvent evt)
     {
-        OnNodeJoined();
+        OnTopologyChanged();
         return true;
     }
 
@@ -89,8 +93,10 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
         IEnumerable<string> hostNames
     )
     {
-        // one event per lost partition: the first one of the cache is logged
-        if (lost.AddOrUpdate(cacheName, 1, (_, count) => count + 1) == 1)
+        // one event per lost partition: the first one of the cache in this batch is logged (also on the nodes that
+        // still remember an earlier loss of the cache, reset by another node)
+        lost.AddOrUpdate(cacheName, 1, (_, count) => count + 1);
+        if (reported.TryAdd(cacheName, 0))
         {
             logger.Error(
                 "Partition data lost: CacheName: {CacheName}; DiscoveryEventName: {DiscoveryEventName}; DiscoveryNodeAddresses: {DiscoveryNodeAddresses}; DiscoveryHostNames: {DiscoveryHostNames}",
@@ -101,40 +107,55 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
             );
         }
 
-        ScheduleReset();
+        ScheduleBatchEnd();
     }
 
-    internal void OnNodeJoined()
+    internal void OnTopologyChanged()
     {
-        // a node that owns lost partitions may be back
-        if (!lost.IsEmpty)
+        // a node that owns lost partitions may be back, or the oldest node, which resets them, left
+        if (autoReset && !lost.IsEmpty)
         {
-            ScheduleReset();
+            ScheduleBatchEnd();
         }
     }
 
-    private void ScheduleReset()
+    private void ScheduleBatchEnd()
     {
-        if (autoReset && Volatile.Read(ref disposed) == 0)
+        if (Volatile.Read(ref disposed) == 0)
         {
             timer.Change(Debounce, Timeout.InfiniteTimeSpan);
         }
     }
 
+    private void OnBatchEnded()
+    {
+        reported.Clear();
+        if (autoReset)
+        {
+            Reset();
+        }
+    }
+
     private void Reset()
     {
-        var caches = lost.Keys.ToArray();
-        if (caches.Length == 0 || Volatile.Read(ref disposed) == 1)
+        if (lost.IsEmpty || Volatile.Read(ref disposed) == 1)
         {
             return;
         }
 
         try
         {
-            var cluster = ignite.GetCluster();
-            if (!cluster.ForServers().ForOldest().GetNodes().Any(node => node.IsLocal))
+            // reset by the oldest node (on the others), or destroyed
+            foreach (var cacheName in lost.Keys.Where(cacheName => !HasLostPartitions(cacheName)))
             {
-                lost.Clear();
+                lost.TryRemove(cacheName, out _);
+            }
+
+            var caches = lost.Keys.ToArray();
+            var cluster = ignite.GetCluster();
+            // the other nodes keep the losses, should the oldest node leave before it reset them
+            if (caches.Length == 0 || !cluster.ForServers().ForOldest().GetNodes().Any(node => node.IsLocal))
+            {
                 return;
             }
 
@@ -162,7 +183,7 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
         {
             logger.Warning(
                 "The lost partitions of caches {CacheNames} are reset once a node that owns them returns (or is removed from the baseline): {Reason}",
-                string.Join(", ", caches),
+                string.Join(", ", lost.Keys),
                 ex.Message
             );
         }
@@ -171,8 +192,21 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
             logger.Warning(
                 ex,
                 "Failed to reset the lost partitions of caches {CacheNames}.",
-                string.Join(", ", caches)
+                string.Join(", ", lost.Keys)
             );
+        }
+    }
+
+    private bool HasLostPartitions(string cacheName)
+    {
+        try
+        {
+            return ignite.GetCache<object, object>(cacheName).GetLostPartitions().Count > 0;
+        }
+        catch (Exception)
+        {
+            // destroyed meanwhile
+            return false;
         }
     }
 

@@ -14,16 +14,26 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 
 Directory.SetCurrentDirectory(AppContext.BaseDirectory);
 
 // cancelling the default SIGTERM action lets Main return its exit code (0 after a graceful stop) instead of the
-// process being terminated (143); the host stops the node
-using var sigTermRegistration = PosixSignalRegistration.Create(PosixSignal.SIGTERM, context => context.Cancel = true);
-return await new ServerCommandLine(RunServerAsync).InvokeAsync(args).ConfigureAwait(false);
+// process being terminated (143); the host stops the node, also when the signal came before the host started
+using CancellationTokenSource sigTerm = new();
+using var sigTermRegistration = PosixSignalRegistration.Create(
+    PosixSignal.SIGTERM,
+    context =>
+    {
+        context.Cancel = true;
+        sigTerm.Cancel();
+    }
+);
+return await new ServerCommandLine(overrides => RunServerAsync(overrides, sigTerm.Token)).InvokeAsync(args)
+    .ConfigureAwait(false);
 
-static async Task<int> RunServerAsync(IReadOnlyDictionary<string, string?> overrides)
+static async Task<int> RunServerAsync(IReadOnlyDictionary<string, string?> overrides, CancellationToken stopToken)
 {
     var configuration = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory)
         .AddJsonFile("appsettings.json", false, true)
@@ -59,9 +69,21 @@ static async Task<int> RunServerAsync(IReadOnlyDictionary<string, string?> overr
 
         using var host = settings.ManagementEnabled ? BuildWithManagement(configuration, settings)
             : BuildWithoutManagement(configuration, settings);
+        if (stopToken.IsCancellationRequested)
+        {
+            Log.Information("Stopped before the Ignite server started.");
+            return 0;
+        }
+
         Log.Information("Starting Ignite server...");
-        await host.RunAsync().ConfigureAwait(false);
+        await host.RunAsync(stopToken).ConfigureAwait(false);
         Log.Information("Ignite server stopped.");
+        return Environment.ExitCode;
+    }
+    catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
+    {
+        // SIGTERM while the host started
+        Log.Information("Ignite server stopped while it started.");
         return Environment.ExitCode;
     }
     catch (Exception ex)

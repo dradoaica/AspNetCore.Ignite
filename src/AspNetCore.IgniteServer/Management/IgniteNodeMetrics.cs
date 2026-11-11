@@ -12,7 +12,8 @@ namespace AspNetCore.IgniteServer.Management;
 /// <summary>
 ///     Publishes node, cluster, data region and cache metrics as <see cref="System.Diagnostics.Metrics" />
 ///     instruments (exported by prometheus-net on /metrics). One snapshot of the node is taken per collection (at most
-///     once per second), not one read per instrument; while the node is not running, only readiness is reported.
+///     once per second), not one read per instrument; while the node is not running, only readiness is reported, and
+///     while its cluster is inactive, no cache metrics.
 /// </summary>
 internal sealed class IgniteNodeMetrics : IDisposable
 {
@@ -49,10 +50,11 @@ internal sealed class IgniteNodeMetrics : IDisposable
         Gauge("cluster_active", s => s.ClusterActive ? 1 : 0, null, "1 when the cluster is active.");
         Gauge("cluster_server_nodes", s => s.ServerNodes, null, "Server nodes in the topology.");
         Gauge("cluster_baseline_nodes", s => s.BaselineNodes, null, "Nodes of the baseline topology.");
-        Gauge(
+        // not reported while the cluster is inactive, when the caches cannot be read
+        meter.CreateObservableGauge(
             "cluster_lost_partitions",
-            s => s.LostPartitions.Values.Sum(),
-            null,
+            () => Read<int>(s => s.ClusterActive ? [new Measurement<int>(s.LostPartitions.Values.Sum()),] : []),
+            description:
             "Lost partitions of all caches (their data is gone until reset, or until the nodes that own them return)."
         );
 
@@ -210,7 +212,7 @@ internal sealed class IgniteNodeMetrics : IDisposable
         }
     }
 
-    private sealed record NodeSnapshot(
+    internal sealed record NodeSnapshot(
         IIgnite Node,
         bool ClusterActive,
         int ServerNodes,
@@ -224,22 +226,34 @@ internal sealed class IgniteNodeMetrics : IDisposable
         public static NodeSnapshot Take(IIgnite node, bool perCache)
         {
             var cluster = node.GetCluster();
+            var clusterActive = cluster.IsActive();
             Dictionary<string, long> cacheEntries = [];
             Dictionary<string, int> lostPartitions = [];
-            // the lost partitions of every cache: their total is reported without METRICS_PER_CACHE too
-            foreach (var cacheName in node.GetCacheNames())
+            // the lost partitions of every cache: their total is reported without METRICS_PER_CACHE too. Ignite refuses
+            // to read the caches of an inactive cluster (e.g., waiting for ACTIVATION_MIN_SERVER_NODES), whose other
+            // metrics are reported all the same
+            foreach (var cacheName in clusterActive ? node.GetCacheNames() : [])
             {
-                var cache = node.GetCache<object, object>(cacheName);
-                lostPartitions[cacheName] = cache.GetLostPartitions().Count;
-                if (perCache)
+                try
                 {
-                    cacheEntries[cacheName] = cache.GetLocalSizeLong(CachePeekMode.Primary, CachePeekMode.Backup);
+                    var cache = node.GetCache<object, object>(cacheName);
+                    lostPartitions[cacheName] = cache.GetLostPartitions().Count;
+                    if (perCache)
+                    {
+                        cacheEntries[cacheName] = cache.GetLocalSizeLong(CachePeekMode.Primary, CachePeekMode.Backup);
+                    }
+                }
+                catch (Exception)
+                {
+                    // destroyed while it was read (e.g., the temporary cache of a password change): the other caches
+                    // are reported
+                    lostPartitions.Remove(cacheName);
                 }
             }
 
             return new NodeSnapshot(
                 node,
-                cluster.IsActive(),
+                clusterActive,
                 cluster.ForServers().GetNodes().Count,
                 IgniteServerRunner.GetBaselineTopology(cluster)?.Count ?? 0,
                 // Ignite.NET reads the metrics once into this object (one call for all node metrics)

@@ -22,6 +22,8 @@ internal sealed class IgniteServerHostedService(
     private const int DefaultDiscoveryPort = 47500;
     private static readonly TimeSpan SslFileChangeDebounce = TimeSpan.FromSeconds(10);
 
+    // guards stopping and runner, so that a stop either finds the runner or keeps it from being created
+    private readonly Lock gate = new();
     private volatile bool restartRequested;
     private IgniteServerRunner? runner;
     private volatile bool stopping;
@@ -34,9 +36,15 @@ internal sealed class IgniteServerHostedService(
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        // before stopping the node, so that RunAsync does not take the stop for a failure
-        stopping = true;
-        runner?.Stop(TimeSpan.FromSeconds(settings.GracefulStopTimeoutInSeconds));
+        IgniteServerRunner? current;
+        lock (gate)
+        {
+            // before stopping the node, so that RunAsync does not take the stop for a failure
+            stopping = true;
+            current = runner;
+        }
+
+        current?.Stop(TimeSpan.FromSeconds(settings.GracefulStopTimeoutInSeconds));
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -66,8 +74,8 @@ internal sealed class IgniteServerHostedService(
             igniteServerRunner.SetClusterEndpoints(settings.ClusterEndpoints);
         }
         else if (settings.UseTcpDiscoveryStaticIpFinder)
-            // resolved only when needed: a failing DNS lookup must not break nodes that do not use it
         {
+            // resolved only when needed: a failing DNS lookup must not break nodes that do not use it
             igniteServerRunner.SetClusterEndpoints([$"{getLocalIpAddress()}:{DefaultDiscoveryPort}",]);
         }
 
@@ -118,15 +126,27 @@ internal sealed class IgniteServerHostedService(
                 )
                 .ConfigureAwait(false);
             EnsureWellFormed(springConfigPath);
-            runner = new IgniteServerRunner(settings.ToRunnerOptions(springConfigPath), logger);
-            ApplySettings(runner, settings, DnsUtils.GetLocalIpAddress);
-            nodeState.SetRunner(runner);
+            IgniteServerRunner created = new(settings.ToRunnerOptions(springConfigPath), logger);
+            ApplySettings(created, settings, DnsUtils.GetLocalIpAddress);
+            lock (gate)
+            {
+                if (stopping)
+                {
+                    // the host stops before the node started: it is not started at all
+                    created.Dispose();
+                    return;
+                }
+
+                runner = created;
+            }
+
+            nodeState.SetRunner(created);
             using var sslFileWatcher = CreateSslFileWatcher();
             do
             {
                 restartRequested = false;
                 // a node that cannot stop must not keep the host from stopping
-                await runner.Run().WaitAsync(stoppingToken).ConfigureAwait(false);
+                await created.Run().WaitAsync(stoppingToken).ConfigureAwait(false);
             } while (restartRequested && !stopping && !stoppingToken.IsCancellationRequested);
 
             if (!stopping && !stoppingToken.IsCancellationRequested)

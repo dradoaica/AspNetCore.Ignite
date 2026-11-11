@@ -23,6 +23,8 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
   (`PEER_ASSEMBLY_LOADING`), and OpenCensus metrics are replaced by `/metrics` on port 9464 (`MANAGEMENT_PORT`).
 * Logs go to the console only (JSON in the image); the file sink is opt-in.
 * SSL restarts are graceful and jittered; the process exits with `1` on failures (it always exited with `0`).
+* The settings inserted into the Spring configuration (`K8S_*` and, with `USE_CLIENT_SSL`, `SSL_*`) must not contain
+  `#{`, which Spring would evaluate as an expression: the server refuses to start with one.
 * Node attributes no longer contain the environment variables and Java system properties (they showed secrets such as
   `IGNITE_USER_PASSWORD` to every node and client): code that reads them, e.g., a node filter, uses `userAttributes`.
 * Baseline auto-adjust waits 5 minutes with persistence (it waited 30 seconds, as in-memory clusters still do), so that
@@ -65,6 +67,22 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
       Kubernetes nodes (`topologySpreadConstraints`).
     * The nodes keep no SQL query history (`sqlQueryHistorySize: 0`): a node that applies a new password would keep it
       there, readable by every SQL user. Set it empty for Ignite's default.
+    * `env.ACTIVATION_MIN_SERVER_NODES` defaults to `replicaCount`: a new cluster, or one stopped completely, is
+      activated once all its replicas joined, as with the ignite chart's activation job (it was activated by its first
+      node). The pods read it from the ConfigMap `<fullname>-activation` when they start, so scaling restarts no
+      running pod.
+    * `networkPolicy.egress` and `networkPolicy.ingress` hold additional rules only, so that adding one keeps the rules
+      the cluster needs: the DNS and Kubernetes API server rules are `networkPolicy.allowDns`,
+      `networkPolicy.kubeApiServerCidrs` (narrow it to the API server's addresses) and
+      `networkPolicy.kubeApiServerPorts` (an `egress` list that repeats them still works), and
+      `networkPolicy.metricsFrom` allows the scraping of `/metrics`. The API server ports include 16443 (MicroK8s),
+      which the earlier rules did not allow, so that the nodes did not find each other there.
+    * `/tmp` is limited to `memory.onHeapMB` + 512 MiB (`tmpVolume.sizeLimit`), room for a heap dump, and the Ingress
+      routes to the Service port named `rest` unless a path sets `port` or `portName`.
+    * The `checksum/secrets` pod annotation is derived through scrypt instead of SHA-256 (whoever can read the pods
+      cannot test guesses of the passwords against it at speed), so the pods restart once with the upgrade.
+    * Upgrade with `--reset-then-reuse-values`, not `--reuse-values`, which keeps the old defaults and misses the new
+      settings (the chart then fails with a message).
 
 ## Moving to Apache Ignite 2.19.0
 

@@ -68,8 +68,8 @@ public class IgniteManager : IIgniteManager, IDisposable
     public IIgniteClient Client => GetIgniteClient();
 
     /// <inheritdoc />
+    // cancelling stops this caller's wait, not the shared connection attempt
     public Task<IIgniteClient> GetClientAsync(CancellationToken cancellationToken = default) =>
-        // cancelling stops this caller's wait, not the shared connection attempt
         GetOrStartConnecting().WaitAsync(cancellationToken);
 
     /// <inheritdoc />
@@ -137,8 +137,8 @@ public class IgniteManager : IIgniteManager, IDisposable
             }
 
             if (connecting is not { IsFaulted: false, IsCanceled: false, })
-                // one background thread runs the connection retries, however many callers wait for them
             {
+                // one background thread runs the connection retries, however many callers wait for them
                 connecting = Task.Run(Connect);
             }
 

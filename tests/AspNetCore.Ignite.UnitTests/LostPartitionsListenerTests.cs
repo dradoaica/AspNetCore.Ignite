@@ -1,8 +1,11 @@
 using Apache.Ignite.Core;
+using Apache.Ignite.Core.Cache;
 using Apache.Ignite.Core.Cluster;
 using AspNetCore.IgniteServer.Listeners;
 using Microsoft.Extensions.Time.Testing;
+using Serilog;
 using Serilog.Core;
+using Serilog.Events;
 using Xunit;
 
 namespace AspNetCore.Ignite.UnitTests;
@@ -42,10 +45,76 @@ public sealed class LostPartitionsListenerTests
 
         Lose(listener, "c");
         time.Advance(Debounce);
-        listener.OnNodeJoined();
+        listener.OnTopologyChanged();
         time.Advance(Debounce);
 
         Assert.Empty(cluster.Calls);
+    }
+
+    [Fact]
+    public void TheNextOldestServerNode_ResetsWhatTheOldestOneLeftLost()
+    {
+        FakeCluster cluster = new()
+        {
+            LocalIsOldest = false,
+        };
+        FakeTimeProvider time = new();
+        using LostPartitionsListener listener = new(cluster.Ignite, Logger.None, true, true, time);
+
+        Lose(listener, "c");
+        time.Advance(Debounce);
+        // the oldest node left before it reset them
+        cluster.LocalIsOldest = true;
+        listener.OnTopologyChanged();
+        time.Advance(Debounce);
+
+        Assert.Equal(["ResetLostPartitions c",], cluster.Calls);
+    }
+
+    [Fact]
+    public void CachesWithoutLostPartitions_AreNotReset()
+    {
+        FakeCluster cluster = new()
+        {
+            LocalIsOldest = false,
+        };
+        FakeTimeProvider time = new();
+        using LostPartitionsListener listener = new(cluster.Ignite, Logger.None, true, true, time);
+
+        Lose(listener, "c");
+        Lose(listener, "d");
+        time.Advance(Debounce);
+        // the oldest node reset c before it left
+        cluster.WithoutLostPartitions.Add("c");
+        cluster.LocalIsOldest = true;
+        listener.OnTopologyChanged();
+        time.Advance(Debounce);
+        listener.OnTopologyChanged();
+        time.Advance(Debounce);
+
+        Assert.Equal(["ResetLostPartitions d",], cluster.Calls);
+    }
+
+    [Fact]
+    public void EveryLoss_IsLoggedOncePerBatch_AlsoWhereAnEarlierOneIsRemembered()
+    {
+        FakeCluster cluster = new()
+        {
+            LocalIsOldest = false,
+        };
+        FakeTimeProvider time = new();
+        CollectingSink sink = new();
+        using var logger = new LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+        using LostPartitionsListener listener = new(cluster.Ignite, logger, true, true, time);
+
+        Lose(listener, "c");
+        Lose(listener, "c");
+        time.Advance(Debounce);
+        // the oldest node resets nothing for this node to see: the cache loses partitions again
+        Lose(listener, "c");
+        time.Advance(Debounce);
+
+        Assert.Equal(2, sink.Events.Count(evt => evt.Level == LogEventLevel.Error));
     }
 
     [Fact]
@@ -62,9 +131,9 @@ public sealed class LostPartitionsListenerTests
         time.Advance(Debounce);
         // no node that owns them is online: retried when a node joins
         Assert.Equal(["ResetLostPartitions c (failed)",], cluster.Calls);
-        listener.OnNodeJoined();
+        listener.OnTopologyChanged();
         time.Advance(Debounce);
-        listener.OnNodeJoined();
+        listener.OnTopologyChanged();
         time.Advance(Debounce);
 
         // the baseline is left as is: the departed nodes return with their data
@@ -102,10 +171,17 @@ public sealed class LostPartitionsListenerTests
         using LostPartitionsListener listener = new(cluster.Ignite, Logger.None, false, false, time);
 
         Lose(listener, "c");
-        listener.OnNodeJoined();
+        listener.OnTopologyChanged();
         time.Advance(Debounce);
 
         Assert.Empty(cluster.Calls);
+    }
+
+    private sealed class CollectingSink : ILogEventSink
+    {
+        public List<LogEvent> Events { get; } = [];
+
+        public void Emit(LogEvent logEvent) => Events.Add(logEvent);
     }
 
     private static void Lose(LostPartitionsListener listener, string cacheName) =>
@@ -128,6 +204,7 @@ public sealed class LostPartitionsListenerTests
             Ignite = Fake.Of<IIgnite>((name, args) => name switch
                 {
                     "GetCluster" => cluster,
+                    "GetCache" => Cache((string)args[0]!),
                     "ResetLostPartitions" => Reset(string.Join(",", (string[])args[0]!)),
                     _ => throw new NotSupportedException(name),
                 }
@@ -136,7 +213,8 @@ public sealed class LostPartitionsListenerTests
 
         public IIgnite Ignite { get; }
         public List<string> Calls { get; } = [];
-        public bool LocalIsOldest { get; init; } = true;
+        public bool LocalIsOldest { get; set; } = true;
+        public HashSet<string> WithoutLostPartitions { get; } = [];
         public string[] Baseline { get; init; } = ["n1",];
         public string[] Online { get; init; } = ["n1",];
         public int ResetFailures { get; set; }
@@ -154,6 +232,14 @@ public sealed class LostPartitionsListenerTests
             {
                 "get_ConsistentId" => consistentId,
                 "get_IsLocal" => consistentId == "n1",
+                _ => throw new NotSupportedException(name),
+            }
+        );
+
+        private ICache<object, object> Cache(string cacheName) => Fake.Of<ICache<object, object>>((name, _) =>
+            name switch
+            {
+                "GetLostPartitions" => WithoutLostPartitions.Contains(cacheName) ? new List<int>() : [0,],
                 _ => throw new NotSupportedException(name),
             }
         );

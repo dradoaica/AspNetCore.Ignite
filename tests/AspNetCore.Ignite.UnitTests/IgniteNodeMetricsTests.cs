@@ -1,3 +1,6 @@
+using Apache.Ignite.Core;
+using Apache.Ignite.Core.Cache;
+using Apache.Ignite.Core.Cluster;
 using AspNetCore.IgniteServer;
 using AspNetCore.IgniteServer.Management;
 using System.Diagnostics.Metrics;
@@ -61,5 +64,82 @@ public sealed class IgniteNodeMetricsTests
         Assert.Contains("node_ready", instruments);
         // data loss is reported without the per-cache series too
         Assert.Contains("cluster_lost_partitions", instruments);
+    }
+
+    [Fact]
+    public void InactiveCluster_IsReportedWithoutItsCaches()
+    {
+        // Ignite refuses to read the caches of an inactive cluster
+        var snapshot = IgniteNodeMetrics.NodeSnapshot.Take(
+            Node(false, () => throw new InvalidOperationException("The cluster is inactive."), _ => null),
+            true
+        );
+
+        Assert.False(snapshot.ClusterActive);
+        Assert.Equal(1, snapshot.ServerNodes);
+        Assert.Empty(snapshot.CacheEntries);
+        Assert.Empty(snapshot.LostPartitions);
+    }
+
+    [Fact]
+    public void CacheDestroyedWhileRead_IsLeftOut()
+    {
+        var snapshot = IgniteNodeMetrics.NodeSnapshot.Take(
+            Node(
+                true,
+                () => ["c", "gone",],
+                cacheName => cacheName == "gone" ? throw new ArgumentException("The cache does not exist.")
+                    : Fake.Of<ICache<object, object>>((name, _) => name switch
+                        {
+                            "GetLostPartitions" => new List<int> { 3, },
+                            "GetLocalSizeLong" => 5L,
+                            _ => throw new NotSupportedException(name),
+                        }
+                    )
+            ),
+            true
+        );
+
+        Assert.True(snapshot.ClusterActive);
+        Assert.Equal(new Dictionary<string, long> { ["c"] = 5, }, snapshot.CacheEntries);
+        Assert.Equal(new Dictionary<string, int> { ["c"] = 1, }, snapshot.LostPartitions);
+    }
+
+    private static IIgnite Node(
+        bool active,
+        Func<ICollection<string>> getCacheNames,
+        Func<string, ICache<object, object>?> getCache
+    )
+    {
+        var localNode = Fake.Of<IClusterNode>((name, _) => name switch
+            {
+                "GetMetrics" => Fake.Of<IClusterMetrics>((metric, _) => throw new NotSupportedException(metric)),
+                _ => throw new NotSupportedException(name),
+            }
+        );
+        var servers = Fake.Of<IClusterGroup>((name, _) => name switch
+            {
+                "GetNodes" => new List<IClusterNode> { localNode, },
+                _ => throw new NotSupportedException(name),
+            }
+        );
+        var cluster = Fake.Of<ICluster>((name, _) => name switch
+            {
+                "IsActive" => active,
+                "ForServers" => servers,
+                "GetBaselineTopology" => null,
+                "GetLocalNode" => localNode,
+                _ => throw new NotSupportedException(name),
+            }
+        );
+        return Fake.Of<IIgnite>((name, args) => name switch
+            {
+                "GetCluster" => cluster,
+                "GetCacheNames" => getCacheNames(),
+                "GetCache" => getCache((string)args[0]!),
+                "GetDataRegionMetrics" => new List<IDataRegionMetrics>(),
+                _ => throw new NotSupportedException(name),
+            }
+        );
     }
 }

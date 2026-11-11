@@ -242,6 +242,17 @@ internal sealed partial class IgniteServerSettings
             RequireValue(errors, "SSL_CLIENT_CERTIFICATE_PATH", SslClientCertificatePath);
         }
 
+        // Spring evaluates #{...} (SpEL) in the values of the Spring configuration they are inserted into; the SSL ones go
+        // there only with USE_CLIENT_SSL (USE_SSL configures the node from .NET)
+        foreach (var (key, value) in ToSpringConfigPlaceholders())
+        {
+            if (value?.Contains("#{", StringComparison.Ordinal) == true &&
+                (UseClientSsl || !key.StartsWith("SSL_", StringComparison.Ordinal)))
+            {
+                errors.Add($"{key} must not contain '#{{' (Spring would evaluate it as an expression).");
+            }
+        }
+
         return errors;
     }
 

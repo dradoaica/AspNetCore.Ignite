@@ -354,6 +354,31 @@ public sealed class IgniteServerSettingsTests
         error => error.StartsWith("SPRING_EXTRA_PROPERTIES_FILE", StringComparison.Ordinal)
     );
 
+    [Theory]
+    [InlineData("true", true)]
+    // without USE_CLIENT_SSL, the SSL passwords configure the node from .NET, not in the Spring configuration
+    [InlineData("false", false)]
+    public void SpringExpressions_AreRejectedInTheSpringConfiguration(string useClientSsl, bool rejected)
+    {
+        var errors = Load(
+                new Dictionary<string, string?>
+                {
+                    ["USE_SSL"] = "true",
+                    ["USE_CLIENT_SSL"] = useClientSsl,
+                    ["SSL_CLIENT_AUTH"] = "false",
+                    ["SSL_KEY_STORE_FILE_PATH"] = "server.jks",
+                    ["SSL_TRUST_STORE_FILE_PATH"] = "trust.jks",
+                    ["SSL_KEY_STORE_PASSWORD"] = "pa#{T(java.lang.System).exit(1)}ss",
+                }
+            )
+            .Validate();
+
+        Assert.Equal(
+            rejected,
+            errors.Any(error => error.StartsWith("SSL_KEY_STORE_PASSWORD must not contain", StringComparison.Ordinal))
+        );
+    }
+
     [Fact]
     public void MalformedSpringConfiguration_FailsWithAClearMessage()
     {

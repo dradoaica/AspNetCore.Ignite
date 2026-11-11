@@ -26,6 +26,9 @@ internal sealed class IgniteServerRunner : IDisposable
 
     // guards starting and pendingRestartTimeout (and the assignment of ignite once started)
     private readonly Lock startLock = new();
+
+    // the cluster's last server node deactivated the cluster to restart: the next run activates it again at once
+    private volatile bool deactivatedToRestart;
     private volatile bool disposed;
     private IIgnite? ignite;
 
@@ -174,15 +177,15 @@ internal sealed class IgniteServerRunner : IDisposable
             tcs.TrySetResult(s?.ToString());
         };
         if (stopRequested)
-            // Stop() ran while starting, before this node could be stopped
         {
+            // Stop() ran while starting, before this node could be stopped
             StopNode(false);
         }
         else if (restartTimeout is { } timeout)
         {
             // Restart() ran while starting: this node may have read the files of before the change
             logger.Information("Restarting Ignite server runner (requested while it started)...");
-            if (!StopNodeGracefully(timeout))
+            if (!StopNodeGracefully(timeout, true))
             {
                 throw new TimeoutException(
                     $"The Ignite node did not stop gracefully within {timeout} to restart with the renewed SSL files."
@@ -194,8 +197,8 @@ internal sealed class IgniteServerRunner : IDisposable
         }
 
         if (!ReferenceEquals(Volatile.Read(ref ignite), current))
-            // stopped before the handler was attached
         {
+            // stopped before the handler was attached
             tcs.TrySetResult(current.Name);
         }
 
@@ -203,7 +206,11 @@ internal sealed class IgniteServerRunner : IDisposable
         var persistenceEnabled = Configuration.DataStorageConfiguration?.DefaultDataRegionConfiguration
                                      ?.PersistenceEnabled ==
                                  true;
-        if (persistenceEnabled)
+        // the cluster was active with this node alone before its restart (e.g., the others are down): it is not made to
+        // wait for ACTIVATION_MIN_SERVER_NODES, as for a cluster that starts
+        var reactivate = deactivatedToRestart;
+        deactivatedToRestart = false;
+        if (persistenceEnabled && !reactivate)
         {
             await WaitForServerNodes(cluster, tcs.Task).ConfigureAwait(false);
         }
@@ -220,7 +227,8 @@ internal sealed class IgniteServerRunner : IDisposable
         {
             cluster.SetActive(true);
             logger.Information(
-                "The cluster was activated ({ServerNodes} server nodes).",
+                "The cluster was activated{Again:l} ({ServerNodes} server nodes).",
+                reactivate ? " again after the restart of its last server node" : "",
                 cluster.ForServers().GetNodes().Count
             );
         }
@@ -251,7 +259,8 @@ internal sealed class IgniteServerRunner : IDisposable
             persistenceEnabled
         );
         current.GetEvents().LocalListen<CacheRebalancingEvent>(lostPartitions, EventType.CacheRebalancePartDataLost);
-        current.GetEvents().LocalListen<DiscoveryEvent>(lostPartitions, EventType.NodeJoined);
+        current.GetEvents()
+            .LocalListen<DiscoveryEvent>(lostPartitions, EventType.NodeJoined, EventType.NodeLeft, EventType.NodeFailed);
         current.GetEvents()
             .LocalListen(
                 new DiscoveryEventListener(logger),
@@ -277,7 +286,7 @@ internal sealed class IgniteServerRunner : IDisposable
     ///     node that is still starting restarts once started. Returns false when the node did not stop within
     ///     <paramref name="timeout" /> (the GRACEFUL shutdown policy waits until the node's partitions have copies on
     ///     other nodes, e.g., while another node restarts). The cluster's last server node deactivates the cluster first,
-    ///     so it stops at once.
+    ///     so it stops at once, and activates it again once restarted.
     /// </summary>
     public bool Restart(TimeSpan timeout)
     {
@@ -292,7 +301,7 @@ internal sealed class IgniteServerRunner : IDisposable
         }
 
         logger.Information("Restarting Ignite server runner...");
-        return StopNodeGracefully(timeout);
+        return StopNodeGracefully(timeout, true);
     }
 
     /// <summary>
@@ -306,7 +315,7 @@ internal sealed class IgniteServerRunner : IDisposable
         stopRequested = true;
         ready = false;
         logger.Information("Stopping Ignite server runner...");
-        if (StopNodeGracefully(timeout))
+        if (StopNodeGracefully(timeout, false))
         {
             logger.Information("Ignite server runner stopped.");
             return true;
@@ -321,12 +330,16 @@ internal sealed class IgniteServerRunner : IDisposable
 
     /// <summary>
     ///     Stops the running node gracefully within <paramref name="timeout" />, the cluster's last server node after
-    ///     deactivating the cluster.
+    ///     deactivating the cluster (which the next run activates again when <paramref name="restarting" />).
     /// </summary>
-    private bool StopNodeGracefully(TimeSpan timeout)
+    private bool StopNodeGracefully(TimeSpan timeout, bool restarting)
     {
         var stopping = Stopwatch.StartNew();
-        DeactivateIfLastServerNode(timeout);
+        if (DeactivateIfLastServerNode(timeout) && restarting)
+        {
+            deactivatedToRestart = true;
+        }
+
         var remaining = timeout - stopping.Elapsed;
         return StopGracefully(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero);
     }
@@ -334,13 +347,13 @@ internal sealed class IgniteServerRunner : IDisposable
     /// <summary>
     ///     No other node can take over the partitions of the cluster's last server node, which the GRACEFUL shutdown
     ///     policy would wait for until the timeout: that node deactivates the cluster (a persistent one checkpoints its data,
-    ///     and the next start activates it again).
+    ///     and the next start activates it again). True when it deactivated the cluster.
     /// </summary>
-    private void DeactivateIfLastServerNode(TimeSpan timeout)
+    private bool DeactivateIfLastServerNode(TimeSpan timeout)
     {
         if (Node is not { } node)
         {
-            return;
+            return false;
         }
 
         try
@@ -348,22 +361,26 @@ internal sealed class IgniteServerRunner : IDisposable
             var cluster = node.GetCluster();
             if (!cluster.IsActive() || cluster.ForServers().GetNodes().Count > 1)
             {
-                return;
+                return false;
             }
 
             logger.Information(
                 "The node is the cluster's last server node: deactivating the cluster so that it stops at once."
             );
-            if (!Task.Run(() => cluster.SetActive(false)).Wait(timeout))
+            if (Task.Run(() => cluster.SetActive(false)).Wait(timeout))
             {
-                logger.Warning("The cluster was not deactivated within {Timeout}.", timeout);
+                return true;
             }
+
+            logger.Warning("The cluster was not deactivated within {Timeout}.", timeout);
         }
         catch (Exception ex) when (ex is IgniteException or InvalidOperationException or AggregateException)
         {
             // the graceful stop decides then
             logger.Warning(ex, "The cluster was not deactivated before the stop.");
         }
+
+        return false;
     }
 
     /// <summary>Stops the running node, if any, gracefully; false when it is still stopping after <paramref name="timeout" />.</summary>

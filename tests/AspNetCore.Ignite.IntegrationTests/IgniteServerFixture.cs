@@ -27,8 +27,8 @@ public abstract class IgniteNodesFixture : IAsyncLifetime
     };
 
     /// <summary>A prebuilt server image to test (e.g., built once by CI); otherwise the Dockerfile is built.</summary>
-    public static string? PrebuiltImage => Environment.GetEnvironmentVariable("IGNITE_SERVER_IMAGE") is
-        { Length: > 0, } name ? name : null;
+    public static string? PrebuiltImage =>
+        Environment.GetEnvironmentVariable("IGNITE_SERVER_IMAGE") is { Length: > 0, } name ? name : null;
 
     public virtual async Task InitializeAsync() => image = await ServerImage.Value;
 
@@ -55,10 +55,10 @@ public abstract class IgniteNodesFixture : IAsyncLifetime
             return new DockerImage(prebuiltImage);
         }
 
+        // the legacy builder Testcontainers uses does not set BUILDPLATFORM (BuildKit and buildx do)
         var built = new ImageFromDockerfileBuilder()
             .WithDockerfileDirectory(CommonDirectoryPath.GetGitDirectory(), string.Empty)
             .WithDockerfile("Dockerfile")
-            // the legacy builder Testcontainers uses does not set BUILDPLATFORM (BuildKit and buildx do)
             .WithBuildArgument("BUILDPLATFORM", BuildPlatform)
             .WithName($"aspnetcore.ignite-server:integration-tests-{Guid.NewGuid():N}")
             .WithCleanUp(true)
