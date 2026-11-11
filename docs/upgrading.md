@@ -71,16 +71,11 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
       activated once all its replicas joined, as with the ignite chart's activation job (it was activated by its first
       node). The pods read it from the ConfigMap `<fullname>-activation` when they start, so scaling restarts no
       running pod.
-    * `networkPolicy.egress` and `networkPolicy.ingress` hold additional rules only, so that adding one keeps the rules
-      the cluster needs: the DNS and Kubernetes API server rules are `networkPolicy.allowDns`,
-      `networkPolicy.kubeApiServerCidrs` (narrow it to the API server's addresses) and
-      `networkPolicy.kubeApiServerPorts` (an `egress` list that repeats them still works), and
-      `networkPolicy.metricsFrom` allows the scraping of `/metrics`. The API server ports include 16443 (MicroK8s),
-      which the earlier rules did not allow, so that the nodes did not find each other there.
-    * `/tmp` is limited to `memory.onHeapMB` + 512 MiB (`tmpVolume.sizeLimit`), room for a heap dump, and the Ingress
-      routes to the Service port named `rest` unless a path sets `port` or `portName`.
-    * The `checksum/secrets` pod annotation is derived through scrypt instead of SHA-256 (whoever can read the pods
-      cannot test guesses of the passwords against it at speed), so the pods restart once with the upgrade.
+    * The default `networkPolicy.egress` allows the Kubernetes API server on port 16443 too (MicroK8s, where the nodes
+      did not find each other).
+    * The autoscaler (`autoscaling.create`) only scales up, on CPU only
+      (`autoscaling.targetMemoryUtilizationPercentage` is refused), with `autoscaling.minReplicas` not below
+      `replicaCount`.
     * Upgrade with `--reset-then-reuse-values`, not `--reuse-values`, which keeps the old defaults and misses the new
       settings (the chart then fails with a message).
 
