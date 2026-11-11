@@ -67,10 +67,6 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
       Kubernetes nodes (`topologySpreadConstraints`).
     * The nodes keep no SQL query history (`sqlQueryHistorySize: 0`): a node that applies a new password would keep it
       there, readable by every SQL user. Set it empty for Ignite's default.
-    * `env.ACTIVATION_MIN_SERVER_NODES` defaults to `replicaCount`: a new cluster, or one stopped completely, is
-      activated once all its replicas joined, as with the ignite chart's activation job (it was activated by its first
-      node). The pods read it from the ConfigMap `<fullname>-activation` when they start, so scaling restarts no
-      running pod.
     * The default `networkPolicy.egress` allows the Kubernetes API server on port 16443 too (MicroK8s, where the nodes
       did not find each other).
     * The autoscaler (`autoscaling.create`) only scales up, on CPU only

@@ -27,10 +27,10 @@ a StatefulSet. A deployment should:
   default 10 minutes; less with little data),
 * give each pod a unique, stable `DEFAULT_CONSISTENT_ID` (e.g., the pod name) and, with persistence, a volume at
   `/app/work`,
-* set `ACTIVATION_MIN_SERVER_NODES` to the number of replicas (persistence; the chart's default): a new cluster, or one
-  stopped completely, waits for them before it is activated, so that it does not start without the partitions of the
-  nodes still starting; until then, no pod is ready, so the Service has no endpoints and thin clients cannot connect yet
-  (by design),
+* set `ACTIVATION_MIN_SERVER_NODES` to the number of replicas (persistence; `env.ACTIVATION_MIN_SERVER_NODES` in the
+  chart): a new cluster, or one stopped completely, waits for them before it is activated, so that it does not start
+  without the partitions of the nodes still starting; until then, no pod is ready, so the Service has no endpoints and
+  thin clients cannot connect yet (by design),
 * enable `USE_SSL` and/or restrict the cluster ports with a NetworkPolicy:
 
 ```yaml
