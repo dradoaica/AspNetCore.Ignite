@@ -26,7 +26,7 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
             .WithEnvironment("DEFAULT_CONSISTENT_ID", "ignite-1")
             .WithEnvironment("CLUSTER_ENDPOINTS", clusterEndpoints)
             .WithEnvironment("ACTIVATION_MIN_SERVER_NODES", "2")
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Waiting for 2 server nodes"))
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ServerLog.WaitingForServerNodes))
             .Build();
         await using var node2 = fixture.CreateNodeBuilder()
             .WithNetwork(network)
@@ -34,7 +34,7 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
             .WithEnvironment("DEFAULT_CONSISTENT_ID", "ignite-2")
             .WithEnvironment("CLUSTER_ENDPOINTS", clusterEndpoints)
             .WithEnvironment("ACTIVATION_MIN_SERVER_NODES", "2")
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ServerLog.Running))
             .Build();
 
         // alone, the first node waits instead of activating a one-node baseline
@@ -42,7 +42,7 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
         await node2.StartAsync();
         await TestContainerLogs.WaitForMessageAsync(
             node1,
-            IgniteServerFixture.RunningMessage,
+            ServerLog.Running,
             1,
             TimeSpan.FromSeconds(60)
         );
@@ -82,8 +82,8 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
         await nodeB.StartAsync();
 
         // the new node receives its partitions (and their backups) and reports when it is done
-        await TestContainerLogs.WaitForMessageAsync(nodeB, "Rebalancing of cache", 1, TimeSpan.FromSeconds(60));
-        await TestContainerLogs.WaitForMessageAsync(nodeB, "finished in", 1, TimeSpan.FromSeconds(120));
+        await TestContainerLogs.WaitForMessageAsync(nodeB, ServerLog.RebalancingOfCache, 1, TimeSpan.FromSeconds(60));
+        await TestContainerLogs.WaitForMessageAsync(nodeB, ServerLog.RebalancingFinished, 1, TimeSpan.FromSeconds(120));
         using HttpClient http = new();
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
         HttpStatusCode status;
@@ -133,10 +133,10 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
         await nodeY.StopAsync();
 
         // the departed in-memory node is dropped from the baseline, so the partitions can be reset (empty)
-        await TestContainerLogs.WaitForMessageAsync(nodeX, "Partition data lost", 1, TimeSpan.FromSeconds(60));
+        await TestContainerLogs.WaitForMessageAsync(nodeX, ServerLog.PartitionDataLost, 1, TimeSpan.FromSeconds(60));
         await TestContainerLogs.WaitForMessageAsync(
             nodeX,
-            "were reset; their data is gone",
+            ServerLog.LostPartitionsResetWithoutData,
             1,
             TimeSpan.FromSeconds(60)
         );
@@ -154,7 +154,7 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
         await volume.CreateAsync();
         const string clusterEndpoints = "ignite-p:47500,ignite-q:47500";
         await using var nodeP = PersistentNode(network, "ignite-p", clusterEndpoints, null)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("Waiting for 2 server nodes"))
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ServerLog.WaitingForServerNodes))
             .Build();
         await nodeP.StartAsync();
         List<KeyValuePair<int, int>> entries =
@@ -164,7 +164,7 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
             await nodeQ.StartAsync();
             await TestContainerLogs.WaitForMessageAsync(
                 nodeP,
-                IgniteServerFixture.RunningMessage,
+                ServerLog.Running,
                 1,
                 TimeSpan.FromSeconds(60)
             );
@@ -182,10 +182,10 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
         }
 
         // the partitions of the departed node stay lost (its data is on its volume), and are not reset meanwhile
-        await TestContainerLogs.WaitForMessageAsync(nodeP, "Partition data lost", 1, TimeSpan.FromSeconds(60));
+        await TestContainerLogs.WaitForMessageAsync(nodeP, ServerLog.PartitionDataLost, 1, TimeSpan.FromSeconds(60));
         await TestContainerLogs.WaitForMessageAsync(
             nodeP,
-            "once a node that owns them returns",
+            ServerLog.LostPartitionsWaitForOwner,
             1,
             TimeSpan.FromSeconds(30)
         );
@@ -198,7 +198,7 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
 
         await TestContainerLogs.WaitForMessageAsync(
             nodeP,
-            "with the data of the nodes that returned",
+            ServerLog.LostPartitionsResetWithReturnedData,
             1,
             TimeSpan.FromSeconds(60)
         );
@@ -259,7 +259,7 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
             .WithEnvironment("ACTIVATION_MIN_SERVER_NODES", "2")
             .WithEnvironment("DEFAULT_CONSISTENT_ID", alias)
             .WithEnvironment("CLUSTER_ENDPOINTS", clusterEndpoints)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage));
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ServerLog.Running));
         return volume == null ? builder : builder.WithVolumeMount(volume, "/app/work");
     }
 
@@ -270,6 +270,6 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
         .WithEnvironment("ENABLE_AUTHENTICATION", "false")
         .WithEnvironment("DEFAULT_CONSISTENT_ID", alias)
         .WithEnvironment("CLUSTER_ENDPOINTS", clusterEndpoints)
-        .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
+        .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ServerLog.Running))
         .Build();
 }

@@ -19,16 +19,17 @@ internal sealed class IgniteServerHostedService(
     IgniteNodeState nodeState
 ) : BackgroundService
 {
-    private const int DefaultDiscoveryPort = 47500;
     private static readonly TimeSpan SslFileChangeDebounce = TimeSpan.FromSeconds(10);
 
-    // guards stopping and runner, so that a stop either finds the runner or keeps it from being created
+    // Guards stopping and runner together: StopAsync either finds the runner and stops it, or sets stopping before
+    // the runner exists, and RunAsync then does not start the node.
     private readonly Lock gate = new();
     private volatile bool restartRequested;
     private IgniteServerRunner? runner;
+    private FileChangeWatcher? sslFileWatcher;
     private volatile bool stopping;
 
-    // Ignition.Start blocks, so run the node off the host's startup path
+    // Ignition.Start blocks for a long time, so the node runs on a thread pool thread and the host starts at once.
     protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.Run(
         () => RunAsync(stoppingToken),
         CancellationToken.None
@@ -39,7 +40,7 @@ internal sealed class IgniteServerHostedService(
         IgniteServerRunner? current;
         lock (gate)
         {
-            // before stopping the node, so that RunAsync does not take the stop for a failure
+            // Set before the node stops: RunAsync would otherwise report the stopped node as a failure.
             stopping = true;
             current = runner;
         }
@@ -55,41 +56,6 @@ internal sealed class IgniteServerHostedService(
         base.Dispose();
     }
 
-    /// <summary>Applies the memory, discovery, consistent id and persistence settings to the runner.</summary>
-    internal static void ApplySettings(
-        IgniteServerRunner igniteServerRunner,
-        IgniteServerSettings settings,
-        Func<string> getLocalIpAddress
-    )
-    {
-        igniteServerRunner.SetOffHeapMemoryLimit(settings.OffHeapMemory);
-        igniteServerRunner.SetOnHeapMemoryLimit(settings.OnHeapMemory);
-        if (settings.SpiPort.HasValue)
-        {
-            igniteServerRunner.SetServerPort(settings.SpiPort.Value);
-        }
-
-        if (settings.ClusterEndpoints.Count > 0)
-        {
-            igniteServerRunner.SetClusterEndpoints(settings.ClusterEndpoints);
-        }
-        else if (settings.UseTcpDiscoveryStaticIpFinder)
-        {
-            // resolved only when needed: a failing DNS lookup must not break nodes that do not use it
-            igniteServerRunner.SetClusterEndpoints([$"{getLocalIpAddress()}:{DefaultDiscoveryPort}",]);
-        }
-
-        if (!string.IsNullOrWhiteSpace(settings.ConsistentId))
-        {
-            igniteServerRunner.SetConsistentId(settings.ConsistentId);
-        }
-
-        if (settings.PersistenceEnabled)
-        {
-            igniteServerRunner.SetPersistence(true);
-        }
-    }
-
     private async Task RunAsync(CancellationToken stoppingToken)
     {
         try
@@ -97,21 +63,25 @@ internal sealed class IgniteServerHostedService(
             if (settings.EnableAuthentication && string.IsNullOrWhiteSpace(settings.IgniteUserPassword))
             {
                 logger.Warning(
-                    "Authentication is enabled but IGNITE_USER_PASSWORD is not set: the default 'ignite' user keeps its well-known password."
+                    "Authentication is enabled but IGNITE_USER_PASSWORD is not set: the default 'ignite' user keeps " +
+                    "its well-known password."
                 );
             }
 
             if (!settings.UseSsl)
             {
                 logger.Warning(
-                    "USE_SSL is disabled: nodes join the cluster unauthenticated and unencrypted, so restrict the discovery and communication ports (47500, 47100) to the cluster's nodes, e.g., with a NetworkPolicy."
+                    "USE_SSL is disabled: nodes join the cluster unauthenticated and unencrypted, so restrict the " +
+                    "discovery and communication ports (47500, 47100) to the cluster's nodes, e.g., with a " +
+                    "NetworkPolicy."
                 );
             }
 
             if (settings.PeerAssemblyLoading)
             {
                 logger.Warning(
-                    "PEER_ASSEMBLY_LOADING is enabled: this node loads and runs .NET assemblies sent by any node of the cluster."
+                    "PEER_ASSEMBLY_LOADING is enabled: this node loads and runs .NET assemblies sent by any node of " +
+                    "the cluster."
                 );
             }
 
@@ -126,13 +96,12 @@ internal sealed class IgniteServerHostedService(
                 )
                 .ConfigureAwait(false);
             EnsureWellFormed(springConfigPath);
-            IgniteServerRunner created = new(settings.ToRunnerOptions(springConfigPath), logger);
-            ApplySettings(created, settings, DnsUtils.GetLocalIpAddress);
+            IgniteServerRunner created = new(settings, logger, DnsUtils.GetLocalIpAddress, springConfigPath);
             lock (gate)
             {
                 if (stopping)
                 {
-                    // the host stops before the node started: it is not started at all
+                    // The host is already stopping, so the node is not started at all.
                     created.Dispose();
                     return;
                 }
@@ -141,11 +110,11 @@ internal sealed class IgniteServerHostedService(
             }
 
             nodeState.SetRunner(created);
-            using var sslFileWatcher = CreateSslFileWatcher();
+            sslFileWatcher = CreateSslFileWatcher();
             do
             {
                 restartRequested = false;
-                // a node that cannot stop must not keep the host from stopping
+                // WaitAsync lets the host stop even when the node itself cannot.
                 await created.Run().WaitAsync(stoppingToken).ConfigureAwait(false);
             } while (restartRequested && !stopping && !stoppingToken.IsCancellationRequested);
 
@@ -157,16 +126,22 @@ internal sealed class IgniteServerHostedService(
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
-            // the host stops, and the node with the process
+            // The host is stopping; a node that is still running stops with the process.
         }
         catch (Exception ex) when (!stopping)
         {
             logger.Fatal(ex, "The Ignite server failed.");
             Fail();
         }
+        finally
+        {
+            sslFileWatcher?.Dispose();
+        }
     }
 
-    /// <summary>A broken SPRING_EXTRA_* fragment fails here, with the file named, rather than deep in the JVM.</summary>
+    /// <summary>
+    ///     A broken SPRING_EXTRA_* fragment fails here, with the file named, rather than deep in the JVM.
+    /// </summary>
     internal static void EnsureWellFormed(string springConfigPath)
     {
         try
@@ -176,7 +151,8 @@ internal sealed class IgniteServerHostedService(
         catch (XmlException ex)
         {
             throw new InvalidOperationException(
-                $"The Spring configuration is not well-formed XML (check SPRING_EXTRA_BEANS_FILE and SPRING_EXTRA_PROPERTIES_FILE): {ex.Message}",
+                $"The Spring configuration is not well-formed XML (check SPRING_EXTRA_BEANS_FILE and " +
+                $"SPRING_EXTRA_PROPERTIES_FILE): {ex.Message}",
                 ex
             );
         }
@@ -224,18 +200,28 @@ internal sealed class IgniteServerHostedService(
             return;
         }
 
+        if (runner?.Node == null)
+        {
+            // The node is starting and may already have read the previous files. Asking the watcher again makes
+            // this method run once more after the usual delay, when the node can be restarted.
+            logger.Information("SSL files changed while the Ignite node starts: it restarts once started.");
+            sslFileWatcher?.NotifyChanged();
+            return;
+        }
+
         logger.Information("SSL files changed, restarting the Ignite node...");
         restartRequested = true;
         var timeout = TimeSpan.FromSeconds(settings.GracefulStopTimeoutInSeconds);
-        if (runner?.Restart(timeout) != false)
+        if (runner.Restart(timeout))
         {
             return;
         }
 
-        // it may wait long (e.g., for another node that restarts too): the server exits instead, and its container
-        // restarts with the renewed files
+        // The graceful stop can take long (e.g., while another node restarts too). The server exits instead, and its
+        // container restarts with the renewed files.
         logger.Error(
-            "The Ignite node did not stop gracefully within {Timeout} to restart with the renewed SSL files; the server stops so that its container restarts with them.",
+            "The Ignite node did not stop gracefully within {Timeout} to restart with the renewed SSL files; the " +
+            "server stops so that its container restarts with them.",
             timeout
         );
         Fail();

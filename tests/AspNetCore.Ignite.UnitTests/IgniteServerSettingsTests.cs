@@ -47,7 +47,7 @@ public sealed class IgniteServerSettingsTests
         Assert.Equal(47600, settings.SpiPort);
         Assert.True(settings.EnableAuthentication);
         Assert.Equal(["a:47500", "b:47500",], settings.ClusterEndpoints);
-        Assert.Equal(TimeSpan.FromSeconds(5), settings.ToRunnerOptions("spring.xml").BaselineAutoAdjustTimeout);
+        Assert.Equal(TimeSpan.FromSeconds(5), settings.GetBaselineAutoAdjustTimeout(true));
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public sealed class IgniteServerSettingsTests
         Assert.True(settings.ManagementEnabled);
         Assert.Equal(9464, settings.ManagementPort);
         Assert.True(settings.EnableOffHeapMetrics);
-        Assert.False(settings.ToRunnerOptions("spring.xml").PeerAssemblyLoading);
+        Assert.True(settings.EnableAuthentication);
     }
 
     [Theory]
@@ -164,57 +164,12 @@ public sealed class IgniteServerSettingsTests
         );
     }
 
-    [Fact]
-    public void ApplySettings_ResolvesLocalAddressOnlyWhenUsed()
-    {
-        var resolved = 0;
-
-        string GetLocalIpAddress()
-        {
-            resolved++;
-            return "10.1.2.3";
-        }
-
-        using IgniteServerRunner withEndpoints = new(new IgniteServerRunnerOptions());
-        IgniteServerHostedService.ApplySettings(
-            withEndpoints,
-            Load(
-                new Dictionary<string, string?>
-                {
-                    ["CLUSTER_ENDPOINTS:0"] = "a:47500",
-                    ["USE_TCP_DISCOVERY_STATIC_IP_FINDER"] = "true",
-                }
-            ),
-            GetLocalIpAddress
-        );
-        Assert.Equal(0, resolved);
-
-        using IgniteServerRunner withStaticIpFinder = new(new IgniteServerRunnerOptions());
-        IgniteServerHostedService.ApplySettings(
-            withStaticIpFinder,
-            Load(
-                new Dictionary<string, string?>
-                {
-                    ["USE_TCP_DISCOVERY_STATIC_IP_FINDER"] = "true",
-                    ["PERSISTENCE_ENABLED"] = "true",
-                }
-            ),
-            GetLocalIpAddress
-        );
-        Assert.Equal(1, resolved);
-        var spi = Assert.IsType<TcpDiscoverySpi>(withStaticIpFinder.Configuration.DiscoverySpi);
-        Assert.Equal(["10.1.2.3:47500",], Assert.IsType<TcpDiscoveryStaticIpFinder>(spi.IpFinder).Endpoints);
-        Assert.True(
-            withStaticIpFinder.Configuration.DataStorageConfiguration.DefaultDataRegionConfiguration.PersistenceEnabled
-        );
-    }
-
     [Theory]
     [InlineData("LOG_ONLY", WalMode.LogOnly)]
     [InlineData("logonly", WalMode.LogOnly)]
     [InlineData("Fsync", WalMode.Fsync)]
     public void WalMode_AcceptsBothNamingStyles(string value, WalMode expected) =>
-        Assert.Equal(expected, IgniteServerSettings.ParseWalMode(value));
+        Assert.Equal(expected, IgniteServerSettings.ParseEnum<WalMode>(value));
 
     [Fact]
     public void Validate_JavaChartSettings()
@@ -256,28 +211,29 @@ public sealed class IgniteServerSettingsTests
 
         Assert.Empty(settings.Validate());
         Assert.Equal("false", settings.ToSpringConfigPlaceholders()["SSL_CLIENT_AUTH"]);
-        Assert.Equal("PKCS12", settings.ToRunnerOptions("spring.xml").SslKeyStoreType);
+        Assert.Equal("PKCS12", settings.SslKeyStoreType);
     }
 
     [Fact]
     public void UnsetJavaChartSettings_KeepTheDefaults()
     {
-        var options = Load([]).ToRunnerOptions("spring.xml");
+        var defaults = IgniteConfigurationFactory.CreateDefault();
+        var configuration = IgniteConfigurationFactory.Create(Load([]), Logger.None, LocalAddress.Resolve);
 
-        Assert.Null(options.NetworkTimeout);
-        Assert.Null(options.PublicThreadPoolSize);
-        Assert.Null(options.WalPath);
-        Assert.Null(options.WalMode);
-        Assert.Empty(options.ExtraJvmOptions);
+        Assert.Equal(defaults.NetworkTimeout, configuration.NetworkTimeout);
+        Assert.Equal(defaults.PublicThreadPoolSize, configuration.PublicThreadPoolSize);
+        Assert.Equal(defaults.DataStorageConfiguration.WalPath, configuration.DataStorageConfiguration.WalPath);
+        Assert.Equal(defaults.DataStorageConfiguration.WalMode, configuration.DataStorageConfiguration.WalMode);
+        Assert.Equal([.. defaults.JvmOptions, "-Xrs",], configuration.JvmOptions);
     }
 
     [Fact]
     public void RebalanceReadiness_DefaultsAndValidation()
     {
-        var options = Load([]).ToRunnerOptions("spring.xml");
+        var settings = Load([]);
 
-        Assert.True(options.ReadyWhenRebalanced);
-        Assert.Equal(TimeSpan.FromMinutes(10), options.RebalanceReadinessMaxWait);
+        Assert.True(settings.ReadyWhenRebalanced);
+        Assert.Equal(600, settings.RebalanceReadinessMaxWaitInSeconds);
         Assert.Contains(
             Load(
                     new Dictionary<string, string?>
@@ -403,7 +359,7 @@ public sealed class IgniteServerSettingsTests
     [InlineData("Disabled", DataPageEvictionMode.Disabled)]
     public void PageEvictionMode_AcceptsBothNamingStyles(string value, DataPageEvictionMode expected) => Assert.Equal(
         expected,
-        IgniteServerSettings.ParsePageEvictionMode(value)
+        IgniteServerSettings.ParseEnum<DataPageEvictionMode>(value)
     );
 
     [Fact]
@@ -436,9 +392,9 @@ public sealed class IgniteServerSettingsTests
                     {
                         ["SQL_SCHEMAS"] = "A, B",
                     }
-                )
-                .ToRunnerOptions("spring.xml"),
-            Logger.None
+                ),
+            Logger.None,
+            LocalAddress.Resolve
         );
 
         Assert.Equal(["A", "B",], configuration.SqlSchemas);
@@ -447,12 +403,12 @@ public sealed class IgniteServerSettingsTests
     [Fact]
     public void BaselineAutoAdjustTimeout_DependsOnPersistence_UnlessSet()
     {
-        var options = Load([]).ToRunnerOptions("spring.xml");
+        var settings = Load([]);
 
-        Assert.Null(options.BaselineAutoAdjustTimeout);
+        Assert.Null(settings.BaselineAutoAdjustTimeoutInSeconds);
         // a restarted persistent node returns with its data: its data is not moved away (and back) meanwhile
-        Assert.Equal(TimeSpan.FromMinutes(5), options.GetBaselineAutoAdjustTimeout(true));
-        Assert.Equal(TimeSpan.FromSeconds(30), options.GetBaselineAutoAdjustTimeout(false));
+        Assert.Equal(TimeSpan.FromMinutes(5), settings.GetBaselineAutoAdjustTimeout(true));
+        Assert.Equal(TimeSpan.FromSeconds(30), settings.GetBaselineAutoAdjustTimeout(false));
         // an empty value (the Helm chart's default) is not set
         Assert.Null(
             Load(
@@ -471,7 +427,6 @@ public sealed class IgniteServerSettingsTests
                         ["BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS"] = "0",
                     }
                 )
-                .ToRunnerOptions("spring.xml")
                 .GetBaselineAutoAdjustTimeout(true)
         );
     }
@@ -479,7 +434,7 @@ public sealed class IgniteServerSettingsTests
     [Fact]
     public void SqlQueryHistorySize_IsOptional_AndNotNegative()
     {
-        Assert.Null(Load([]).ToRunnerOptions("spring.xml").SqlQueryHistorySize);
+        Assert.Null(Load([]).SqlQueryHistorySize);
         Assert.Equal(
             0,
             Load(
@@ -488,7 +443,6 @@ public sealed class IgniteServerSettingsTests
                         ["SQL_QUERY_HISTORY_SIZE"] = "0",
                     }
                 )
-                .ToRunnerOptions("spring.xml")
                 .SqlQueryHistorySize
         );
         Assert.Contains(

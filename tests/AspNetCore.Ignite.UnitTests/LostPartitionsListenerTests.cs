@@ -194,18 +194,21 @@ public sealed class LostPartitionsListenerTests
         {
             var cluster = Fake.Of<ICluster>((name, args) => name switch
                 {
-                    "ForServers" => Group(Online),
-                    "GetBaselineTopology" => Baseline.Select(id => Fake.Of<IBaselineNode>((_, _) => id)).ToList(),
-                    "get_TopologyVersion" => 7L,
-                    "SetBaselineAutoAdjustEnabledFlag" or "SetBaselineTopology" => Record($"{name} {args[0]}"),
+                    nameof(ICluster.ForServers) => Group(Online),
+                    nameof(ICluster.GetBaselineTopology) => Baseline
+                        .Select(id => Fake.Of<IBaselineNode>((_, _) => id))
+                        .ToList(),
+                    nameof(ICluster.TopologyVersion) => 7L,
+                    nameof(ICluster.SetBaselineAutoAdjustEnabledFlag) or nameof(ICluster.SetBaselineTopology) =>
+                        Record($"{name} {args[0]}"),
                     _ => throw new NotSupportedException(name),
                 }
             );
             Ignite = Fake.Of<IIgnite>((name, args) => name switch
                 {
-                    "GetCluster" => cluster,
-                    "GetCache" => Cache((string)args[0]!),
-                    "ResetLostPartitions" => Reset(string.Join(",", (string[])args[0]!)),
+                    nameof(IIgnite.GetCluster) => cluster,
+                    nameof(IIgnite.GetCache) => Cache((string)args[0]!),
+                    nameof(IIgnite.ResetLostPartitions) => Reset(string.Join(",", (string[])args[0]!)),
                     _ => throw new NotSupportedException(name),
                 }
             );
@@ -222,16 +225,16 @@ public sealed class LostPartitionsListenerTests
         private IClusterGroup Group(IEnumerable<string> consistentIds) => Fake.Of<IClusterGroup>((name, _) =>
             name switch
             {
-                "ForOldest" => Group([LocalIsOldest ? "n1" : "n0",]),
-                "GetNodes" => consistentIds.Select(Node).ToList(),
+                nameof(IClusterGroup.ForOldest) => Group([LocalIsOldest ? "n1" : "n0",]),
+                nameof(IClusterGroup.GetNodes) => consistentIds.Select(Node).ToList(),
                 _ => throw new NotSupportedException(name),
             }
         );
 
         private static IClusterNode Node(string consistentId) => Fake.Of<IClusterNode>((name, _) => name switch
             {
-                "get_ConsistentId" => consistentId,
-                "get_IsLocal" => consistentId == "n1",
+                nameof(IClusterNode.ConsistentId) => consistentId,
+                nameof(IClusterNode.IsLocal) => consistentId == "n1",
                 _ => throw new NotSupportedException(name),
             }
         );
@@ -239,7 +242,8 @@ public sealed class LostPartitionsListenerTests
         private ICache<object, object> Cache(string cacheName) => Fake.Of<ICache<object, object>>((name, _) =>
             name switch
             {
-                "GetLostPartitions" => WithoutLostPartitions.Contains(cacheName) ? new List<int>() : [0,],
+                nameof(ICache<object, object>.GetLostPartitions) =>
+                    WithoutLostPartitions.Contains(cacheName) ? new List<int>() : [0,],
                 _ => throw new NotSupportedException(name),
             }
         );

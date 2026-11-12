@@ -8,8 +8,8 @@ using System.Linq;
 namespace AspNetCore.IgniteServer;
 
 /// <summary>
-///     The server settings: appsettings.json, overridden by environment variables of the same name, overridden by the
-///     command line options.
+///     The server settings, with their defaults: overridden by appsettings.json (empty as shipped), by environment
+///     variables of the same name, and by the command line options.
 /// </summary>
 internal sealed partial class IgniteServerSettings
 {
@@ -27,7 +27,7 @@ internal sealed partial class IgniteServerSettings
     public List<string> ClusterEndpoints { get; set; } = [];
 
     [ConfigurationKeyName("USE_TCP_DISCOVERY_STATIC_IP_FINDER")]
-    public bool UseTcpDiscoveryStaticIpFinder { get; set; }
+    public bool UseTcpDiscoveryStaticIpFinder { get; set; } = true;
 
     [ConfigurationKeyName("DEFAULT_CONSISTENT_ID")]
     public string? ConsistentId { get; set; }
@@ -42,9 +42,9 @@ internal sealed partial class IgniteServerSettings
     /// <summary>
     ///     A Spring XML file with &lt;property&gt; elements of the IgniteConfiguration bean, as the configuration
     ///     sections of the Ignite chart. Verified on a node: userAttributes, binaryConfiguration, cacheConfiguration,
-    ///     executorConfiguration, transactionConfiguration and the collision, deployment, failover and load balancing SPIs.
-    ///     The .NET configuration wins for the properties it sets: sqlConfiguration (use SQL_SCHEMAS), encryptionSpi (use
-    ///     -ConfigFile), the communication and discovery SPIs, data storage, the client connector.
+    ///     executorConfiguration, transactionConfiguration and the collision, deployment, failover and load balancing
+    ///     SPIs. The .NET configuration wins for the properties it sets: sqlConfiguration (use SQL_SCHEMAS),
+    ///     encryptionSpi (use -ConfigFile), the communication and discovery SPIs, data storage, the client connector.
     /// </summary>
     [ConfigurationKeyName("SPRING_EXTRA_PROPERTIES_FILE")]
     public string? SpringExtraPropertiesFile { get; set; }
@@ -57,8 +57,9 @@ internal sealed partial class IgniteServerSettings
     public List<string> SqlSchemas { get; set; } = [];
 
     /// <summary>
-    ///     SQL queries each node keeps in SYS.SQL_QUERIES_HISTORY (Ignite's default when not set; 0 keeps none). The node
-    ///     that applies a new IGNITE_USER_PASSWORD keeps its ALTER USER statement there, password included, until it restarts.
+    ///     SQL queries each node keeps in SYS.SQL_QUERIES_HISTORY (Ignite's default when not set; 0 keeps none). The
+    ///     node that applies a new IGNITE_USER_PASSWORD keeps its ALTER USER statement there, password included, until
+    ///     it restarts.
     /// </summary>
     [ConfigurationKeyName("SQL_QUERY_HISTORY_SIZE")]
     public int? SqlQueryHistorySize { get; set; }
@@ -71,7 +72,7 @@ internal sealed partial class IgniteServerSettings
     public bool PeerAssemblyLoading { get; set; }
 
     [ConfigurationKeyName("ENABLE_AUTHENTICATION")]
-    public bool EnableAuthentication { get; set; }
+    public bool EnableAuthentication { get; set; } = true;
 
     [ConfigurationKeyName("IGNITE_USER_PASSWORD")]
     public string? IgniteUserPassword { get; set; }
@@ -95,9 +96,9 @@ internal sealed partial class IgniteServerSettings
     [ConfigurationKeyName("AUTO_RESET_LOST_PARTITIONS")]
     public bool AutoResetLostPartitions { get; set; } = true;
 
-    // the settings below apply only when set: their defaults are those of the default configuration (or of -ConfigFile)
-
-    /// <summary>Binds the settings; CLUSTER_ENDPOINTS is a list (CLUSTER_ENDPOINTS__0, ...) or a comma-separated value.</summary>
+    /// <summary>
+    ///     Binds the settings; CLUSTER_ENDPOINTS is a list (CLUSTER_ENDPOINTS__0, ...) or a comma-separated value.
+    /// </summary>
     public static IgniteServerSettings Load(IConfiguration configuration)
     {
         var settings = configuration.Get<IgniteServerSettings>() ?? new IgniteServerSettings();
@@ -118,16 +119,17 @@ internal sealed partial class IgniteServerSettings
     public IReadOnlyList<string> Validate()
     {
         List<string> errors = [];
-        if (OnHeapMemory <= 0)
-        {
-            errors.Add("DEFAULT_ON_HEAP_MEMORY (-OnHeap) must be positive.");
-        }
+        ValidateCluster(errors);
+        ValidateJvm(errors);
+        ValidateStorage(errors);
+        ValidateSsl(errors);
+        ValidateManagement(errors);
+        ValidateSpringConfig(errors);
+        return errors;
+    }
 
-        if (OffHeapMemory <= 0)
-        {
-            errors.Add("DEFAULT_OFF_HEAP_MEMORY (-OffHeap) must be positive.");
-        }
-
+    private void ValidateCluster(List<string> errors)
+    {
         if (SpiPort is <= 0 or > 65535)
         {
             errors.Add("SPI_PORT (-SpiPort) must be a valid port.");
@@ -147,170 +149,32 @@ internal sealed partial class IgniteServerSettings
         {
             errors.Add("SQL_QUERY_HISTORY_SIZE must not be negative.");
         }
+    }
 
-        if (RebalanceReadinessMaxWaitInSeconds <= 0)
-        {
-            errors.Add("REBALANCE_READINESS_MAX_WAIT_IN_SECONDS must be positive.");
-        }
+    private void ValidateSpringConfig(List<string> errors)
+    {
+        RequireExistingFile(errors, "SPRING_EXTRA_BEANS_FILE", SpringExtraBeansFile);
+        RequireExistingFile(errors, "SPRING_EXTRA_PROPERTIES_FILE", SpringExtraPropertiesFile);
 
-        if (SslRestartMaxJitterInSeconds < 0)
-        {
-            errors.Add("SSL_RESTART_MAX_JITTER_IN_SECONDS must not be negative.");
-        }
-
-        if (ShutdownTimeoutInSeconds <= 0)
-        {
-            errors.Add("SHUTDOWN_TIMEOUT_IN_SECONDS must be positive.");
-        }
-
-        if (GracefulStopTimeoutInSeconds <= 0 || GracefulStopTimeoutInSeconds >= ShutdownTimeoutInSeconds)
-        {
-            errors.Add(
-                "GRACEFUL_STOP_TIMEOUT_IN_SECONDS must be positive and less than SHUTDOWN_TIMEOUT_IN_SECONDS (the host waits for the stop)."
-            );
-        }
-
-        if (ManagementPort is <= 0 or > 65535)
-        {
-            errors.Add("MANAGEMENT_PORT must be a valid port.");
-        }
-
-        foreach (var (key, value) in new[]
-                 {
-                     ("JVM_MAX_METASPACE_MB", JvmMaxMetaspaceMb),
-                     ("JVM_RESERVED_CODE_CACHE_MB", JvmReservedCodeCacheMb),
-                     ("JVM_MAX_DIRECT_MEMORY_MB", JvmMaxDirectMemoryMb), ("JVM_G1_HEAP_REGION_MB", JvmG1HeapRegionMb),
-                     ("FAILURE_DETECTION_TIMEOUT_MS", FailureDetectionTimeoutMs),
-                     ("CLIENT_FAILURE_DETECTION_TIMEOUT_MS", ClientFailureDetectionTimeoutMs),
-                     ("NETWORK_TIMEOUT_MS", NetworkTimeoutMs), ("PUBLIC_THREAD_POOL_SIZE", PublicThreadPoolSize),
-                     ("SYSTEM_THREAD_POOL_SIZE", SystemThreadPoolSize), ("QUERY_THREAD_POOL_SIZE", QueryThreadPoolSize),
-                     ("SERVICE_THREAD_POOL_SIZE", ServiceThreadPoolSize),
-                     ("STRIPED_THREAD_POOL_SIZE", StripedThreadPoolSize),
-                     ("DATA_STREAMER_THREAD_POOL_SIZE", DataStreamerThreadPoolSize),
-                 })
-        {
-            if (value <= 0)
-            {
-                errors.Add($"{key} must be positive.");
-            }
-        }
-
-        if (JvmG1HeapRegionMb is { } regionMb && (regionMb > 32 || (regionMb & (regionMb - 1)) != 0))
-        {
-            errors.Add("JVM_G1_HEAP_REGION_MB must be a power of 2 from 1 to 32.");
-        }
-
-        foreach (var (key, path) in new[]
-                 {
-                     ("SPRING_EXTRA_BEANS_FILE", SpringExtraBeansFile),
-                     ("SPRING_EXTRA_PROPERTIES_FILE", SpringExtraPropertiesFile),
-                 })
-        {
-            if (!string.IsNullOrWhiteSpace(path) && !File.Exists(path))
-            {
-                errors.Add($"{key} ({path}) does not exist.");
-            }
-        }
-
-        if (PageEvictionMode != null && ParsePageEvictionMode(PageEvictionMode) == null)
-        {
-            errors.Add("PAGE_EVICTION_MODE must be one of Disabled, RandomLru, Random2Lru.");
-        }
-
-        if (WalMode != null && ParseWalMode(WalMode) == null)
-        {
-            errors.Add("WAL_MODE must be one of Fsync, LogOnly, Background, None.");
-        }
-
-        if (ClientFailureDetectionTimeoutMs is { } clientTimeout &&
-            clientTimeout < MetricsUpdateFrequencyInSeconds * 1000L)
-        {
-            errors.Add(
-                "CLIENT_FAILURE_DETECTION_TIMEOUT_MS must not be less than METRICS_UPDATE_FREQUENCY_IN_SECONDS (Ignite requires it)."
-            );
-        }
-
-        if (UseSsl || UseClientSsl)
-        {
-            RequireValue(errors, "SSL_KEY_STORE_FILE_PATH", SslKeyStoreFilePath);
-            RequireValue(errors, "SSL_TRUST_STORE_FILE_PATH", SslTrustStoreFilePath);
-        }
-
-        // the server's own loopback client (password change) needs a certificate when client authentication is on
-        if (UseClientSsl && SslClientAuth)
-        {
-            RequireValue(errors, "SSL_CLIENT_CERTIFICATE_PATH", SslClientCertificatePath);
-        }
-
-        // Spring evaluates #{...} (SpEL) in the values of the Spring configuration they are inserted into; the SSL ones go
-        // there only with USE_CLIENT_SSL (USE_SSL configures the node from .NET)
+        // Spring evaluates "#{...}" (SpEL) in the values inserted into its configuration. The SSL values are inserted
+        // only with USE_CLIENT_SSL, because USE_SSL alone configures the node from .NET.
         foreach (var (key, value) in ToSpringConfigPlaceholders())
         {
-            if (value?.Contains("#{", StringComparison.Ordinal) == true &&
-                (UseClientSsl || !key.StartsWith("SSL_", StringComparison.Ordinal)))
+            var inserted = UseClientSsl || !key.StartsWith("SSL_", StringComparison.Ordinal);
+            if (inserted && value?.Contains("#{", StringComparison.Ordinal) == true)
             {
                 errors.Add($"{key} must not contain '#{{' (Spring would evaluate it as an expression).");
             }
         }
-
-        return errors;
     }
 
-    public IgniteServerRunnerOptions ToRunnerOptions(string springConfigPath) => new()
-    {
-        MetricsExpireTime = TimeSpan.FromHours(MetricsExpireTimeInHours),
-        MetricsLogFrequency = TimeSpan.FromMinutes(MetricsLogFrequencyInMinutes),
-        MetricsUpdateFrequency = TimeSpan.FromSeconds(MetricsUpdateFrequencyInSeconds),
-        EnableOffHeapMetrics = EnableOffHeapMetrics,
-        AuthenticationEnabled = EnableAuthentication,
-        IgniteUserPassword = IgniteUserPassword,
-        IgniteUserPreviousPassword = IgniteUserPreviousPassword,
-        ConfigurationFile = string.IsNullOrWhiteSpace(ConfigFile) ? null : ConfigFile,
-        PeerAssemblyLoading = PeerAssemblyLoading,
-        SqlSchemas = SqlSchemas,
-        SpringConfigPath = springConfigPath,
-        ActivationMinServerNodes = ActivationMinServerNodes,
-        BaselineAutoAdjustTimeout =
-            BaselineAutoAdjustTimeoutInSeconds is { } autoAdjustTimeout ? TimeSpan.FromSeconds(autoAdjustTimeout)
-                : null,
-        AutoResetLostPartitions = AutoResetLostPartitions,
-        ReadyWhenRebalanced = ReadyWhenRebalanced,
-        RebalanceReadinessMaxWait = TimeSpan.FromSeconds(RebalanceReadinessMaxWaitInSeconds),
-        UseSsl = UseSsl,
-        SslProtocol = SslProtocol,
-        SslKeyStoreType = SslKeyStoreType,
-        SslTrustStoreType = SslTrustStoreType,
-        SslKeyAlgorithm = SslKeyAlgorithm,
-        JvmMaxMetaspaceMb = JvmMaxMetaspaceMb,
-        JvmReservedCodeCacheMb = JvmReservedCodeCacheMb,
-        JvmMaxDirectMemoryMb = JvmMaxDirectMemoryMb,
-        JvmG1HeapRegionMb = JvmG1HeapRegionMb,
-        ExtraJvmOptions = SplitOptions(ExtraJvmOpts),
-        ExtraClasspath = ExtraClasspath,
-        FailureDetectionTimeout = Milliseconds(FailureDetectionTimeoutMs),
-        ClientFailureDetectionTimeout = Milliseconds(ClientFailureDetectionTimeoutMs),
-        NetworkTimeout = Milliseconds(NetworkTimeoutMs),
-        PublicThreadPoolSize = PublicThreadPoolSize,
-        SystemThreadPoolSize = SystemThreadPoolSize,
-        QueryThreadPoolSize = QueryThreadPoolSize,
-        ServiceThreadPoolSize = ServiceThreadPoolSize,
-        StripedThreadPoolSize = StripedThreadPoolSize,
-        DataStreamerThreadPoolSize = DataStreamerThreadPoolSize,
-        StoragePath = Blank(StoragePath),
-        WalPath = Blank(WalPath),
-        WalArchivePath = Blank(WalArchivePath),
-        WalCompactionEnabled = WalCompactionEnabled,
-        WalMode = WalMode == null ? null : ParseWalMode(WalMode),
-        PageEvictionMode = PageEvictionMode == null ? null : ParsePageEvictionMode(PageEvictionMode),
-        SqlQueryHistorySize = SqlQueryHistorySize,
-        SslKeyStoreFilePath = SslKeyStoreFilePath,
-        SslKeyStorePassword = SslKeyStorePassword,
-        SslTrustStoreFilePath = SslTrustStoreFilePath,
-        SslTrustStorePassword = SslTrustStorePassword,
-        UseClientSsl = UseClientSsl,
-        SslClientCertificatePath = SslClientCertificatePath,
-        SslClientCertificatePassword = SslClientCertificatePassword,
-    };
+    /// <summary>
+    ///     How long the baseline waits for a stable topology before following it; when not set, 5 minutes with
+    ///     persistence (a restarted node returns with its data, which is then not moved away and back) and 30 seconds
+    ///     without.
+    /// </summary>
+    public TimeSpan GetBaselineAutoAdjustTimeout(bool persistenceEnabled) =>
+        TimeSpan.FromSeconds(BaselineAutoAdjustTimeoutInSeconds ?? (persistenceEnabled ? 300 : 30));
 
     /// <summary>Values for the placeholders of the Spring configuration templates.</summary>
     public IReadOnlyDictionary<string, string?> ToSpringConfigPlaceholders() => new Dictionary<string, string?>
@@ -328,10 +192,12 @@ internal sealed partial class IgniteServerSettings
         ["SSL_CLIENT_AUTH"] = SslClientAuth ? "true" : "false",
     };
 
-    /// <summary>XML elements inserted verbatim (not escaped) at the placeholders of the Spring configuration templates.</summary>
+    /// <summary>
+    ///     XML elements inserted verbatim (not escaped) at the placeholders of the Spring configuration templates.
+    /// </summary>
     public IReadOnlyDictionary<string, string?> ToSpringConfigXmlPlaceholders() => new Dictionary<string, string?>
     {
-        // without a connector configuration Ignite starts neither the REST API (Jetty) nor the TCP binary protocol
+        // Without a connector configuration, Ignite starts neither the REST API (Jetty) nor the TCP binary protocol.
         [ConnectorConfigurationPlaceholder] =
             RestEnabled ? null : "<property name=\"connectorConfiguration\"><null/></property>",
         [ExtraBeansPlaceholder] = ReadFile(SpringExtraBeansFile),
@@ -348,41 +214,27 @@ internal sealed partial class IgniteServerSettings
 
     private static string ReadFile(string? path) => string.IsNullOrWhiteSpace(path) ? "" : File.ReadAllText(path);
 
-    internal static DataPageEvictionMode? ParsePageEvictionMode(string value) =>
-        Enum.TryParse<DataPageEvictionMode>(
-            value.Replace("_", string.Empty, StringComparison.Ordinal),
-            true,
-            out var mode
-        ) &&
-        Enum.IsDefined(mode) ? mode : null;
+    /// <summary>
+    ///     The enum value of that name, in either naming style (LogOnly or LOG_ONLY); null when there is none.
+    /// </summary>
+    internal static T? ParseEnum<T>(string value)
+        where T : struct, Enum =>
+        Enum.TryParse<T>(value.Replace("_", string.Empty, StringComparison.Ordinal), true, out var parsed) &&
+        Enum.IsDefined(parsed) ? parsed : null;
 
-    internal static WalMode? ParseWalMode(string value) => Enum.TryParse<WalMode>(
-                                                               value.Replace(
-                                                                   "_",
-                                                                   string.Empty,
-                                                                   StringComparison.Ordinal
-                                                               ),
-                                                               true,
-                                                               out var walMode
-                                                           ) &&
-                                                           Enum.IsDefined(walMode) ? walMode : null;
-
-    private static string[] SplitOptions(string? value) => value?.Split(
-                                                               ' ',
-                                                               StringSplitOptions.RemoveEmptyEntries |
-                                                               StringSplitOptions.TrimEntries
-                                                           ) ??
-                                                           [];
-
-    private static TimeSpan? Milliseconds(int? value) => value.HasValue ? TimeSpan.FromMilliseconds(value.Value) : null;
-
-    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
-
-    private static void RequireValue(List<string> errors, string key, string? value)
+    private static void RequirePositive(List<string> errors, string key, int? value)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        if (value <= 0)
         {
-            errors.Add($"{key} must be set when SSL is enabled.");
+            errors.Add($"{key} must be positive.");
+        }
+    }
+
+    private static void RequireExistingFile(List<string> errors, string key, string? path)
+    {
+        if (!string.IsNullOrWhiteSpace(path) && !File.Exists(path))
+        {
+            errors.Add($"{key} ({path}) does not exist.");
         }
     }
 }

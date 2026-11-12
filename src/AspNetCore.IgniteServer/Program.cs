@@ -19,8 +19,8 @@ using System.Threading.Tasks;
 
 Directory.SetCurrentDirectory(AppContext.BaseDirectory);
 
-// cancelling the default SIGTERM action lets Main return its exit code (0 after a graceful stop) instead of the
-// process being terminated (143); the host stops the node, also when the signal came before the host started
+// By default SIGTERM terminates the process with exit code 143. Cancelling that default lets Main return its own exit
+// code (0 after a graceful stop). The token stops the host, also when the signal arrives before the host has started.
 using CancellationTokenSource sigTerm = new();
 using var sigTermRegistration = PosixSignalRegistration.Create(
     PosixSignal.SIGTERM,
@@ -82,7 +82,7 @@ static async Task<int> RunServerAsync(IReadOnlyDictionary<string, string?> overr
     }
     catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
     {
-        // SIGTERM while the host started
+        // SIGTERM arrived while the host was starting.
         Log.Information("Ignite server stopped while it started.");
         return Environment.ExitCode;
     }
@@ -129,7 +129,7 @@ static IHost BuildWithManagement(IConfiguration configuration, IgniteServerSetti
             settings.MetricsPerCache
         )
     );
-    // the instruments of /metrics pushed to an OpenTelemetry collector too, as the OTEL_* settings say
+    // With an OTLP endpoint, the same instruments are also pushed to an OpenTelemetry collector (OTEL_* settings).
     if (!string.IsNullOrWhiteSpace(configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
     {
         builder.Services.AddOpenTelemetry()
@@ -144,7 +144,7 @@ static IHost BuildWithManagement(IConfiguration configuration, IgniteServerSetti
         .AddCheck<IgniteNodeStartedHealthCheck>("ignite-node-started", tags: ["started",])
         .ForwardToPrometheus();
     var app = builder.Build();
-    // created eagerly, so its instruments exist before the first scrape
+    // Resolved here so that the instruments exist before the first scrape.
     app.Services.GetRequiredService<IgniteNodeMetrics>();
     app.MapHealthChecks(
         "/health/liveness",

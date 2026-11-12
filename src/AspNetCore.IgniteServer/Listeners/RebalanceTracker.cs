@@ -53,7 +53,8 @@ internal sealed class RebalanceTracker(ILogger logger, TimeSpan maxWait, TimePro
             var now = timeProvider.GetUtcNow();
             UpdateCaughtUp(now);
             lastActivity = now;
-            // the first start counts: Ignite restarts a rebalance on every topology change, which must not extend the wait
+            // Only the first start is recorded. Ignite restarts a rebalance on every topology change, and that must
+            // not extend the wait.
             if (rebalancing.TryAdd(cacheName, now))
             {
                 logger.Information("Rebalancing of cache {CacheName} started.", cacheName);
@@ -88,12 +89,20 @@ internal sealed class RebalanceTracker(ILogger logger, TimeSpan maxWait, TimePro
     }
 
     /// <summary>
-    ///     True while the node catches up after its start, until it holds its data: while it is not in the baseline (a
-    ///     joining node gets partitions only once the baseline auto-adjust adds it), at most <c>maxWait</c> after it runs, and
-    ///     while a cache rebalances that started less than <c>maxWait</c> ago (a rebalance that never reports its end must not
-    ///     keep the node unready forever, but it does not end the wait for the others). The catch-up ends once the node,
-    ///     running and in the baseline, has not rebalanced for <see cref="CatchUpSettleTime" />; rebalancing after that (e.g.,
-    ///     another node left) does not count, as every node of the cluster rebalances then.
+    ///     True while the node catches up after its start, that is, until it holds its data.
+    ///     <para>
+    ///         A joining node gets partitions only once the baseline auto-adjust has added it to the baseline, so it is
+    ///         catching up while it is not in the baseline, for at most <c>maxWait</c> after it runs.
+    ///     </para>
+    ///     <para>
+    ///         In the baseline, it is catching up while a cache rebalances. A rebalance that started more than
+    ///         <c>maxWait</c> ago is ignored: one that never reports its end must not keep the node unready forever.
+    ///     </para>
+    ///     <para>
+    ///         The catch-up ends for good once the node, running and in the baseline, has not rebalanced for
+    ///         <see cref="CatchUpSettleTime" />. Rebalancing after that (e.g., another node left) does not count,
+    ///         because every node of the cluster rebalances then.
+    ///     </para>
     /// </summary>
     /// <param name="isInBaseline">Whether the node is in the baseline now (read only while it catches up).</param>
     public bool IsCatchingUp(Func<bool> isInBaseline)
@@ -103,7 +112,7 @@ internal sealed class RebalanceTracker(ILogger logger, TimeSpan maxWait, TimePro
             return false;
         }
 
-        // outside the lock, which the event listener takes: it calls into Ignite
+        // Called outside the lock because it calls into Ignite, whose event thread takes the same lock.
         var inBaseline = isInBaseline();
         lock (catchUpLock)
         {

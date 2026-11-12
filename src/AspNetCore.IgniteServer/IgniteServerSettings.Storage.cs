@@ -1,8 +1,10 @@
+using Apache.Ignite.Core.Configuration;
 using Microsoft.Extensions.Configuration;
+using System.Collections.Generic;
 
 namespace AspNetCore.IgniteServer;
 
-// Persistence, data and WAL storage; the nullable ones apply only when set.
+// Persistence, data and WAL storage. A nullable setting applies only when it is set.
 internal sealed partial class IgniteServerSettings
 {
     [ConfigurationKeyName("PERSISTENCE_ENABLED")]
@@ -32,4 +34,17 @@ internal sealed partial class IgniteServerSettings
     /// <summary>Fsync, LogOnly (Ignite's default), Background or None (LOG_ONLY style names work too).</summary>
     [ConfigurationKeyName("WAL_MODE")]
     public string? WalMode { get; set; }
+
+    private void ValidateStorage(List<string> errors)
+    {
+        if (PageEvictionMode != null && ParseEnum<DataPageEvictionMode>(PageEvictionMode) == null)
+        {
+            errors.Add("PAGE_EVICTION_MODE must be one of Disabled, RandomLru, Random2Lru.");
+        }
+
+        if (WalMode != null && ParseEnum<WalMode>(WalMode) == null)
+        {
+            errors.Add("WAL_MODE must be one of Fsync, LogOnly, Background, None.");
+        }
+    }
 }

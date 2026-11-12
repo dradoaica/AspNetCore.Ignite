@@ -2,6 +2,8 @@ using Apache.Ignite.Core;
 using Apache.Ignite.Core.Communication.Tcp;
 using Apache.Ignite.Core.Configuration;
 using Apache.Ignite.Core.Deployment;
+using Apache.Ignite.Core.Discovery.Tcp;
+using Apache.Ignite.Core.Discovery.Tcp.Static;
 using Apache.Ignite.Core.Events;
 using Apache.Ignite.Core.Ssl;
 using AspNetCore.IgniteServer.Utils;
@@ -15,7 +17,7 @@ using System.Xml.Linq;
 
 namespace AspNetCore.IgniteServer;
 
-/// <summary>Creates the node configuration: the default one (or a -ConfigFile), adjusted by the runner options.</summary>
+/// <summary>Creates the node configuration: the default one (or a -ConfigFile), adjusted by the settings.</summary>
 internal static class IgniteConfigurationFactory
 {
     /// <summary>
@@ -24,73 +26,76 @@ internal static class IgniteConfigurationFactory
     /// </summary>
     internal const string ReduceSignalUsageJvmOption = "-Xrs";
 
+    private const int DefaultDiscoveryPort = 47500;
     private const int WalSegmentSize = 256 * 1024 * 1024;
 
-    public static IgniteConfiguration Create(IgniteServerRunnerOptions options, ILogger logger)
+    /// <param name="settings">The server settings.</param>
+    /// <param name="logger">Where the node logs.</param>
+    /// <param name="getLocalIpAddress">
+    ///     Resolves the address of this machine. It is called only when the node is its own static discovery endpoint
+    ///     (USE_TCP_DISCOVERY_STATIC_IP_FINDER without CLUSTER_ENDPOINTS), so a failing DNS lookup does not break nodes
+    ///     that do not need it.
+    /// </param>
+    /// <param name="springConfigPath">The rendered Spring configuration, if any.</param>
+    public static IgniteConfiguration Create(
+        IgniteServerSettings settings,
+        ILogger logger,
+        Func<string> getLocalIpAddress,
+        string? springConfigPath = null
+    )
     {
         var igniteConfiguration = CreateDefault();
-        if (!string.IsNullOrWhiteSpace(options.ConfigurationFile))
+        if (!string.IsNullOrWhiteSpace(settings.ConfigFile))
         {
-            ApplyConfigurationFile(igniteConfiguration, File.ReadAllText(options.ConfigurationFile), logger);
+            ApplyConfigurationFile(igniteConfiguration, File.ReadAllText(settings.ConfigFile), logger);
         }
 
-        if (!string.IsNullOrWhiteSpace(options.SpringConfigPath))
+        if (!string.IsNullOrWhiteSpace(springConfigPath))
         {
-            igniteConfiguration.SpringConfigUrl = options.SpringConfigPath;
+            igniteConfiguration.SpringConfigUrl = springConfigPath;
         }
 
-        ApplyJvmOptions(igniteConfiguration, options);
-        igniteConfiguration.FailureDetectionTimeout =
-            options.FailureDetectionTimeout ?? igniteConfiguration.FailureDetectionTimeout;
-        igniteConfiguration.ClientFailureDetectionTimeout = options.ClientFailureDetectionTimeout ??
-                                                            igniteConfiguration.ClientFailureDetectionTimeout;
-        igniteConfiguration.NetworkTimeout = options.NetworkTimeout ?? igniteConfiguration.NetworkTimeout;
-        igniteConfiguration.PublicThreadPoolSize =
-            options.PublicThreadPoolSize ?? igniteConfiguration.PublicThreadPoolSize;
-        igniteConfiguration.SystemThreadPoolSize =
-            options.SystemThreadPoolSize ?? igniteConfiguration.SystemThreadPoolSize;
-        igniteConfiguration.QueryThreadPoolSize =
-            options.QueryThreadPoolSize ?? igniteConfiguration.QueryThreadPoolSize;
-        igniteConfiguration.ServiceThreadPoolSize =
-            options.ServiceThreadPoolSize ?? igniteConfiguration.ServiceThreadPoolSize;
-        igniteConfiguration.StripedThreadPoolSize =
-            options.StripedThreadPoolSize ?? igniteConfiguration.StripedThreadPoolSize;
-        igniteConfiguration.DataStreamerThreadPoolSize =
-            options.DataStreamerThreadPoolSize ?? igniteConfiguration.DataStreamerThreadPoolSize;
-        ApplyStorage(igniteConfiguration, options);
-        if (options.SqlSchemas.Count > 0)
+        ApplyJvmOptions(igniteConfiguration, settings);
+        ApplyTimeoutsAndThreadPools(igniteConfiguration, settings);
+        igniteConfiguration.MetricsExpireTime = TimeSpan.FromHours(settings.MetricsExpireTimeInHours);
+        igniteConfiguration.MetricsLogFrequency = TimeSpan.FromMinutes(settings.MetricsLogFrequencyInMinutes);
+        igniteConfiguration.MetricsUpdateFrequency = TimeSpan.FromSeconds(settings.MetricsUpdateFrequencyInSeconds);
+        EnsureConsistentTimeouts(igniteConfiguration, logger);
+        ApplyStorage(igniteConfiguration, settings);
+        ApplyDiscovery(igniteConfiguration, settings, getLocalIpAddress);
+        if (!string.IsNullOrWhiteSpace(settings.ConsistentId))
         {
-            igniteConfiguration.SqlSchemas = [.. options.SqlSchemas,];
+            igniteConfiguration.ConsistentId = settings.ConsistentId;
+        }
+
+        if (settings.SqlSchemas.Count > 0)
+        {
+            igniteConfiguration.SqlSchemas = [.. settings.SqlSchemas,];
         }
 
         igniteConfiguration.SqlQueryHistorySize =
-            options.SqlQueryHistorySize ?? igniteConfiguration.SqlQueryHistorySize;
-
-        // loading .NET assemblies sent by other nodes runs their code on this node: opt-in only
-        igniteConfiguration.PeerAssemblyLoadingMode = options.PeerAssemblyLoading
+            settings.SqlQueryHistorySize ?? igniteConfiguration.SqlQueryHistorySize;
+        // Loading .NET assemblies sent by other nodes runs their code on this node, so it is opt-in.
+        igniteConfiguration.PeerAssemblyLoadingMode = settings.PeerAssemblyLoading
             ? PeerAssemblyLoadingMode.CurrentAppDomain : PeerAssemblyLoadingMode.Disabled;
-        igniteConfiguration.MetricsExpireTime = options.MetricsExpireTime;
-        igniteConfiguration.MetricsLogFrequency = options.MetricsLogFrequency;
-        igniteConfiguration.MetricsUpdateFrequency = options.MetricsUpdateFrequency;
-        EnsureConsistentTimeouts(igniteConfiguration, logger);
-        if (options.AuthenticationEnabled)
+        if (settings.EnableAuthentication)
         {
             igniteConfiguration.AuthenticationEnabled = true;
-            SetPersistence(igniteConfiguration, true);
         }
 
-        if (options.UseSsl)
+        if (settings.UseSsl)
         {
             igniteConfiguration.SslContextFactory = new SslContextFactory
             {
-                KeyStoreFilePath = options.SslKeyStoreFilePath,
-                KeyStorePassword = options.SslKeyStorePassword,
-                TrustStoreFilePath = options.SslTrustStoreFilePath,
-                TrustStorePassword = options.SslTrustStorePassword,
-                KeyStoreType = options.SslKeyStoreType,
-                TrustStoreType = options.SslTrustStoreType,
-                KeyAlgorithm = options.SslKeyAlgorithm,
-                Protocol = options.SslProtocol,
+                KeyStoreFilePath = settings.SslKeyStoreFilePath,
+                // Ignite requires both passwords, so an unset one becomes an empty one.
+                KeyStorePassword = settings.SslKeyStorePassword ?? string.Empty,
+                TrustStoreFilePath = settings.SslTrustStoreFilePath,
+                TrustStorePassword = settings.SslTrustStorePassword ?? string.Empty,
+                KeyStoreType = settings.SslKeyStoreType,
+                TrustStoreType = settings.SslTrustStoreType,
+                KeyAlgorithm = settings.SslKeyAlgorithm,
+                Protocol = settings.SslProtocol,
             };
         }
 
@@ -108,43 +113,28 @@ internal static class IgniteConfigurationFactory
             "-XX:+UseG1GC", "-XX:MaxGCPauseMillis=200", "-XX:+UseStringDeduplication",
             "-XX:+ParallelRefProcEnabled",
             "-XX:+DisableExplicitGC", "-XX:-OmitStackTraceInFastThrow",
-            // as the Ignite chart: an out-of-memory JVM exits (and the pod restarts) instead of running half-dead in
-            // the process, and leaves a heap dump in /tmp
+            // As in the Ignite chart: a JVM that runs out of memory exits (and the pod restarts) instead of staying
+            // half-dead in the process. It leaves a heap dump in /tmp.
             "-XX:+ExitOnOutOfMemoryError", "-XX:+HeapDumpOnOutOfMemoryError",
             "-XX:HeapDumpPath=/tmp/heapdump.hprof",
-            "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
-            "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED", "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
-            "--add-opens=java.base/sun.util.calendar=ALL-UNNAMED",
-            "--add-opens=java.management/com.sun.jmx.mbeanserver=ALL-UNNAMED",
-            "--add-opens=jdk.internal.jvmstat/sun.jvmstat.monitor=ALL-UNNAMED",
-            "--add-opens=java.base/sun.reflect.generics.reflectiveObjects=ALL-UNNAMED",
-            "--add-opens=jdk.management/com.sun.management.internal=ALL-UNNAMED",
-            "--add-opens=java.base/java.io=ALL-UNNAMED", "--add-opens=java.base/java.nio=ALL-UNNAMED",
-            "--add-opens=java.base/java.net=ALL-UNNAMED", "--add-opens=java.base/java.util=ALL-UNNAMED",
-            "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
-            "--add-opens=java.base/java.util.concurrent.locks=ALL-UNNAMED",
-            "--add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED",
-            "--add-opens=java.base/java.lang=ALL-UNNAMED", "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED",
-            "--add-opens=java.base/java.math=ALL-UNNAMED", "--add-opens=java.sql/java.sql=ALL-UNNAMED",
-            "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED", "--add-opens=java.base/java.time=ALL-UNNAMED",
-            "--add-opens=java.base/java.text=ALL-UNNAMED", "--add-opens=java.management/sun.management=ALL-UNNAMED",
-            "--add-opens=java.desktop/java.awt.font=ALL-UNNAMED",
+            .. File.ReadLines(Path.Combine(AppContext.BaseDirectory, "config", "jvm-add-opens.args"))
+                .Where(line => line.StartsWith("--", StringComparison.Ordinal)),
         ],
         DataStorageConfiguration = new DataStorageConfiguration
         {
             WalSegmentSize = WalSegmentSize,
         },
         WorkDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "work"),
-        // Ignite.NET sends every timeout of an SPI it configures, so Ignite ignores FailureDetectionTimeout for this
-        // SPI (and for a TcpDiscoverySpi configured from .NET, e.g., by -Cluster), logging "Failure detection timeout
-        // will be ignored": these timeouts govern instead
+        // Ignite.NET sends every timeout of an SPI it configures. Ignite then ignores FailureDetectionTimeout for that
+        // SPI and logs "Failure detection timeout will be ignored". This applies here and to a TcpDiscoverySpi
+        // configured from .NET (e.g., by -Cluster): the timeouts below are the ones in effect.
         CommunicationSpi = new TcpCommunicationSpi
         {
             MessageQueueLimit = 2048,
             SocketWriteTimeout = 5000,
             ConnectTimeout = TimeSpan.FromSeconds(10),
         },
-        // governs the discovery of the Spring configuration (Kubernetes)
+        // These apply to the discovery of the Spring configuration (Kubernetes), which .NET does not configure.
         FailureDetectionTimeout = TimeSpan.FromSeconds(30),
         ClientFailureDetectionTimeout = TimeSpan.FromSeconds(60),
         NetworkTimeout = TimeSpan.FromSeconds(10),
@@ -157,9 +147,9 @@ internal static class IgniteConfigurationFactory
 
     /// <summary>
     ///     Applies the properties the file sets (attributes and elements of its root) over
-    ///     <paramref name="igniteConfiguration" />, so the server's defaults (JVM options, timeouts, event types, ...) stay
-    ///     unless the file overrides them. Nested configurations are replaced as a whole (e.g., a dataStorageConfiguration
-    ///     element replaces the default one).
+    ///     <paramref name="igniteConfiguration" />. The server's defaults (JVM options, timeouts, event types, ...)
+    ///     stay unless the file overrides them. Nested configurations are replaced as a whole (e.g., a
+    ///     dataStorageConfiguration element replaces the default one).
     /// </summary>
     internal static void ApplyConfigurationFile(IgniteConfiguration igniteConfiguration, string xml, ILogger logger)
     {
@@ -194,7 +184,9 @@ internal static class IgniteConfigurationFactory
         }
     }
 
-    /// <summary>Ignite refuses to start when clientFailureDetectionTimeout is less than metricsUpdateFrequency.</summary>
+    /// <summary>
+    ///     Ignite refuses to start when clientFailureDetectionTimeout is less than metricsUpdateFrequency.
+    /// </summary>
     internal static void EnsureConsistentTimeouts(IgniteConfiguration igniteConfiguration, ILogger logger)
     {
         if (igniteConfiguration.ClientFailureDetectionTimeout >= igniteConfiguration.MetricsUpdateFrequency)
@@ -203,30 +195,38 @@ internal static class IgniteConfigurationFactory
         }
 
         logger.Warning(
-            "ClientFailureDetectionTimeout ({ClientFailureDetectionTimeout}) is raised to the metrics update frequency ({MetricsUpdateFrequency}), as Ignite requires.",
+            "ClientFailureDetectionTimeout ({ClientFailureDetectionTimeout}) is raised to the metrics update " +
+            "frequency ({MetricsUpdateFrequency}), as Ignite requires.",
             igniteConfiguration.ClientFailureDetectionTimeout,
             igniteConfiguration.MetricsUpdateFrequency
         );
         igniteConfiguration.ClientFailureDetectionTimeout = igniteConfiguration.MetricsUpdateFrequency;
     }
 
-    private static void ApplyJvmOptions(IgniteConfiguration igniteConfiguration, IgniteServerRunnerOptions options)
+    private static void ApplyJvmOptions(IgniteConfiguration igniteConfiguration, IgniteServerSettings settings)
     {
+        // The initial heap equals the maximum, as in the Ignite chart. With AlwaysPreTouch and guaranteed container
+        // memory, the heap is allocated at the start and never grows at run time.
+        igniteConfiguration.JvmInitialMemoryMb = settings.OnHeapMemory;
+        igniteConfiguration.JvmMaxMemoryMb = settings.OnHeapMemory;
         List<string> jvmOptions = [.. igniteConfiguration.JvmOptions ?? [],];
-        SetJvmOption(jvmOptions, "-XX:MaxMetaspaceSize=", options.JvmMaxMetaspaceMb);
-        SetJvmOption(jvmOptions, "-XX:ReservedCodeCacheSize=", options.JvmReservedCodeCacheMb);
-        SetJvmOption(jvmOptions, "-XX:MaxDirectMemorySize=", options.JvmMaxDirectMemoryMb);
-        SetJvmOption(jvmOptions, "-XX:G1HeapRegionSize=", options.JvmG1HeapRegionMb);
-        jvmOptions.AddRange(options.ExtraJvmOptions);
+        SetJvmOption(jvmOptions, "-XX:MaxMetaspaceSize=", settings.JvmMaxMetaspaceMb);
+        SetJvmOption(jvmOptions, "-XX:ReservedCodeCacheSize=", settings.JvmReservedCodeCacheMb);
+        SetJvmOption(jvmOptions, "-XX:MaxDirectMemorySize=", settings.JvmMaxDirectMemoryMb);
+        SetJvmOption(jvmOptions, "-XX:G1HeapRegionSize=", settings.JvmG1HeapRegionMb);
+        jvmOptions.AddRange(
+            settings.ExtraJvmOpts?.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ??
+            []
+        );
         if (!jvmOptions.Contains(ReduceSignalUsageJvmOption))
         {
             jvmOptions.Add(ReduceSignalUsageJvmOption);
         }
 
         igniteConfiguration.JvmOptions = jvmOptions;
-        if (!string.IsNullOrWhiteSpace(options.ExtraClasspath))
+        if (!string.IsNullOrWhiteSpace(settings.ExtraClasspath))
         {
-            var classpath = ExpandClasspath(options.ExtraClasspath);
+            var classpath = ExpandClasspath(settings.ExtraClasspath);
             igniteConfiguration.JvmClasspath = string.IsNullOrEmpty(igniteConfiguration.JvmClasspath) ? classpath
                 : $"{igniteConfiguration.JvmClasspath}{Path.PathSeparator}{classpath}";
         }
@@ -243,6 +243,36 @@ internal static class IgniteConfigurationFactory
         jvmOptions.Add($"{prefix}{value}m");
     }
 
+    /// <summary>
+    ///     The settings that are not set keep the value of the default configuration (or of -ConfigFile).
+    /// </summary>
+    private static void ApplyTimeoutsAndThreadPools(
+        IgniteConfiguration igniteConfiguration,
+        IgniteServerSettings settings
+    )
+    {
+        igniteConfiguration.FailureDetectionTimeout = Milliseconds(settings.FailureDetectionTimeoutMs) ??
+                                                      igniteConfiguration.FailureDetectionTimeout;
+        igniteConfiguration.ClientFailureDetectionTimeout = Milliseconds(settings.ClientFailureDetectionTimeoutMs) ??
+                                                            igniteConfiguration.ClientFailureDetectionTimeout;
+        igniteConfiguration.NetworkTimeout =
+            Milliseconds(settings.NetworkTimeoutMs) ?? igniteConfiguration.NetworkTimeout;
+        igniteConfiguration.PublicThreadPoolSize =
+            settings.PublicThreadPoolSize ?? igniteConfiguration.PublicThreadPoolSize;
+        igniteConfiguration.SystemThreadPoolSize =
+            settings.SystemThreadPoolSize ?? igniteConfiguration.SystemThreadPoolSize;
+        igniteConfiguration.QueryThreadPoolSize =
+            settings.QueryThreadPoolSize ?? igniteConfiguration.QueryThreadPoolSize;
+        igniteConfiguration.ServiceThreadPoolSize =
+            settings.ServiceThreadPoolSize ?? igniteConfiguration.ServiceThreadPoolSize;
+        igniteConfiguration.StripedThreadPoolSize =
+            settings.StripedThreadPoolSize ?? igniteConfiguration.StripedThreadPoolSize;
+        igniteConfiguration.DataStreamerThreadPoolSize =
+            settings.DataStreamerThreadPoolSize ?? igniteConfiguration.DataStreamerThreadPoolSize;
+    }
+
+    private static TimeSpan? Milliseconds(int? value) => value.HasValue ? TimeSpan.FromMilliseconds(value.Value) : null;
+
     /// <summary>Entries separated by ':' (or ';'); a directory stands for the *.jar files in it.</summary>
     internal static string ExpandClasspath(string classpath) => string.Join(
         Path.PathSeparator,
@@ -252,55 +282,80 @@ internal static class IgniteConfigurationFactory
             )
     );
 
-    private static void ApplyStorage(IgniteConfiguration igniteConfiguration, IgniteServerRunnerOptions options)
+    /// <summary>
+    ///     The default data region (off-heap memory, persistence, page eviction), the data and WAL storage.
+    /// </summary>
+    private static void ApplyStorage(IgniteConfiguration igniteConfiguration, IgniteServerSettings settings)
     {
-        if (options is
-            {
-                StoragePath: null, WalPath: null, WalArchivePath: null, WalCompactionEnabled: null, WalMode: null,
-            })
+        var region = GetDefaultDataRegion(igniteConfiguration);
+        region.MaxSize = (long)settings.OffHeapMemory * 1024 * 1024;
+        region.MetricsEnabled = settings.EnableOffHeapMetrics;
+        // Persistence is only ever turned on here, so a -ConfigFile that enables it keeps it. Authentication needs
+        // it, because Ignite stores its users on disk.
+        if (settings.PersistenceEnabled || settings.EnableAuthentication)
+        {
+            region.PersistenceEnabled = true;
+        }
+
+        // An in-memory region evicts pages when it is full. A persistent region writes them to disk instead, and
+        // Ignite warns about an eviction mode there.
+        var inMemoryMode = settings.PageEvictionMode is { } mode
+            ? IgniteServerSettings.ParseEnum<DataPageEvictionMode>(mode)!.Value : DataPageEvictionMode.Random2Lru;
+        region.PageEvictionMode = region.PersistenceEnabled ? DataPageEvictionMode.Disabled : inMemoryMode;
+
+        var dataStorage = igniteConfiguration.DataStorageConfiguration;
+        dataStorage.MetricsEnabled = settings.EnableOffHeapMetrics;
+        dataStorage.StoragePath = NullIfBlank(settings.StoragePath) ?? dataStorage.StoragePath;
+        dataStorage.WalPath = NullIfBlank(settings.WalPath) ?? dataStorage.WalPath;
+        dataStorage.WalArchivePath = NullIfBlank(settings.WalArchivePath) ?? dataStorage.WalArchivePath;
+        dataStorage.WalCompactionEnabled = settings.WalCompactionEnabled ?? dataStorage.WalCompactionEnabled;
+        dataStorage.WalMode = settings.WalMode is { } walMode ? IgniteServerSettings.ParseEnum<WalMode>(walMode)!.Value
+            : dataStorage.WalMode;
+    }
+
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
+    /// <summary>
+    ///     Configures static discovery from .NET when a discovery port or endpoints are set. It then replaces the
+    ///     discovery of the Spring configuration (Kubernetes), which stays in place otherwise.
+    /// </summary>
+    private static void ApplyDiscovery(
+        IgniteConfiguration igniteConfiguration,
+        IgniteServerSettings settings,
+        Func<string> getLocalIpAddress
+    )
+    {
+        var endpoints = settings.ClusterEndpoints;
+        if (endpoints.Count == 0 && settings.UseTcpDiscoveryStaticIpFinder)
+        {
+            // No other node is known, so the node is its own discovery endpoint. Other nodes join it by naming it
+            // in their CLUSTER_ENDPOINTS.
+            endpoints = [$"{getLocalIpAddress()}:{DefaultDiscoveryPort}",];
+        }
+
+        if (settings.SpiPort is null && endpoints.Count == 0)
         {
             return;
         }
 
-        GetDefaultDataRegion(igniteConfiguration);
-        var dataStorage = igniteConfiguration.DataStorageConfiguration;
-        dataStorage.StoragePath = options.StoragePath ?? dataStorage.StoragePath;
-        dataStorage.WalPath = options.WalPath ?? dataStorage.WalPath;
-        dataStorage.WalArchivePath = options.WalArchivePath ?? dataStorage.WalArchivePath;
-        dataStorage.WalCompactionEnabled = options.WalCompactionEnabled ?? dataStorage.WalCompactionEnabled;
-        dataStorage.WalMode = options.WalMode ?? dataStorage.WalMode;
-    }
-
-    public static void SetOffHeapMemoryLimit(
-        IgniteConfiguration igniteConfiguration,
-        int megabytes,
-        bool metricsEnabled
-    )
-    {
-        var region = GetDefaultDataRegion(igniteConfiguration);
-        region.MaxSize = (long)megabytes * 1024 * 1024;
-        region.MetricsEnabled = metricsEnabled;
-        igniteConfiguration.DataStorageConfiguration.MetricsEnabled = metricsEnabled;
-    }
-
-    /// <summary>
-    ///     In-memory regions evict pages when full (Random2Lru); persistent regions write them to disk instead, and
-    ///     Ignite warns that an eviction mode has no effect there.
-    /// </summary>
-    public static void SetPageEvictionMode(
-        IgniteConfiguration igniteConfiguration,
-        DataPageEvictionMode? inMemoryMode = null
-    )
-    {
-        if (igniteConfiguration.DataStorageConfiguration?.DefaultDataRegionConfiguration is { } region)
+        if (igniteConfiguration.DiscoverySpi is not null and not TcpDiscoverySpi)
         {
-            region.PageEvictionMode = region.PersistenceEnabled ? DataPageEvictionMode.Disabled
-                : inMemoryMode ?? DataPageEvictionMode.Random2Lru;
+            throw new InvalidOperationException(
+                $"The discovery port and cluster endpoints need a TcpDiscoverySpi, the configuration uses " +
+                $"{igniteConfiguration.DiscoverySpi.GetType().Name}."
+            );
+        }
+
+        var discoverySpi = (TcpDiscoverySpi)(igniteConfiguration.DiscoverySpi ??= new TcpDiscoverySpi());
+        discoverySpi.LocalPort = settings.SpiPort ?? discoverySpi.LocalPort;
+        if (endpoints.Count > 0)
+        {
+            discoverySpi.IpFinder = new TcpDiscoveryStaticIpFinder
+            {
+                Endpoints = endpoints,
+            };
         }
     }
-
-    public static void SetPersistence(IgniteConfiguration igniteConfiguration, bool enabled) =>
-        GetDefaultDataRegion(igniteConfiguration).PersistenceEnabled = enabled;
 
     private static DataRegionConfiguration GetDefaultDataRegion(IgniteConfiguration igniteConfiguration)
     {

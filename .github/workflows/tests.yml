@@ -195,14 +195,7 @@ jobs:
           INPUT_REF: ${{ inputs.helm-charts-ref }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
-          set -euo pipefail
-          if [ -n "${INPUT_REF}" ]; then
-            ref="${INPUT_REF}"
-          elif git ls-remote --exit-code --heads https://github.com/dradoaica/helm-charts.git "${BRANCH}" > /dev/null; then
-            ref="${BRANCH}"
-          else
-            ref=main
-          fi
+          ref="$(scripts/ci/resolve-chart-ref.sh "$INPUT_REF" "$BRANCH")"
           echo "Testing the chart of dradoaica/helm-charts@${ref}"
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"
 
@@ -217,19 +210,7 @@ jobs:
       - name: Check Paired Versions
         env:
           CHART_REF: ${{ steps.chart-ref.outputs.ref }}
-        run: |
-          set -euo pipefail
-          server="$(sed -n -E 's/.*<Version>(.*)<\/Version>.*/\1/p' src/Directory.Build.props)"
-          app="$(sed -n -E 's/^appVersion: "?([^"]*)"?$/\1/p' helm-charts/charts/aspnetcore-ignite-server/Chart.yaml)"
-          echo "server ${server}, chart appVersion ${app} (helm-charts@${CHART_REF})"
-          if [ "$server" != "$app" ]; then
-            if [ "$CHART_REF" = main ]; then
-              echo "::notice::The chart on main has appVersion ${app}, this branch builds ${server}."
-            else
-              echo "::error::helm-charts@${CHART_REF} has appVersion ${app}, but this branch builds ${server}."
-              exit 1
-            fi
-          fi
+        run: scripts/ci/check-paired-versions.sh helm-charts/charts/aspnetcore-ignite-server "$CHART_REF"
 
       - name: Load Image
         uses: actions/download-artifact@v8
@@ -250,27 +231,11 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v5
 
-      - name: Install Chart
-        run: >-
-          helm install "$RELEASE" helm-charts/charts/aspnetcore-ignite-server
-          --set image.tag=e2e --set image.pullPolicy=Never
-          --set replicaCount=2 --set env.ACTIVATION_MIN_SERVER_NODES=2
-          --set authentication.igniteUserPassword=e2e-secret
-          --set resources.requests.cpu=500m --set resources.limits.cpu=1
-          --set resources.requests.memory=3Gi --set resources.limits.memory=3Gi
-          --set memory.onHeapMB=512 --set memory.offHeapMB=256 --set memory.maxDirectMemorySizeMB=1024
-          --set persistence.storageVolume.size=1Gi --set persistence.walVolume.size=1Gi
-          --wait --timeout 10m
-
-      - name: Helm Test
-        run: helm test "$RELEASE" --logs
-
-      - name: Diagnostics
-        if: failure()
-        run: |
-          kubectl get pods,pvc,svc -o wide
-          kubectl describe pods
-          kubectl logs -l app.kubernetes.io/name=aspnetcore-ignite-server --all-containers --tail=200
+      # installs a two-node persistent cluster, waits for the probes, runs helm test, and prints diagnostics on failure
+      - name: Test Chart
+        run: scripts/test-chart.sh helm-charts/charts/aspnetcore-ignite-server
+        env:
+          KEEP: 1
 
   # the documented upgrade from chart 2.18.2 (REST probes, one "persistence" volume with the WAL in it): data written
   # before it is read after it. The published 2.17.0 and 2.18.0 images do not start (their -server JVM option), so the
@@ -285,6 +250,9 @@ jobs:
       RELEASE: ignite
       FULLNAME: ignite-aspnetcore-ignite-server
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
       - name: Checkout Old Helm Chart
         uses: actions/checkout@v6
         with:
@@ -299,14 +267,7 @@ jobs:
           INPUT_REF: ${{ inputs.helm-charts-ref }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
-          set -euo pipefail
-          if [ -n "${INPUT_REF}" ]; then
-            ref="${INPUT_REF}"
-          elif git ls-remote --exit-code --heads https://github.com/dradoaica/helm-charts.git "${BRANCH}" > /dev/null; then
-            ref="${BRANCH}"
-          else
-            ref=main
-          fi
+          ref="$(scripts/ci/resolve-chart-ref.sh "$INPUT_REF" "$BRANCH")"
           echo "Testing the chart of dradoaica/helm-charts@${ref}"
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"
 

@@ -49,7 +49,7 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
             .WithPortBinding(IgniteServerFixture.RestPort, true)
             .WithEnvironment("REST_ENABLED", "true")
             .WithEnvironment("ENABLE_AUTHENTICATION", "false")
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ServerLog.Running))
             .Build();
         await restNode.StartAsync();
 
@@ -78,7 +78,7 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
         await using var node = fixture.CreateNodeBuilder()
             .WithEnvironment("CONFIG_FILE", configFile)
             .WithEnvironment("ENABLE_AUTHENTICATION", "false")
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ServerLog.Running))
             .Build();
 
         await node.StartAsync();
@@ -140,7 +140,7 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
             .WithEnvironment("SQL_SCHEMAS", "MY_SCHEMA, OTHER_SCHEMA")
             .WithEnvironment("PEER_CLASS_LOADING_ENABLED", "true")
             .WithResourceMapping(Encoding.UTF8.GetBytes(properties), "/app/work/spring-extra-properties.xml", 1001)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ServerLog.Running))
             .Build();
         await node.StartAsync();
 
@@ -221,7 +221,7 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
             .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", $"http://collector:{port}")
             .WithEnvironment("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf")
             .WithEnvironment("OTEL_METRIC_EXPORT_INTERVAL", "1000")
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ServerLog.Running))
             .Build();
         await node.StartAsync();
 
@@ -265,7 +265,7 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
         Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
         await using var node = fixture.CreateNodeBuilder()
             .WithEnvironment("ENABLE_AUTHENTICATION", "false")
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ServerLog.Running))
             .Build();
         await node.StartAsync();
 
@@ -274,7 +274,7 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
 
         Assert.Equal(0, await node.GetExitCodeAsync());
         var (stdout, _) = await node.GetLogsAsync();
-        Assert.Contains("Ignite server runner stopped.", stdout);
+        Assert.Contains(ServerLog.Stopped, stdout);
     }
 
     [SkippableFact]
@@ -284,7 +284,7 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
         await using var node = fixture.CreateNodeBuilder()
             .WithEnvironment("GRACEFUL_STOP_TIMEOUT_IN_SECONDS", "60")
             .WithEnvironment("SHUTDOWN_TIMEOUT_IN_SECONDS", "70")
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ServerLog.Running))
             .Build();
         await node.StartAsync();
         using (var igniteClient = CacheFactory.ConnectAsClient(
@@ -311,8 +311,8 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
         Assert.Equal(0, await node.GetExitCodeAsync());
         Assert.True(stopping.Elapsed < TimeSpan.FromSeconds(30), $"The node took {stopping.Elapsed} to stop.");
         var (stdout, _) = await node.GetLogsAsync();
-        Assert.Contains("deactivating the cluster so that it stops at once", stdout);
-        Assert.Contains("Ignite server runner stopped.", stdout);
+        Assert.Contains(ServerLog.DeactivatingAsLastServerNode, stdout);
+        Assert.Contains(ServerLog.Stopped, stdout);
     }
 
     [SkippableFact]

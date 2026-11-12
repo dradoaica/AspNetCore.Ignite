@@ -59,7 +59,7 @@
         <None Update="appsettings.json;serilog.config.json;control.sh">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
-        <None Update="config\default-config.xml;config\persistent-config.xml;config\spring-config.xml;config\spring-config-client-with-ssl.xml">
+        <None Update="config\default-config.xml;config\persistent-config.xml;config\spring-config.xml;config\spring-config-client-with-ssl.xml;config\jvm-add-opens.args">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
     </ItemGroup>

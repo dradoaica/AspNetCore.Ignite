@@ -37,6 +37,14 @@ CI reports the unit test coverage and the image's vulnerabilities with a fix (Tr
 the job summary, and tests the image with its
 [Helm chart](https://github.com/dradoaica/helm-charts/tree/main/charts/aspnetcore-ignite-server): a two-node persistent
 cluster in kind, checked by the chart's probes and `helm test` (the `helm-charts-ref` input selects the chart revision).
+The logic of the workflows lives in scripts that also run locally: `scripts/test-chart.sh` (the chart test, against any
+cluster that has the image; its header shows how to load the image into kind or microk8s) and `scripts/ci/` (which chart
+revision is tested, the paired versions check, and the chart update of a release).
+
+The integration tests wait for texts in the server's logs. Those texts are listed in
+`tests/AspNetCore.Ignite.IntegrationTests/ServerLog.cs`, and a unit test fails when one of them is no longer part of a
+message in the server's code: after rewording a log message, update that list.
+
 Run by hand (Run workflow), the Release workflow is a dry run: it builds the package and the image for every
 platform, and publishes nothing.
 

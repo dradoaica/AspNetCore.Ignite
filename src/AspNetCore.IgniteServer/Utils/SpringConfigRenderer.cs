@@ -40,8 +40,9 @@ internal static class SpringConfigRenderer
     }
 
     /// <summary>
-    ///     Renders the template into a private file under the temp directory and returns its path. The template itself is
-    ///     never modified, so every start re-applies the current configuration (and works on a read-only file system).
+    ///     Renders the template into a private file under the temp directory and returns its path. The template itself
+    ///     is never modified, so every start re-applies the current configuration (and works on a read-only file
+    ///     system).
     /// </summary>
     internal static async Task<string> RenderToFileAsync(
         string templatePath,

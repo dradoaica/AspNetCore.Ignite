@@ -91,8 +91,8 @@ public sealed class IgniteNodeMetricsTests
                 cacheName => cacheName == "gone" ? throw new ArgumentException("The cache does not exist.")
                     : Fake.Of<ICache<object, object>>((name, _) => name switch
                         {
-                            "GetLostPartitions" => new List<int> { 3, },
-                            "GetLocalSizeLong" => 5L,
+                            nameof(ICache<object, object>.GetLostPartitions) => new List<int> { 3, },
+                            nameof(ICache<object, object>.GetLocalSizeLong) => 5L,
                             _ => throw new NotSupportedException(name),
                         }
                     )
@@ -113,31 +113,33 @@ public sealed class IgniteNodeMetricsTests
     {
         var localNode = Fake.Of<IClusterNode>((name, _) => name switch
             {
-                "GetMetrics" => Fake.Of<IClusterMetrics>((metric, _) => throw new NotSupportedException(metric)),
+                nameof(IClusterNode.GetMetrics) => Fake.Of<IClusterMetrics>((metric, _) =>
+                    throw new NotSupportedException(metric)
+                ),
                 _ => throw new NotSupportedException(name),
             }
         );
         var servers = Fake.Of<IClusterGroup>((name, _) => name switch
             {
-                "GetNodes" => new List<IClusterNode> { localNode, },
+                nameof(IClusterGroup.GetNodes) => new List<IClusterNode> { localNode, },
                 _ => throw new NotSupportedException(name),
             }
         );
         var cluster = Fake.Of<ICluster>((name, _) => name switch
             {
-                "IsActive" => active,
-                "ForServers" => servers,
-                "GetBaselineTopology" => null,
-                "GetLocalNode" => localNode,
+                nameof(ICluster.IsActive) => active,
+                nameof(ICluster.ForServers) => servers,
+                nameof(ICluster.GetBaselineTopology) => null,
+                nameof(ICluster.GetLocalNode) => localNode,
                 _ => throw new NotSupportedException(name),
             }
         );
         return Fake.Of<IIgnite>((name, args) => name switch
             {
-                "GetCluster" => cluster,
-                "GetCacheNames" => getCacheNames(),
-                "GetCache" => getCache((string)args[0]!),
-                "GetDataRegionMetrics" => new List<IDataRegionMetrics>(),
+                nameof(IIgnite.GetCluster) => cluster,
+                nameof(IIgnite.GetCacheNames) => getCacheNames(),
+                nameof(IIgnite.GetCache) => getCache((string)args[0]!),
+                nameof(IIgnite.GetDataRegionMetrics) => new List<IDataRegionMetrics>(),
                 _ => throw new NotSupportedException(name),
             }
         );

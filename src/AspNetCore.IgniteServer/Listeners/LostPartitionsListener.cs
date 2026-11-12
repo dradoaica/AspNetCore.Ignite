@@ -11,25 +11,41 @@ using System.Threading;
 namespace AspNetCore.IgniteServer.Listeners;
 
 /// <summary>
-///     Logs partition data loss (once per cache) and, when <c>autoReset</c> is set, resets the lost partitions so the
-///     caches become usable again. Ignite resets partitions only while a baseline node that owns them is online: a
-///     persistent cluster waits for its nodes to return, with their data; an in-memory cluster, whose departed nodes took
-///     their data with them, first drops them from the baseline (the lost data is NOT recovered). Every node reports the
-///     loss (once per cache and batch of losses) and remembers it until the cache has no lost partitions any more, the
-///     oldest server node resets: off the Ignite thread that reports it, once per batch of losses, and again whenever a
-///     node joins or leaves (a node that owns them may be back, or this node may have become the oldest one).
+///     Logs partition data loss and, when <c>autoReset</c> is set, resets the lost partitions so that the caches become
+///     usable again.
+///     <para>
+///         Ignite raises one event per lost partition. The events of one second form a batch: each cache is logged
+///         once per batch, and the reset runs once at the end of the batch, off the Ignite thread that raised the
+///         events.
+///     </para>
+///     <para>
+///         Every node remembers the caches that lost partitions, but only the oldest server node resets them. The
+///         reset is tried again whenever a node joins or leaves: a node that owns the partitions may be back, or this
+///         node may have become the oldest one.
+///     </para>
+///     <para>
+///         Ignite resets partitions only while a baseline node that owns them is online. A persistent cluster
+///         therefore waits for its nodes to return with their data. The departed nodes of an in-memory cluster took
+///         their data with them, so they are dropped from the baseline first; that data is NOT recovered.
+///     </para>
 /// </summary>
 internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEvent>, IEventListener<DiscoveryEvent>,
     IDisposable
 {
+    private const string ResetWithReturnedData =
+        "The {Partitions} lost partitions of cache {CacheName} were reset, with the data of the nodes that returned.";
+
+    private const string ResetWithoutData =
+        "The {Partitions} lost partitions of cache {CacheName} were reset; their data is gone.";
+
     private static readonly TimeSpan Debounce = TimeSpan.FromSeconds(1);
 
     private readonly bool autoReset;
     private readonly IIgnite ignite;
     private readonly ILogger logger;
 
-    // the lost partitions of each cache, until they are reset
-    private readonly ConcurrentDictionary<string, int> lost = new(StringComparer.Ordinal);
+    // the caches that lost partitions, until they are reset
+    private readonly ConcurrentDictionary<string, byte> lost = new(StringComparer.Ordinal);
     private readonly bool persistent;
 
     // the caches whose loss was logged in the current batch of losses
@@ -93,13 +109,14 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
         IEnumerable<string> hostNames
     )
     {
-        // one event per lost partition: the first one of the cache in this batch is logged (also on the nodes that
-        // still remember an earlier loss of the cache, reset by another node)
-        lost.AddOrUpdate(cacheName, 1, (_, count) => count + 1);
+        // Ignite raises one event per lost partition; only the first one of a cache in this batch is logged. That
+        // also holds on a node that still remembers an earlier loss of the cache which another node has reset.
+        lost.TryAdd(cacheName, 0);
         if (reported.TryAdd(cacheName, 0))
         {
             logger.Error(
-                "Partition data lost: CacheName: {CacheName}; DiscoveryEventName: {DiscoveryEventName}; DiscoveryNodeAddresses: {DiscoveryNodeAddresses}; DiscoveryHostNames: {DiscoveryHostNames}",
+                "Partition data lost: CacheName: {CacheName}; DiscoveryEventName: {DiscoveryEventName}; " +
+                "DiscoveryNodeAddresses: {DiscoveryNodeAddresses}; DiscoveryHostNames: {DiscoveryHostNames}",
                 cacheName,
                 discoveryEventName,
                 string.Join(",", addresses),
@@ -112,7 +129,7 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
 
     internal void OnTopologyChanged()
     {
-        // a node that owns lost partitions may be back, or the oldest node, which resets them, left
+        // A node that owns lost partitions may be back, or the oldest node (which resets them) may have left.
         if (autoReset && !lost.IsEmpty)
         {
             ScheduleBatchEnd();
@@ -145,16 +162,24 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
 
         try
         {
-            // reset by the oldest node (on the others), or destroyed
-            foreach (var cacheName in lost.Keys.Where(cacheName => !HasLostPartitions(cacheName)))
+            Dictionary<string, int> partitions = [];
+            foreach (var cacheName in lost.Keys)
             {
-                lost.TryRemove(cacheName, out _);
+                var count = CountLostPartitions(cacheName);
+                if (count == 0)
+                {
+                    // Nothing is lost any more: the oldest node reset the cache, or the cache was destroyed.
+                    lost.TryRemove(cacheName, out _);
+                }
+                else
+                {
+                    partitions[cacheName] = count;
+                }
             }
 
-            var caches = lost.Keys.ToArray();
             var cluster = ignite.GetCluster();
-            // the other nodes keep the losses, should the oldest node leave before it reset them
-            if (caches.Length == 0 || !cluster.ForServers().ForOldest().GetNodes().Any(node => node.IsLocal))
+            // Only the oldest node resets. The others keep their record, in case it leaves before it has done so.
+            if (partitions.Count == 0 || !cluster.ForServers().ForOldest().GetNodes().Any(node => node.IsLocal))
             {
                 return;
             }
@@ -164,25 +189,22 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
                 DropDepartedBaselineNodes(cluster);
             }
 
-            ignite.ResetLostPartitions(caches);
-            foreach (var cacheName in caches)
+            ignite.ResetLostPartitions(partitions.Keys.ToArray());
+            foreach (var (cacheName, count) in partitions)
             {
-                if (lost.TryRemove(cacheName, out var partitions))
-                {
-                    logger.Warning(
-                        persistent
-                            ? "The {Partitions} lost partitions of cache {CacheName} were reset, with the data of the nodes that returned."
-                            : "The {Partitions} lost partitions of cache {CacheName} were reset; their data is gone.",
-                        partitions,
-                        cacheName
-                    );
-                }
+                lost.TryRemove(cacheName, out _);
+                logger.Warning(
+                    persistent ? ResetWithReturnedData : ResetWithoutData,
+                    count,
+                    cacheName
+                );
             }
         }
         catch (ClusterTopologyException ex)
         {
             logger.Warning(
-                "The lost partitions of caches {CacheNames} are reset once a node that owns them returns (or is removed from the baseline): {Reason}",
+                "The lost partitions of caches {CacheNames} are reset once a node that owns them returns (or is " +
+                "removed from the baseline): {Reason}",
                 string.Join(", ", lost.Keys),
                 ex.Message
             );
@@ -197,16 +219,16 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
         }
     }
 
-    private bool HasLostPartitions(string cacheName)
+    private int CountLostPartitions(string cacheName)
     {
         try
         {
-            return ignite.GetCache<object, object>(cacheName).GetLostPartitions().Count > 0;
+            return ignite.GetCache<object, object>(cacheName).GetLostPartitions().Count;
         }
         catch (Exception)
         {
-            // destroyed meanwhile
-            return false;
+            // The cache was destroyed in the meantime.
+            return 0;
         }
     }
 
@@ -223,7 +245,7 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
             return;
         }
 
-        // Ignite changes the baseline by hand only without auto-adjust
+        // Ignite accepts a manual baseline change only while auto-adjust is off.
         cluster.SetBaselineAutoAdjustEnabledFlag(false);
         try
         {

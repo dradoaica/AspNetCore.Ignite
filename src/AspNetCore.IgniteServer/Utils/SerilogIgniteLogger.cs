@@ -1,3 +1,4 @@
+using AspNetCore.Ignite.Logging;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
@@ -26,7 +27,7 @@ internal sealed class SerilogIgniteLogger(ILogger logger) : IIgniteLogger
             return;
         }
 
-        var text = Format(message, args, formatProvider);
+        var text = IgniteLoggerAdapter.Format(message, args, formatProvider);
         if (!string.IsNullOrEmpty(nativeErrorInfo))
         {
             text += Environment.NewLine + nativeErrorInfo;
@@ -40,27 +41,9 @@ internal sealed class SerilogIgniteLogger(ILogger logger) : IIgniteLogger
         );
     }
 
+    // Debug and Trace are not forwarded: enabling them makes the Java side log at that level, which is very verbose
     public bool IsEnabled(IgniteLogLevel level) =>
         level >= IgniteLogLevel.Info && logger.IsEnabled(ConvertLevel(level));
-
-    // Debug and Trace are not forwarded: enabling them makes the Java side log at that level, which is very verbose
-    internal static string Format(string message, object[]? args, IFormatProvider? formatProvider)
-    {
-        if (args is not { Length: > 0, })
-        {
-            return message;
-        }
-
-        try
-        {
-            return string.Format(formatProvider, message, args);
-        }
-        catch (FormatException)
-        {
-            // never fail the logging callback: keep the message and append the arguments
-            return $"{message} [{string.Join(", ", args)}]";
-        }
-    }
 
     internal static LogEventLevel ConvertLevel(IgniteLogLevel level) => level switch
     {

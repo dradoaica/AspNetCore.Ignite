@@ -50,7 +50,7 @@ internal sealed class IgniteNodeMetrics : IDisposable
         Gauge("cluster_active", s => s.ClusterActive ? 1 : 0, null, "1 when the cluster is active.");
         Gauge("cluster_server_nodes", s => s.ServerNodes, null, "Server nodes in the topology.");
         Gauge("cluster_baseline_nodes", s => s.BaselineNodes, null, "Nodes of the baseline topology.");
-        // not reported while the cluster is inactive, when the caches cannot be read
+        // Not reported while the cluster is inactive, because the caches cannot be read then.
         meter.CreateObservableGauge(
             "cluster_lost_partitions",
             () => Read<int>(s => s.ClusterActive ? [new Measurement<int>(s.LostPartitions.Values.Sum()),] : []),
@@ -148,11 +148,15 @@ internal sealed class IgniteNodeMetrics : IDisposable
         );
         meter.CreateObservableGauge(
             "cache_rebalancing",
-            () => Read(s => s.CacheEntries.Keys.Select(cache => new Measurement<int>(
-                        nodeState.RebalancingCaches.Contains(cache) ? 1 : 0,
-                        Cache(cache)
-                    )
-                )
+            () => Read(s =>
+                {
+                    var rebalancing = nodeState.RebalancingCaches;
+                    return s.CacheEntries.Keys.Select(cache => new Measurement<int>(
+                            rebalancing.Contains(cache) ? 1 : 0,
+                            Cache(cache)
+                        )
+                    );
+                }
             ),
             description: "1 while this node rebalances the cache."
         );
@@ -184,7 +188,7 @@ internal sealed class IgniteNodeMetrics : IDisposable
     private List<Measurement<T>> Read<T>(Func<NodeSnapshot, IEnumerable<Measurement<T>>> read)
         where T : struct
     {
-        // the node may stop while it is read: report nothing rather than failing the whole scrape
+        // The node may stop while it is read. Reporting nothing is better than failing the whole scrape.
         try
         {
             return GetSnapshot() is { } current ? read(current).ToList() : [];
@@ -229,9 +233,9 @@ internal sealed class IgniteNodeMetrics : IDisposable
             var clusterActive = cluster.IsActive();
             Dictionary<string, long> cacheEntries = [];
             Dictionary<string, int> lostPartitions = [];
-            // the lost partitions of every cache: their total is reported without METRICS_PER_CACHE too. Ignite refuses
-            // to read the caches of an inactive cluster (e.g., waiting for ACTIVATION_MIN_SERVER_NODES), whose other
-            // metrics are reported all the same
+            // Lost partitions are read for every cache, because their total is reported even without
+            // METRICS_PER_CACHE. Ignite refuses to read the caches of an inactive cluster (e.g., one waiting for
+            // ACTIVATION_MIN_SERVER_NODES); its other metrics are still reported.
             foreach (var cacheName in clusterActive ? node.GetCacheNames() : [])
             {
                 try
@@ -245,8 +249,8 @@ internal sealed class IgniteNodeMetrics : IDisposable
                 }
                 catch (Exception)
                 {
-                    // destroyed while it was read (e.g., the temporary cache of a password change): the other caches
-                    // are reported
+                    // The cache was destroyed while it was read (e.g., the temporary cache of a password change).
+                    // The other caches are still reported.
                     lostPartitions.Remove(cacheName);
                 }
             }

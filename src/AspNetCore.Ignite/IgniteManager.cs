@@ -68,7 +68,7 @@ public class IgniteManager : IIgniteManager, IDisposable
     public IIgniteClient Client => GetIgniteClient();
 
     /// <inheritdoc />
-    // cancelling stops this caller's wait, not the shared connection attempt
+    // Cancelling stops only this caller's wait; the shared connection attempt goes on.
     public Task<IIgniteClient> GetClientAsync(CancellationToken cancellationToken = default) =>
         GetOrStartConnecting().WaitAsync(cancellationToken);
 
@@ -138,7 +138,7 @@ public class IgniteManager : IIgniteManager, IDisposable
 
             if (connecting is not { IsFaulted: false, IsCanceled: false, })
             {
-                // one background thread runs the connection retries, however many callers wait for them
+                // One background thread runs the connection retries, however many callers wait for the result.
                 connecting = Task.Run(Connect);
             }
 
@@ -175,8 +175,8 @@ public class IgniteManager : IIgniteManager, IDisposable
 
     internal static bool IsTransient(Exception ex) => ex switch
     {
-        // a failed connection (with its socket, IO or timeout exception), or a cluster that is not active (yet); the
-        // other answers of the server (e.g., an invalid cache configuration) do not change on retry
+        // Transient: a failed connection (socket, IO or timeout) and a cluster that is not active yet. Any other
+        // answer of the server (e.g., an invalid cache configuration) would be the same on a retry.
         IgniteClientException { StatusCode: ClientStatusCode.InvalidNodeState, } => true,
         IgniteClientException { InnerException: { } inner, } => IsTransient(inner),
         IgniteClientException => false,

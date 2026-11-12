@@ -25,6 +25,11 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- the log texts the integration tests wait for, checked against the server's code by ServerLogTests -->
+        <Compile Include="..\AspNetCore.Ignite.IntegrationTests\ServerLog.cs" Link="ServerLog.cs"/>
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\..\src\AspNetCore.Ignite\AspNetCore.Ignite.csproj"/>
         <ProjectReference Include="..\..\src\AspNetCore.IgniteServer\AspNetCore.IgniteServer.csproj"/>
     </ItemGroup>

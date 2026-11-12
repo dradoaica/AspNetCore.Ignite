@@ -32,9 +32,10 @@ public sealed class IgniteHealthCheck(IIgniteManager igniteManager, TimeSpan tim
             bool active;
             try
             {
-                // shared with every other caller: a slow connection does not block a thread per check
+                // The connection attempt is shared, so a slow connection does not block one thread per check.
                 var client = await igniteManager.GetClientAsync(timeoutCts.Token).ConfigureAwait(false);
-                // the client's calls are synchronous (bounded by its socket timeout only): wait no longer than the check
+                // The client call is synchronous and bounded only by the socket timeout, so the check stops
+                // waiting for it at its own timeout.
                 active = await Task.Run(() => client.GetCluster().IsActive(), CancellationToken.None)
                     .WaitAsync(timeoutCts.Token)
                     .ConfigureAwait(false);

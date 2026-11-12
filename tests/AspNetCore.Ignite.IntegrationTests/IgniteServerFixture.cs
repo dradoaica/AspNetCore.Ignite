@@ -84,7 +84,6 @@ public sealed class IgniteServerFixture : IgniteNodesFixture
     public const int ThinClientPort = 10800;
     public const int ManagementPort = 9464;
     public const int RestPort = 8080;
-    public const string RunningMessage = "Ignite server runner is running";
     private IContainer? container;
 
     public string Endpoint => GetEndpoint(container!);
@@ -108,7 +107,7 @@ public sealed class IgniteServerFixture : IgniteNodesFixture
         }
 
         container = CreateNodeBuilder()
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(RunningMessage))
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ServerLog.Running))
             .Build();
         await container.StartAsync();
     }

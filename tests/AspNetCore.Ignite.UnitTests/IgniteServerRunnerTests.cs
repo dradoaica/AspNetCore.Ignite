@@ -14,15 +14,18 @@ namespace AspNetCore.Ignite.UnitTests;
 public sealed class IgniteServerRunnerTests
 {
     [Fact]
-    public void Constructor_AppliesOptions()
+    public void Constructor_AppliesSettings()
     {
         using IgniteServerRunner runner = new(
-            new IgniteServerRunnerOptions
+            new IgniteServerSettings
             {
-                SpringConfigPath = "/tmp/spring-config.xml",
+                EnableAuthentication = false,
                 UseSsl = true,
                 SslKeyStoreFilePath = "server.jks",
-            }
+            },
+            Logger.None,
+            LocalAddress.Resolve,
+            "/tmp/spring-config.xml"
         );
 
         Assert.Equal("/tmp/spring-config.xml", runner.Configuration.SpringConfigUrl);
@@ -33,65 +36,101 @@ public sealed class IgniteServerRunnerTests
     }
 
     [Fact]
-    public void Constructor_AuthenticationEnablesPersistence()
+    public void Authentication_EnablesPersistence()
     {
-        using IgniteServerRunner runner = new(
-            new IgniteServerRunnerOptions
-            {
-                AuthenticationEnabled = true,
-            }
-        );
+        var configuration = IgniteConfigurationFactory.Create(new IgniteServerSettings(), Logger.None, LocalAddress.Resolve);
 
-        Assert.True(runner.Configuration.AuthenticationEnabled);
-        Assert.True(runner.Configuration.DataStorageConfiguration.DefaultDataRegionConfiguration.PersistenceEnabled);
+        Assert.True(configuration.AuthenticationEnabled);
+        Assert.True(configuration.DataStorageConfiguration.DefaultDataRegionConfiguration.PersistenceEnabled);
     }
 
     [Fact]
-    public void SetOffHeapMemoryLimit_ConfiguresDefaultRegion()
+    public void Memory_ConfiguresTheDefaultRegionAndTheJvm()
     {
-        using IgniteServerRunner runner = new(
-            new IgniteServerRunnerOptions
+        var configuration = IgniteConfigurationFactory.Create(
+            new IgniteServerSettings
             {
-                EnableOffHeapMetrics = true,
-            }
+                EnableAuthentication = false,
+                OffHeapMemory = 4096,
+                OnHeapMemory = 512,
+                PersistenceEnabled = true,
+            },
+            Logger.None,
+            LocalAddress.Resolve
         );
 
-        runner.SetOffHeapMemoryLimit(2048);
-        runner.SetPersistence(true);
-
-        var region = runner.Configuration.DataStorageConfiguration.DefaultDataRegionConfiguration;
-        Assert.Equal(2048L * 1024 * 1024, region.MaxSize);
+        var region = configuration.DataStorageConfiguration.DefaultDataRegionConfiguration;
+        Assert.Equal(4096L * 1024 * 1024, region.MaxSize);
         Assert.True(region.MetricsEnabled);
         Assert.True(region.PersistenceEnabled);
+        Assert.Equal(512, configuration.JvmInitialMemoryMb);
+        Assert.Equal(512, configuration.JvmMaxMemoryMb);
     }
 
     [Fact]
-    public void SetOnHeapMemoryLimit_SetsJvmMemory()
+    public void SpiPortAndClusterEndpoints_ConfigureDiscovery()
     {
-        using IgniteServerRunner runner = new(new IgniteServerRunnerOptions());
+        var configuration = IgniteConfigurationFactory.Create(
+            new IgniteServerSettings
+            {
+                SpiPort = 47600,
+                ClusterEndpoints = ["10.0.0.1:47500", "10.0.0.2:47500",],
+                ConsistentId = "node-1",
+            },
+            Logger.None,
+            LocalAddress.Resolve
+        );
 
-        runner.SetOnHeapMemoryLimit(1024);
-
-        Assert.Equal(1024, runner.Configuration.JvmInitialMemoryMb);
-        Assert.Equal(1024, runner.Configuration.JvmMaxMemoryMb);
-    }
-
-    [Fact]
-    public void SetServerPortAndClusterEndpoints_ConfigureDiscovery()
-    {
-        using IgniteServerRunner runner = new(new IgniteServerRunnerOptions());
-
-        runner.SetServerPort(47600);
-        runner.SetClusterEndpoints(["10.0.0.1:47500", "10.0.0.2:47500",]);
-        runner.SetConsistentId("node-1");
-
-        var spi = Assert.IsType<TcpDiscoverySpi>(runner.Configuration.DiscoverySpi);
+        var spi = Assert.IsType<TcpDiscoverySpi>(configuration.DiscoverySpi);
         Assert.Equal(47600, spi.LocalPort);
         Assert.Equal(
             ["10.0.0.1:47500", "10.0.0.2:47500",],
             Assert.IsType<TcpDiscoveryStaticIpFinder>(spi.IpFinder).Endpoints
         );
-        Assert.Equal("node-1", runner.Configuration.ConsistentId);
+        Assert.Equal("node-1", configuration.ConsistentId);
+    }
+
+    [Fact]
+    public void WithoutClusterEndpoints_TheNodeIsItsOwnStaticDiscoveryEndpoint()
+    {
+        var configuration = IgniteConfigurationFactory.Create(
+            new IgniteServerSettings(),
+            Logger.None,
+            LocalAddress.Resolve
+        );
+
+        var spi = Assert.IsType<TcpDiscoverySpi>(configuration.DiscoverySpi);
+        Assert.Equal(
+            [$"{LocalAddress.Value}:47500",],
+            Assert.IsType<TcpDiscoveryStaticIpFinder>(spi.IpFinder).Endpoints
+        );
+    }
+
+    [Fact]
+    public void LocalAddress_IsResolvedOnlyWhenNeeded()
+    {
+        // a failing DNS lookup must not break the nodes that do not use the local address
+        static string Fail() => throw new InvalidOperationException("Local IP Address Not Found!");
+
+        IgniteConfigurationFactory.Create(
+            new IgniteServerSettings
+            {
+                ClusterEndpoints = ["a:47500",],
+            },
+            Logger.None,
+            Fail
+        );
+        var withoutStaticIpFinder = IgniteConfigurationFactory.Create(
+            new IgniteServerSettings
+            {
+                UseTcpDiscoveryStaticIpFinder = false,
+            },
+            Logger.None,
+            Fail
+        );
+
+        // the discovery of the Spring configuration (Kubernetes) stays
+        Assert.Null(withoutStaticIpFinder.DiscoverySpi);
     }
 
     [Fact]
@@ -103,44 +142,41 @@ public sealed class IgniteServerRunnerTests
     [Fact]
     public void PeerAssemblyLoading_IsOptIn()
     {
-        using IgniteServerRunner byDefault = new(new IgniteServerRunnerOptions());
-        using IgniteServerRunner optedIn = new(
-            new IgniteServerRunnerOptions
+        var byDefault = IgniteConfigurationFactory.Create(new IgniteServerSettings(), Logger.None, LocalAddress.Resolve);
+        var optedIn = IgniteConfigurationFactory.Create(
+            new IgniteServerSettings
             {
                 PeerAssemblyLoading = true,
-            }
+            },
+            Logger.None,
+            LocalAddress.Resolve
         );
 
-        Assert.Equal(PeerAssemblyLoadingMode.Disabled, byDefault.Configuration.PeerAssemblyLoadingMode);
-        Assert.Equal(PeerAssemblyLoadingMode.CurrentAppDomain, optedIn.Configuration.PeerAssemblyLoadingMode);
+        Assert.Equal(PeerAssemblyLoadingMode.Disabled, byDefault.PeerAssemblyLoadingMode);
+        Assert.Equal(PeerAssemblyLoadingMode.CurrentAppDomain, optedIn.PeerAssemblyLoadingMode);
     }
 
-    [Fact]
-    public void PageEviction_OnlyForInMemoryRegions()
+    [Theory]
+    [InlineData(false, null, DataPageEvictionMode.Random2Lru)]
+    [InlineData(false, "RANDOM_LRU", DataPageEvictionMode.RandomLru)]
+    [InlineData(true, "RANDOM_LRU", DataPageEvictionMode.Disabled)]
+    public void PageEviction_OnlyForInMemoryRegions(bool persistent, string? mode, DataPageEvictionMode expected)
     {
-        using IgniteServerRunner runner = new(new IgniteServerRunnerOptions());
-        runner.SetOffHeapMemoryLimit(256);
+        var configuration = IgniteConfigurationFactory.Create(
+            new IgniteServerSettings
+            {
+                EnableAuthentication = false,
+                PersistenceEnabled = persistent,
+                PageEvictionMode = mode,
+            },
+            Logger.None,
+            LocalAddress.Resolve
+        );
 
-        IgniteConfigurationFactory.SetPageEvictionMode(runner.Configuration);
-        var region = runner.Configuration.DataStorageConfiguration.DefaultDataRegionConfiguration;
-        Assert.Equal(DataPageEvictionMode.Random2Lru, region.PageEvictionMode);
-
-        IgniteConfigurationFactory.SetPageEvictionMode(runner.Configuration, DataPageEvictionMode.RandomLru);
-        Assert.Equal(DataPageEvictionMode.RandomLru, region.PageEvictionMode);
-
-        runner.SetPersistence(true);
-        IgniteConfigurationFactory.SetPageEvictionMode(runner.Configuration, DataPageEvictionMode.RandomLru);
-        Assert.Equal(DataPageEvictionMode.Disabled, region.PageEvictionMode);
-    }
-
-    [Fact]
-    public void SetServerPort_KeepsAnExistingTcpDiscoverySpi()
-    {
-        using IgniteServerRunner runner = new(new IgniteServerRunnerOptions());
-        runner.Configuration.DiscoverySpi = new TcpDiscoverySpi();
-        runner.SetServerPort(47600);
-
-        Assert.Equal(47600, Assert.IsType<TcpDiscoverySpi>(runner.Configuration.DiscoverySpi).LocalPort);
+        Assert.Equal(
+            expected,
+            configuration.DataStorageConfiguration.DefaultDataRegionConfiguration.PageEvictionMode
+        );
     }
 
     [Theory]
@@ -149,7 +185,7 @@ public sealed class IgniteServerRunnerTests
     public void PasswordCandidates_MostLikelyFirst(bool newCluster, string first, string second)
     {
         IgniteUserPasswordManager manager = new(
-            new IgniteServerRunnerOptions
+            new IgniteServerSettings
             {
                 IgniteUserPreviousPassword = "old",
             },
@@ -163,7 +199,7 @@ public sealed class IgniteServerRunnerTests
     public void PasswordClient_ConnectsToTheLocalNodeOnly()
     {
         IgniteUserPasswordManager manager = new(
-            new IgniteServerRunnerOptions
+            new IgniteServerSettings
             {
                 UseClientSsl = true,
                 SslClientCertificatePath = "client.pfx",
@@ -184,7 +220,7 @@ public sealed class IgniteServerRunnerTests
     [Fact]
     public void PasswordCandidates_NeverTheConfiguredPassword()
     {
-        IgniteUserPasswordManager manager = new(new IgniteServerRunnerOptions(), Logger.None);
+        IgniteUserPasswordManager manager = new(new IgniteServerSettings(), Logger.None);
 
         Assert.Empty(manager.GetCurrentPasswordCandidates("ignite", true));
     }

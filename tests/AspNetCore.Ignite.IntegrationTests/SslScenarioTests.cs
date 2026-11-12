@@ -46,10 +46,10 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
         // rotating a keystore restarts the node (after the 10 s debounce), which then serves clients again
         var (exitCode, _, stderr) = await ExecAsync(node, "touch", $"{CertificatesDirectory}/server.jks");
         Assert.True(exitCode == 0, stderr);
-        await TestContainerLogs.WaitForMessageAsync(node, "SSL files changed", 1, TimeSpan.FromSeconds(60));
+        await TestContainerLogs.WaitForMessageAsync(node, ServerLog.SslFilesChanged, 1, TimeSpan.FromSeconds(60));
         await TestContainerLogs.WaitForMessageAsync(
             node,
-            IgniteServerFixture.RunningMessage,
+            ServerLog.Running,
             2,
             TimeSpan.FromSeconds(120)
         );
@@ -91,13 +91,13 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
 
         await TestContainerLogs.WaitForMessageAsync(
             node,
-            "deactivating the cluster so that it stops at once",
+            ServerLog.DeactivatingAsLastServerNode,
             1,
             TimeSpan.FromSeconds(60)
         );
         await TestContainerLogs.WaitForMessageAsync(
             node,
-            IgniteServerFixture.RunningMessage,
+            ServerLog.Running,
             2,
             TimeSpan.FromSeconds(120)
         );
@@ -121,7 +121,7 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
         await using var network = new NetworkBuilder().WithName($"ignite-{Guid.NewGuid():N}").Build();
         await network.CreateAsync();
         const string clusterEndpoints = "ssl-1:47500,ssl-2:47500";
-        await using var node1 = SslNode("Waiting for 2 server nodes")
+        await using var node1 = SslNode(ServerLog.WaitingForServerNodes)
             .WithNetwork(network)
             .WithNetworkAliases("ssl-1")
             .WithEnvironment("DEFAULT_CONSISTENT_ID", "ssl-1")
@@ -141,7 +141,7 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
         await node2.StartAsync();
         await TestContainerLogs.WaitForMessageAsync(
             node1,
-            IgniteServerFixture.RunningMessage,
+            ServerLog.Running,
             1,
             TimeSpan.FromSeconds(60)
         );
@@ -168,13 +168,13 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
 
         await TestContainerLogs.WaitForMessageAsync(
             node1,
-            "activated again after the restart of its last server node",
+            ServerLog.ActivatedAgainAfterRestart,
             1,
             TimeSpan.FromSeconds(120)
         );
         await TestContainerLogs.WaitForMessageAsync(
             node1,
-            IgniteServerFixture.RunningMessage,
+            ServerLog.Running,
             2,
             TimeSpan.FromSeconds(60)
         );
@@ -186,7 +186,7 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
     }
 
     /// <summary>A node with SSL between nodes, from the sample keystores, started once it logs <paramref name="startedMessage" />.</summary>
-    private ContainerBuilder SslNode(string startedMessage = IgniteServerFixture.RunningMessage)
+    private ContainerBuilder SslNode(string startedMessage = ServerLog.Running)
     {
         const UnixFileModes ownerReadWrite = UnixFileModes.UserRead | UnixFileModes.UserWrite;
         var builder = fixture.CreateNodeBuilder()

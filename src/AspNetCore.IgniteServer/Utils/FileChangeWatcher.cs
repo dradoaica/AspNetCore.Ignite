@@ -8,8 +8,8 @@ using System.Threading;
 namespace AspNetCore.IgniteServer.Utils;
 
 /// <summary>
-///     Watches files and invokes a callback once they have settled: after <c>debounce</c> without further changes,
-///     plus a random delay of up to <c>maxJitter</c> so that nodes whose certificates are rotated at the same time do not
+///     Watches files and invokes a callback once they have settled: after <c>debounce</c> without further changes, plus
+///     a random delay of up to <c>maxJitter</c> so that nodes whose certificates are rotated at the same time do not
 ///     restart at the same time.
 /// </summary>
 internal sealed class FileChangeWatcher : IDisposable
@@ -17,7 +17,6 @@ internal sealed class FileChangeWatcher : IDisposable
     private readonly TimeSpan debounce;
     private readonly TimeSpan maxJitter;
     private readonly Action onChanged;
-    private readonly Random random;
     private readonly List<IDisposable> registrations = [];
     private readonly ITimer timer;
     private int disposed;
@@ -27,26 +26,18 @@ internal sealed class FileChangeWatcher : IDisposable
         Action onChanged,
         TimeSpan debounce,
         TimeSpan maxJitter,
-        TimeProvider? timeProvider = null,
-        Random? random = null,
-        bool watchFiles = true
+        TimeProvider? timeProvider = null
     )
     {
         this.onChanged = onChanged;
         this.debounce = debounce;
         this.maxJitter = maxJitter;
-        this.random = random ?? Random.Shared;
         timer = (timeProvider ?? TimeProvider.System).CreateTimer(
             _ => OnSettled(),
             null,
             Timeout.InfiniteTimeSpan,
             Timeout.InfiniteTimeSpan
         );
-        if (!watchFiles)
-        {
-            return;
-        }
-
         foreach (var filePath in filePaths)
         {
             var fullPath = Path.GetFullPath(filePath);
@@ -62,9 +53,6 @@ internal sealed class FileChangeWatcher : IDisposable
             );
         }
     }
-
-    /// <summary>The delay applied after the last change (debounce plus this watcher's jitter).</summary>
-    public TimeSpan? PendingDelay { get; private set; }
 
     public void Dispose()
     {
@@ -85,14 +73,12 @@ internal sealed class FileChangeWatcher : IDisposable
             return;
         }
 
-        var jitter = TimeSpan.FromMilliseconds(random.NextDouble() * maxJitter.TotalMilliseconds);
-        PendingDelay = debounce + jitter;
-        timer.Change(PendingDelay.Value, Timeout.InfiniteTimeSpan);
+        var jitter = TimeSpan.FromMilliseconds(Random.Shared.NextDouble() * maxJitter.TotalMilliseconds);
+        timer.Change(debounce + jitter, Timeout.InfiniteTimeSpan);
     }
 
     private void OnSettled()
     {
-        PendingDelay = null;
         if (Volatile.Read(ref disposed) == 0)
         {
             onChanged();

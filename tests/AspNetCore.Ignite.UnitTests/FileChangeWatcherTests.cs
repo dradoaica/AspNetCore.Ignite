@@ -14,14 +14,7 @@ public sealed class FileChangeWatcherTests
     {
         FakeTimeProvider time = new();
         var invocations = 0;
-        using FileChangeWatcher watcher = new(
-            [],
-            () => invocations++,
-            Debounce,
-            TimeSpan.Zero,
-            time,
-            watchFiles: false
-        );
+        using FileChangeWatcher watcher = new([], () => invocations++, Debounce, TimeSpan.Zero, time);
 
         watcher.NotifyChanged();
         time.Advance(TimeSpan.FromSeconds(9));
@@ -44,23 +37,13 @@ public sealed class FileChangeWatcherTests
         FakeTimeProvider time = new();
         var invocations = 0;
         var maxJitter = TimeSpan.FromSeconds(60);
-        using FileChangeWatcher watcher = new(
-            [],
-            () => invocations++,
-            Debounce,
-            maxJitter,
-            time,
-            new Random(42),
-            false
-        );
+        using FileChangeWatcher watcher = new([], () => invocations++, Debounce, maxJitter, time);
 
         watcher.NotifyChanged();
-        var delay = watcher.PendingDelay!.Value;
 
-        Assert.InRange(delay, Debounce, Debounce + maxJitter);
-        time.Advance(delay - TimeSpan.FromMilliseconds(1));
+        time.Advance(Debounce - TimeSpan.FromMilliseconds(1));
         Assert.Equal(0, invocations);
-        time.Advance(TimeSpan.FromMilliseconds(1));
+        time.Advance(maxJitter + TimeSpan.FromMilliseconds(1));
         Assert.Equal(1, invocations);
     }
 
@@ -69,7 +52,7 @@ public sealed class FileChangeWatcherTests
     {
         FakeTimeProvider time = new();
         var invocations = 0;
-        FileChangeWatcher watcher = new([], () => invocations++, Debounce, TimeSpan.Zero, time, watchFiles: false);
+        FileChangeWatcher watcher = new([], () => invocations++, Debounce, TimeSpan.Zero, time);
 
         watcher.NotifyChanged();
         watcher.Dispose();

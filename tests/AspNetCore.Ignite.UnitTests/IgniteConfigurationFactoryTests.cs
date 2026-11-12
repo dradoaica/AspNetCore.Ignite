@@ -20,11 +20,13 @@ public sealed class IgniteConfigurationFactoryTests
     public void ShippedConfigurationFiles_KeepTheServerDefaults(string file, bool persistent)
     {
         var configuration = IgniteConfigurationFactory.Create(
-            new IgniteServerRunnerOptions
+            new IgniteServerSettings
             {
-                ConfigurationFile = Path.Combine(ConfigDirectory, file),
+                EnableAuthentication = false,
+                ConfigFile = Path.Combine(ConfigDirectory, file),
             },
-            Logger.None
+            Logger.None,
+            LocalAddress.Resolve
         );
 
         Assert.Contains(
@@ -84,21 +86,22 @@ public sealed class IgniteConfigurationFactoryTests
     public void Options_SetJvmOptionsTimeoutsPoolsAndStorage()
     {
         var configuration = IgniteConfigurationFactory.Create(
-            new IgniteServerRunnerOptions
+            new IgniteServerSettings
             {
                 JvmMaxMetaspaceMb = 512,
                 JvmMaxDirectMemoryMb = 2960,
-                ExtraJvmOptions = ["-Dfoo=bar", "-Xrs",],
-                NetworkTimeout = TimeSpan.FromSeconds(5),
+                ExtraJvmOpts = "-Dfoo=bar -Xrs",
+                NetworkTimeoutMs = 5000,
                 PublicThreadPoolSize = 16,
                 StripedThreadPoolSize = 8,
                 StoragePath = "/storage",
                 WalPath = "/wal",
                 WalArchivePath = "/wal/archive",
                 WalCompactionEnabled = true,
-                WalMode = WalMode.LogOnly,
+                WalMode = "LOG_ONLY",
             },
-            Logger.None
+            Logger.None,
+            LocalAddress.Resolve
         );
 
         Assert.Contains("-XX:MaxMetaspaceSize=512m", configuration.JvmOptions);
@@ -150,16 +153,17 @@ public sealed class IgniteConfigurationFactoryTests
     {
         Assert.Equal(
             IgniteConfiguration.DefaultSqlQueryHistorySize,
-            IgniteConfigurationFactory.Create(new IgniteServerRunnerOptions(), Logger.None).SqlQueryHistorySize
+            IgniteConfigurationFactory.Create(new IgniteServerSettings(), Logger.None, LocalAddress.Resolve).SqlQueryHistorySize
         );
         Assert.Equal(
             0,
             IgniteConfigurationFactory.Create(
-                    new IgniteServerRunnerOptions
+                    new IgniteServerSettings
                     {
                         SqlQueryHistorySize = 0,
                     },
-                    Logger.None
+                    Logger.None,
+                    LocalAddress.Resolve
                 )
                 .SqlQueryHistorySize
         );

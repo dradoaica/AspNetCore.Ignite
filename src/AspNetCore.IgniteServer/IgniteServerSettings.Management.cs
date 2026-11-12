@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using System.Collections.Generic;
 
 namespace AspNetCore.IgniteServer;
 
@@ -41,4 +42,22 @@ internal sealed partial class IgniteServerSettings
 
     [ConfigurationKeyName("SHUTDOWN_TIMEOUT_IN_SECONDS")]
     public int ShutdownTimeoutInSeconds { get; set; } = 30;
+
+    private void ValidateManagement(List<string> errors)
+    {
+        RequirePositive(errors, "REBALANCE_READINESS_MAX_WAIT_IN_SECONDS", RebalanceReadinessMaxWaitInSeconds);
+        RequirePositive(errors, "SHUTDOWN_TIMEOUT_IN_SECONDS", ShutdownTimeoutInSeconds);
+        if (GracefulStopTimeoutInSeconds <= 0 || GracefulStopTimeoutInSeconds >= ShutdownTimeoutInSeconds)
+        {
+            errors.Add(
+                "GRACEFUL_STOP_TIMEOUT_IN_SECONDS must be positive and less than SHUTDOWN_TIMEOUT_IN_SECONDS (the " +
+                "host waits for the stop)."
+            );
+        }
+
+        if (ManagementPort is <= 0 or > 65535)
+        {
+            errors.Add("MANAGEMENT_PORT must be a valid port.");
+        }
+    }
 }

@@ -142,7 +142,7 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
         Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
         await using var node = fixture.CreateNodeBuilder()
             .WithEnvironment("SQL_QUERY_HISTORY_SIZE", "0")
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage))
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ServerLog.Running))
             .Build();
         await node.StartAsync();
         using var igniteClient = Connect(IgniteServerFixture.GetEndpoint(node), IgniteServerFixture.Password);
@@ -178,7 +178,7 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
             // the same data directory for both starts
             .WithEnvironment("DEFAULT_CONSISTENT_ID", "rotation")
             .WithEnvironment("IGNITE_USER_PASSWORD", password)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(IgniteServerFixture.RunningMessage));
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ServerLog.Running));
         return previousPassword == null ? builder.Build()
             : builder.WithEnvironment("IGNITE_USER_PREVIOUS_PASSWORD", previousPassword).Build();
     }
