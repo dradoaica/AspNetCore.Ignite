@@ -94,18 +94,23 @@ public sealed class IgniteServerRunnerTests
         Assert.Equal("node-1", configuration.ConsistentId);
     }
 
-    [Fact]
-    public void WithoutClusterEndpoints_TheNodeIsItsOwnStaticDiscoveryEndpoint()
+    [Theory]
+    [InlineData(null, 47500)]
+    [InlineData(47600, 47600)]
+    public void WithoutClusterEndpoints_TheNodeIsItsOwnStaticDiscoveryEndpoint(int? spiPort, int endpointPort)
     {
         var configuration = IgniteConfigurationFactory.Create(
-            new IgniteServerSettings(),
+            new IgniteServerSettings
+            {
+                SpiPort = spiPort,
+            },
             Logger.None,
             LocalAddress.Resolve
         );
 
         var spi = Assert.IsType<TcpDiscoverySpi>(configuration.DiscoverySpi);
         Assert.Equal(
-            [$"{LocalAddress.Value}:47500",],
+            [$"{LocalAddress.Value}:{endpointPort}",],
             Assert.IsType<TcpDiscoveryStaticIpFinder>(spi.IpFinder).Endpoints
         );
     }

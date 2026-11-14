@@ -31,7 +31,10 @@ internal sealed class IgniteNodeMetrics : IDisposable
     private readonly Lock snapshotLock = new();
     private readonly TimeProvider timeProvider;
     private NodeSnapshot? snapshot;
-    private DateTimeOffset snapshotTime;
+
+    // The node of the last snapshot (null: none was taken yet, or no node ran), also when taking it failed.
+    private IIgnite? snapshotNode;
+    private DateTimeOffset? snapshotTime;
 
     public IgniteNodeMetrics(
         IgniteNodeState nodeState,
@@ -196,29 +199,45 @@ internal sealed class IgniteNodeMetrics : IDisposable
     private List<Measurement<T>> Read<T>(Func<NodeSnapshot, IEnumerable<Measurement<T>>> read)
         where T : struct
     {
-        // The node may stop while it is read. Reporting nothing is better than failing the whole scrape.
+        // The snapshot holds values already read, so this fails only for a bug: it must not fail the whole scrape.
         try
         {
             return GetSnapshot() is { } current ? read(current).ToList() : [];
         }
         catch (Exception ex)
         {
-            logger?.Debug(ex, "Ignite metrics were not read.");
+            logger?.Warning(ex, "An Ignite metric was not reported.");
             return [];
         }
     }
 
+    /// <summary>
+    ///     The snapshot of the running node, taken at most once per <see cref="SnapshotMaxAge" />: a failure too, so
+    ///     that a scrape of a stopping node reads it (and logs) once rather than once per instrument.
+    /// </summary>
     private NodeSnapshot? GetSnapshot()
     {
         lock (snapshotLock)
         {
             var now = timeProvider.GetUtcNow();
-            if (snapshot == null ||
-                now - snapshotTime >= SnapshotMaxAge ||
-                !ReferenceEquals(snapshot.Node, nodeState.Node))
+            var node = nodeState.Node;
+            if (snapshotTime is not { } taken || now - taken >= SnapshotMaxAge || !ReferenceEquals(snapshotNode, node))
             {
-                snapshot = nodeState.Node is { } node ? NodeSnapshot.Take(node, perCache, logger) : null;
+                snapshot = null;
+                snapshotNode = node;
                 snapshotTime = now;
+                if (node != null)
+                {
+                    try
+                    {
+                        snapshot = NodeSnapshot.Take(node, perCache, logger);
+                    }
+                    catch (Exception ex)
+                    {
+                        // The node may stop while it is read. Reporting nothing beats failing the whole scrape.
+                        logger?.Debug(ex, "The Ignite node metrics were not read.");
+                    }
+                }
             }
 
             return snapshot;
@@ -226,7 +245,6 @@ internal sealed class IgniteNodeMetrics : IDisposable
     }
 
     internal sealed record NodeSnapshot(
-        IIgnite Node,
         bool ClusterActive,
         int ServerNodes,
         int BaselineNodes,
@@ -266,7 +284,6 @@ internal sealed class IgniteNodeMetrics : IDisposable
             }
 
             return new NodeSnapshot(
-                node,
                 clusterActive,
                 cluster.ForServers().GetNodes().Count,
                 IgniteServerRunner.GetBaselineTopology(cluster)?.Count ?? 0,

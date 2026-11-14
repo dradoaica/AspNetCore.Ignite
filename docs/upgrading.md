@@ -25,6 +25,8 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
 * SSL restarts are graceful and jittered; the process exits with `1` on failures (it always exited with `0`).
 * The settings inserted into the Spring configuration (`K8S_*` and, with `USE_CLIENT_SSL`, `SSL_*`) must not contain
   `#{`, which Spring would evaluate as an expression: the server refuses to start with one.
+* A list setting (`CLUSTER_ENDPOINTS`, `SQL_SCHEMAS`) comes from one source, the one of the highest priority: `-Cluster`
+  replaces the endpoints of the environment instead of overwriting them index by index.
 * Kubernetes discovery (`USE_TCP_DISCOVERY_STATIC_IP_FINDER=false` without `CLUSTER_ENDPOINTS`, `SPI_PORT` or
   `CONFIG_FILE`) needs `K8S_NAMESPACE` and `K8S_SERVICE_NAME`: the server refuses to start without them (the chart sets
   both).

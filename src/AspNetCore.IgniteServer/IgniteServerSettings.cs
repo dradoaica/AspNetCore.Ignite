@@ -101,21 +101,51 @@ internal sealed partial class IgniteServerSettings
     internal bool UsesKubernetesDiscovery =>
         ClusterEndpoints.Count == 0 && !UseTcpDiscoveryStaticIpFinder && SpiPort is null;
 
-    /// <summary>Binds the settings; CLUSTER_ENDPOINTS is a list (CLUSTER_ENDPOINTS__0, ...) or a comma-separated value.</summary>
+    /// <summary>
+    ///     Binds the settings. CLUSTER_ENDPOINTS and SQL_SCHEMAS are lists (CLUSTER_ENDPOINTS__0, ...) or
+    ///     comma-separated values, taken from the source of the highest priority that sets them.
+    /// </summary>
     public static IgniteServerSettings Load(IConfiguration configuration)
     {
         var settings = configuration.Get<IgniteServerSettings>() ?? new IgniteServerSettings();
-        if (settings.ClusterEndpoints.Count == 0 && configuration["CLUSTER_ENDPOINTS"] is { } clusterEndpoints)
-        {
-            settings.ClusterEndpoints = SplitList(clusterEndpoints);
-        }
-
-        if (settings.SqlSchemas.Count == 0 && configuration["SQL_SCHEMAS"] is { } sqlSchemas)
-        {
-            settings.SqlSchemas = SplitList(sqlSchemas);
-        }
-
+        settings.ClusterEndpoints = GetList(configuration, "CLUSTER_ENDPOINTS");
+        settings.SqlSchemas = GetList(configuration, "SQL_SCHEMAS");
         return settings;
+    }
+
+    /// <summary>
+    ///     The list of the source of the highest priority that sets <paramref name="key" />. The configuration would
+    ///     merge the lists of several sources index by index: -Cluster a with CLUSTER_ENDPOINTS__0 and __1 in the
+    ///     environment would be a and the second endpoint of the environment.
+    /// </summary>
+    private static List<string> GetList(IConfiguration configuration, string key)
+    {
+        if (configuration is not IConfigurationRoot root)
+        {
+            // a section: its sources are not known, so its values are taken as they are merged
+            return configuration.GetSection(key).Get<List<string>>() is { Count: > 0, } merged ? merged
+                : configuration[key] is { } scalar ? SplitList(scalar) : [];
+        }
+
+        foreach (var provider in root.Providers.Reverse())
+        {
+            var indexes = provider.GetChildKeys([], key).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (indexes.Count > 0)
+            {
+                return indexes.OrderBy(index => int.TryParse(index, out var number) ? number : int.MaxValue)
+                    .Select(index => provider.TryGet($"{key}:{index}", out var item) ? item?.Trim() : null)
+                    .Where(item => !string.IsNullOrEmpty(item))
+                    .Select(item => item!)
+                    .ToList();
+            }
+
+            if (provider.TryGet(key, out var value) && value != null)
+            {
+                return SplitList(value);
+            }
+        }
+
+        return [];
     }
 
     /// <summary>Returns the configuration errors (empty when the settings are valid).</summary>

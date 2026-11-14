@@ -331,10 +331,11 @@ internal static class IgniteConfigurationFactory
             return;
         }
 
-        // Without CLUSTER_ENDPOINTS, no other node is known, so the node is its own discovery endpoint. Other nodes
-        // join it by naming it in their CLUSTER_ENDPOINTS.
+        // Without CLUSTER_ENDPOINTS, no other node is known, so the node is its own discovery endpoint (on its own
+        // port). Other nodes join it by naming it in their CLUSTER_ENDPOINTS.
         List<string> endpoints = settings.ClusterEndpoints.Count > 0 ? settings.ClusterEndpoints
-            : settings.UseTcpDiscoveryStaticIpFinder ? [$"{getLocalIpAddress()}:{DefaultDiscoveryPort}",] : [];
+            : settings.UseTcpDiscoveryStaticIpFinder
+                ? [$"{getLocalIpAddress()}:{settings.SpiPort ?? DefaultDiscoveryPort}",] : [];
 
         if (igniteConfiguration.DiscoverySpi is not null and not TcpDiscoverySpi)
         {

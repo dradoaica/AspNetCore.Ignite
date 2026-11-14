@@ -80,6 +80,34 @@ public sealed class IgniteServerSettingsTests
         );
     }
 
+    [Theory]
+    [InlineData("CLUSTER_ENDPOINTS:0", "cmd:47500")]
+    [InlineData("CLUSTER_ENDPOINTS", "cmd:47500")]
+    public void Load_Lists_ComeFromTheSourceOfTheHighestPriority(string key, string value)
+    {
+        // as the environment (CLUSTER_ENDPOINTS__0, __1) and then the command line (-Cluster)
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["CLUSTER_ENDPOINTS:0"] = "env-a:47500",
+                    ["CLUSTER_ENDPOINTS:1"] = "env-b:47500",
+                    ["SQL_SCHEMAS"] = "ENV",
+                }
+            )
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    [key] = value,
+                }
+            )
+            .Build();
+
+        var settings = IgniteServerSettings.Load(configuration);
+
+        Assert.Equal([value,], settings.ClusterEndpoints);
+        Assert.Equal(["ENV",], settings.SqlSchemas);
+    }
+
     [Fact]
     public void Load_ClusterEndpoints_CommaSeparated() => Assert.Equal(
         ["a:47500", "b:47500",],

@@ -19,6 +19,7 @@ internal sealed class IgniteServerRunner : IDisposable
 {
     private static readonly TimeSpan ActivationPollInterval = TimeSpan.FromSeconds(5);
 
+    private readonly INodeLauncher launcher;
     private readonly ILogger logger;
     private readonly IgniteServerSettings settings;
     private readonly Lock stopLock = new();
@@ -41,11 +42,13 @@ internal sealed class IgniteServerRunner : IDisposable
         IgniteServerSettings settings,
         ILogger logger,
         Func<string> getLocalIpAddress,
-        string? springConfigPath = null
+        string? springConfigPath = null,
+        INodeLauncher? launcher = null
     )
     {
         this.settings = settings;
         this.logger = logger;
+        this.launcher = launcher ?? IgnitionNodeLauncher.Instance;
         Configuration = IgniteConfigurationFactory.Create(settings, logger, getLocalIpAddress, springConfigPath);
         RebalanceTracker = new RebalanceTracker(
             this.logger,
@@ -117,7 +120,7 @@ internal sealed class IgniteServerRunner : IDisposable
     {
         logger.Information("Starting Ignite server runner...");
         RebalanceTracker.Reset();
-        var node = Ignition.Start(Configuration);
+        var node = launcher.Start(Configuration);
         TaskCompletionSource<string?> stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
         node.Stopped += (s, _) =>
         {
@@ -175,25 +178,29 @@ internal sealed class IgniteServerRunner : IDisposable
 
     /// <summary>
     ///     Stops the running node gracefully so that <see cref="Run" /> starts it again (e.g., with renewed
-    ///     certificates); nothing happens when no node is running or it is being stopped. Returns false when the node
-    ///     did not stop within <paramref name="timeout" /> (see <see cref="StopNodeGracefully" />): it then still
-    ///     stops, but is not started again.
+    ///     certificates), within <paramref name="timeout" /> (see <see cref="StopNodeGracefully" />).
     /// </summary>
-    public bool Restart(TimeSpan timeout)
+    public RestartResult Restart(TimeSpan timeout)
     {
         if (Node == null || Interlocked.CompareExchange(ref request, Request.Restart, Request.None) == Request.Stop)
         {
-            return true;
+            return RestartResult.NotRunning;
         }
 
         logger.Information("Restarting Ignite server runner...");
         if (StopNodeGracefully(timeout, true))
         {
-            return true;
+            return RestartResult.Restarting;
         }
 
-        Interlocked.CompareExchange(ref request, Request.None, Request.Restart);
-        return false;
+        // The node stops on its own time; withdrawn, the request no longer starts it again. A request already taken
+        // means the node stopped just after the timeout, and Run started it again.
+        return Interlocked.CompareExchange(ref request, Request.None, Request.Restart) switch
+        {
+            Request.Restart => RestartResult.TimedOut,
+            Request.None => RestartResult.Restarting,
+            _ => RestartResult.NotRunning,
+        };
     }
 
     /// <summary>
@@ -345,7 +352,7 @@ internal sealed class IgniteServerRunner : IDisposable
                 return null;
             }
 
-            var stop = Task.Run(() => Ignition.Stop(node.Name, cancel));
+            var stop = Task.Run(() => launcher.Stop(node.Name, cancel));
             Volatile.Write(ref nodeStop, stop);
             return stop;
         }
@@ -406,6 +413,19 @@ internal sealed class IgniteServerRunner : IDisposable
         {
             return null;
         }
+    }
+
+    /// <summary>The outcome of <see cref="Restart" />.</summary>
+    public enum RestartResult
+    {
+        /// <summary>The node stopped, and <see cref="Run" /> starts it again.</summary>
+        Restarting,
+
+        /// <summary>No node is running (it is starting or stopping): nothing was done.</summary>
+        NotRunning,
+
+        /// <summary>The node did not stop within the timeout; it still stops, but is not started again.</summary>
+        TimedOut,
     }
 
     private enum Request

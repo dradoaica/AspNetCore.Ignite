@@ -199,28 +199,39 @@ internal sealed class IgniteServerHostedService(
 
         if (runner?.Node == null)
         {
-            // The node is starting and may already have read the previous files. Asking the watcher again makes
-            // this method run once more after the usual delay, when the node can be restarted.
-            logger.Information("SSL files changed while the Ignite node starts: it restarts once started.");
-            sslFileWatcher?.NotifyChanged();
+            RestartOnceStarted();
             return;
         }
 
         logger.Information("SSL files changed, restarting the Ignite node...");
         var timeout = TimeSpan.FromSeconds(settings.GracefulStopTimeoutInSeconds);
-        if (runner.Restart(timeout))
+        switch (runner.Restart(timeout))
         {
-            return;
+            case IgniteServerRunner.RestartResult.NotRunning:
+                // The node stopped, or began to, since the check above.
+                RestartOnceStarted();
+                break;
+            case IgniteServerRunner.RestartResult.TimedOut:
+                // The graceful stop can take long (e.g., while another node restarts too). The server exits instead,
+                // and its container restarts with the renewed files.
+                logger.Error(
+                    "The Ignite node did not stop gracefully within {Timeout} to restart with the renewed SSL files; " +
+                    "the server stops so that its container restarts with them.",
+                    timeout
+                );
+                Fail();
+                break;
         }
+    }
 
-        // The graceful stop can take long (e.g., while another node restarts too). The server exits instead, and its
-        // container restarts with the renewed files.
-        logger.Error(
-            "The Ignite node did not stop gracefully within {Timeout} to restart with the renewed SSL files; the " +
-            "server stops so that its container restarts with them.",
-            timeout
-        );
-        Fail();
+    /// <summary>
+    ///     The node is starting and may already have read the previous files. Asking the watcher again makes
+    ///     <see cref="OnSslFilesChanged" /> run once more after the usual delay, when the node can be restarted.
+    /// </summary>
+    private void RestartOnceStarted()
+    {
+        logger.Information("SSL files changed while the Ignite node starts: it restarts once started.");
+        sslFileWatcher?.NotifyChanged();
     }
 
     private void Fail()

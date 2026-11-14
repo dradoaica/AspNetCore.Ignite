@@ -49,6 +49,9 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
 
     // the caches whose loss was logged in the current batch of losses
     private readonly ConcurrentDictionary<string, byte> reported = new(StringComparer.Ordinal);
+
+    // Timer callbacks can overlap: a reset that takes longer than the debounce would otherwise run twice at once.
+    private readonly Lock resetLock = new();
     private readonly ITimer timer;
     private int disposed;
 
@@ -145,10 +148,24 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
 
     private void OnBatchEnded()
     {
-        reported.Clear();
-        if (autoReset)
+        if (!resetLock.TryEnter())
         {
-            Reset();
+            // The reset in progress may have missed the losses of this batch: they are handled after it.
+            ScheduleBatchEnd();
+            return;
+        }
+
+        try
+        {
+            reported.Clear();
+            if (autoReset)
+            {
+                Reset();
+            }
+        }
+        finally
+        {
+            resetLock.Exit();
         }
     }
 
