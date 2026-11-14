@@ -37,10 +37,11 @@ from the WAL on the next start). The cluster's last server node deactivates the 
 next start activates it again); to stop several nodes at once (e.g., `helm uninstall`), deactivate the cluster first
 (`control.sh --set-state INACTIVE --yes`).
 
-| Exit code | Meaning                                                                               |
-|-----------|---------------------------------------------------------------------------------------|
-| `0`       | Stopped gracefully (SIGTERM/CTRL+C).                                                  |
-| `1`       | Invalid arguments or settings, failed start, or the Ignite node stopped unexpectedly. |
+| Exit code | Meaning                                                                                        |
+|-----------|------------------------------------------------------------------------------------------------|
+| `0`       | Stopped gracefully (SIGTERM/CTRL+C).                                                           |
+| `1`       | Invalid arguments or settings, failed start, or the Ignite node stopped unexpectedly.          |
+| `2`       | Stopped, but not within `GRACEFUL_STOP_TIMEOUT_IN_SECONDS`: the node stopped with the process. |
 
 ## Settings
 

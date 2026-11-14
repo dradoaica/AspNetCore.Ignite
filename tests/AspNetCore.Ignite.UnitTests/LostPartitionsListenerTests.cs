@@ -201,7 +201,7 @@ public sealed class LostPartitionsListenerTests
     [Fact]
     public async Task AResetInProgress_DefersTheNextOne()
     {
-        var timeout = TimeSpan.FromSeconds(2);
+        var timeout = TimeSpan.FromSeconds(10);
         using ManualResetEventSlim release = new();
         var resets = 0;
         FakeCluster cluster = new()

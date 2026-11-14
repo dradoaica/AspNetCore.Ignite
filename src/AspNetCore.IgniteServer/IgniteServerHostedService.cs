@@ -2,7 +2,6 @@ using AspNetCore.IgniteServer.Utils;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,22 +10,23 @@ using System.Xml.Linq;
 
 namespace AspNetCore.IgniteServer;
 
-/// <summary>Runs the Ignite node for the lifetime of the host, restarting it when its SSL files change.</summary>
+/// <summary>
+///     Runs the Ignite node for the lifetime of the host: renders its Spring configuration, starts it, restarts it when
+///     its SSL files change (<see cref="SslFileRestarter" />), stops it with the host, and sets the exit code.
+/// </summary>
 internal sealed class IgniteServerHostedService(
     IgniteServerSettings settings,
     ILogger logger,
     IHostApplicationLifetime lifetime,
     IgniteNodeState nodeState,
-    INodeLauncher launcher
+    INodeLauncher launcher,
+    ServerExit exit
 ) : BackgroundService
 {
-    private static readonly TimeSpan SslFileChangeDebounce = TimeSpan.FromSeconds(10);
-
     // Guards stopping and runner together: StopAsync either finds the runner and stops it, or sets stopping before
     // the runner exists, and RunAsync then does not start the node.
     private readonly Lock gate = new();
     private IgniteServerRunner? runner;
-    private FileChangeWatcher? sslFileWatcher;
     private volatile bool stopping;
 
     private bool IsStopping => stopping || lifetime.ApplicationStopping.IsCancellationRequested;
@@ -51,16 +51,21 @@ internal sealed class IgniteServerHostedService(
             {
                 // Off the host's thread, so that the host can stop waiting at its own timeout. Validation keeps
                 // GRACEFUL_STOP_TIMEOUT_IN_SECONDS below it, so this happens only when the host is stopped otherwise.
-                await Task.Run(
+                var graceful = await Task.Run(
                         () => current.Stop(TimeSpan.FromSeconds(settings.GracefulStopTimeoutInSeconds)),
                         CancellationToken.None
                     )
                     .WaitAsync(cancellationToken)
                     .ConfigureAwait(false);
+                if (!graceful)
+                {
+                    exit.Set(ServerExit.NotGraceful);
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 logger.Warning("The host stopped waiting for the Ignite node to stop; it stops with the process.");
+                exit.Set(ServerExit.NotGraceful);
             }
         }
 
@@ -77,33 +82,10 @@ internal sealed class IgniteServerHostedService(
     private async Task RunAsync(CancellationToken stoppingToken)
     {
         string? springConfigPath = null;
+        SslFileRestarter? sslFileRestarter = null;
         try
         {
-            if (settings.EnableAuthentication && string.IsNullOrWhiteSpace(settings.IgniteUserPassword))
-            {
-                logger.Warning(
-                    "Authentication is enabled but IGNITE_USER_PASSWORD is not set: the default 'ignite' user keeps " +
-                    "its well-known password."
-                );
-            }
-
-            if (!settings.UseSsl)
-            {
-                logger.Warning(
-                    "USE_SSL is disabled: nodes join the cluster unauthenticated and unencrypted, so restrict the " +
-                    "discovery and communication ports (47500, 47100) to the cluster's nodes, e.g., with a " +
-                    "NetworkPolicy."
-                );
-            }
-
-            if (settings.PeerAssemblyLoading)
-            {
-                logger.Warning(
-                    "PEER_ASSEMBLY_LOADING is enabled: this node loads and runs .NET assemblies sent by any node of " +
-                    "the cluster."
-                );
-            }
-
+            LogSecurityWarnings();
             springConfigPath = await SpringConfigRenderer.RenderToFileAsync(
                     Path.Combine(
                         AppContext.BaseDirectory,
@@ -135,7 +117,7 @@ internal sealed class IgniteServerHostedService(
             }
 
             nodeState.SetRunner(created);
-            sslFileWatcher = CreateSslFileWatcher();
+            sslFileRestarter = SslFileRestarter.Create(settings, logger, created, () => IsStopping, Fail);
             // WaitAsync lets the host stop even when the node itself cannot.
             await created.Run().WaitAsync(stoppingToken).ConfigureAwait(false);
 
@@ -156,7 +138,7 @@ internal sealed class IgniteServerHostedService(
         }
         finally
         {
-            sslFileWatcher?.Dispose();
+            sslFileRestarter?.Dispose();
             if (springConfigPath != null)
             {
                 // Read by every (re)start of the node, so it is removed only now. It may contain keystore passwords.
@@ -182,94 +164,37 @@ internal sealed class IgniteServerHostedService(
         }
     }
 
-    private FileChangeWatcher? CreateSslFileWatcher()
+    private void LogSecurityWarnings()
     {
-        List<string> sslFiles = [];
-        if (settings.UseSsl || settings.UseClientSsl)
+        if (settings.EnableAuthentication && string.IsNullOrWhiteSpace(settings.IgniteUserPassword))
         {
-            sslFiles.Add(settings.SslKeyStoreFilePath!);
-            sslFiles.Add(settings.SslTrustStoreFilePath!);
-        }
-
-        if (settings.UseClientSsl)
-        {
-            sslFiles.Add(settings.SslClientCertificatePath!);
-        }
-
-        if (sslFiles.Count == 0)
-        {
-            return null;
-        }
-
-        if (!settings.RestartOnSslFileChange)
-        {
-            logger.Information(
-                "RESTART_ON_SSL_FILE_CHANGE is disabled: renewed SSL files are used after the next restart only."
+            logger.Warning(
+                "Authentication is enabled but IGNITE_USER_PASSWORD is not set: the default 'ignite' user keeps " +
+                "its well-known password."
             );
-            return null;
         }
 
-        return new FileChangeWatcher(
-            sslFiles,
-            OnSslFilesChanged,
-            SslFileChangeDebounce,
-            TimeSpan.FromSeconds(settings.SslRestartMaxJitterInSeconds)
-        );
-    }
-
-    internal void OnSslFilesChanged()
-    {
-        if (IsStopping)
+        if (!settings.UseSsl)
         {
-            return;
+            logger.Warning(
+                "USE_SSL is disabled: nodes join the cluster unauthenticated and unencrypted, so restrict the " +
+                "discovery and communication ports (47500, 47100) to the cluster's nodes, e.g., with a " +
+                "NetworkPolicy."
+            );
         }
 
-        if (runner?.Node == null)
+        if (settings.PeerAssemblyLoading)
         {
-            RestartOnceStarted();
-            return;
+            logger.Warning(
+                "PEER_ASSEMBLY_LOADING is enabled: this node loads and runs .NET assemblies sent by any node of " +
+                "the cluster."
+            );
         }
-
-        logger.Information("SSL files changed, restarting the Ignite node...");
-        var timeout = TimeSpan.FromSeconds(settings.GracefulStopTimeoutInSeconds);
-        switch (runner.Restart(timeout))
-        {
-            case IgniteServerRunner.RestartResult.NotRunning:
-                // The node stopped, or began to, since the check above.
-                RestartOnceStarted();
-                break;
-            case IgniteServerRunner.RestartResult.TimedOut:
-                // The graceful stop can take long (e.g., while another node restarts too). The server exits instead,
-                // and its container restarts with the renewed files.
-                logger.Error(
-                    "The Ignite node did not stop gracefully within {Timeout} to restart with the renewed SSL files; " +
-                    "the server stops so that its container restarts with them.",
-                    timeout
-                );
-                Fail();
-                break;
-        }
-    }
-
-    /// <summary>
-    ///     The node is starting and may already have read the previous files. Asking the watcher again makes
-    ///     <see cref="OnSslFilesChanged" /> run once more after the usual delay, when the node can be restarted.
-    /// </summary>
-    private void RestartOnceStarted()
-    {
-        // e.g., Restart found no node because the host stopped it in the meantime
-        if (IsStopping)
-        {
-            return;
-        }
-
-        logger.Information("SSL files changed while the Ignite node starts: it restarts once started.");
-        sslFileWatcher?.NotifyChanged();
     }
 
     private void Fail()
     {
-        Environment.ExitCode = 1;
+        exit.Set(ServerExit.Failure);
         lifetime.StopApplication();
     }
 }

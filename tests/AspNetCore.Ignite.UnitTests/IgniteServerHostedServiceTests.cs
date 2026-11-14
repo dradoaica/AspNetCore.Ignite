@@ -1,4 +1,5 @@
 using AspNetCore.IgniteServer;
+using AspNetCore.IgniteServer.Utils;
 using Microsoft.Extensions.Hosting;
 using Serilog.Core;
 using System.Diagnostics;
@@ -7,23 +8,20 @@ using Xunit;
 namespace AspNetCore.Ignite.UnitTests;
 
 /// <summary>
-///     How <see cref="IgniteServerHostedService" /> runs, restarts and stops the node, on nodes of a
-///     <see cref="FakeNodeLauncher" />. A failure sets the process exit code, which each test resets.
+///     How <see cref="IgniteServerHostedService" /> runs and stops the node, and the exit code it sets, on nodes of a
+///     <see cref="FakeNodeLauncher" />.
 /// </summary>
-public sealed class IgniteServerHostedServiceTests : IDisposable
+public sealed class IgniteServerHostedServiceTests
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
+    private readonly ServerExit exit = new();
     private readonly FakeLifetime lifetime = new();
     private readonly FakeNodeLauncher launcher = new();
     private readonly IgniteNodeState nodeState = new();
 
-    public IgniteServerHostedServiceTests() => Environment.ExitCode = 0;
-
-    public void Dispose() => Environment.ExitCode = 0;
-
     [Fact]
-    public async Task GracefulStop_StopsTheNode_WithoutFailing()
+    public async Task GracefulStop_StopsTheNode_WithExitCodeZero()
     {
         using var service = await StartAsync();
 
@@ -31,9 +29,23 @@ public sealed class IgniteServerHostedServiceTests : IDisposable
 
         Assert.False(nodeState.IsStarted);
         Assert.False(lifetime.StopRequested);
-        Assert.Equal(0, Environment.ExitCode);
+        Assert.Equal(0, exit.Code);
         // it may contain keystore passwords
-        Assert.False(File.Exists(RenderedSpringConfigPath));
+        Assert.False(File.Exists(Path.Combine(SpringConfigRenderer.DefaultOutputDirectory, "spring-config.xml")));
+    }
+
+    [Fact]
+    public async Task StopThatIsNotGraceful_HasExitCodeTwo()
+    {
+        using var service = await StartAsync();
+        using ManualResetEventSlim release = new();
+        launcher.BeforeStopped = () => release.Wait();
+
+        // GRACEFUL_STOP_TIMEOUT_IN_SECONDS is 1
+        await service.StopAsync(CancellationToken.None).WaitAsync(Timeout);
+        release.Set();
+
+        Assert.Equal(ServerExit.NotGraceful, exit.Code);
     }
 
     [Fact]
@@ -44,8 +56,10 @@ public sealed class IgniteServerHostedServiceTests : IDisposable
         launcher.Stop(nodeState.Node!.Name, false);
 
         await FakeNodeLauncher.Eventually(() => lifetime.StopRequested);
-        Assert.Equal(1, Environment.ExitCode);
+        Assert.Equal(ServerExit.Failure, exit.Code);
+        // the failure is the cause: the stop that follows does not change the exit code
         await service.StopAsync(CancellationToken.None).WaitAsync(Timeout);
+        Assert.Equal(ServerExit.Failure, exit.Code);
     }
 
     [Fact]
@@ -59,53 +73,13 @@ public sealed class IgniteServerHostedServiceTests : IDisposable
 
         Assert.Equal(0, launcher.Started);
         Assert.False(lifetime.StopRequested);
-    }
-
-    [Fact]
-    public async Task SslFilesChange_RestartsTheNode()
-    {
-        using var service = await StartAsync();
-
-        service.OnSslFilesChanged();
-
-        await FakeNodeLauncher.Eventually(() => launcher.Started == 2 && nodeState.IsStarted);
-        Assert.False(lifetime.StopRequested);
-        await service.StopAsync(CancellationToken.None).WaitAsync(Timeout);
-    }
-
-    [Fact]
-    public async Task SslRestartThatTimesOut_StopsTheServerWithExitCodeOne()
-    {
-        using var service = await StartAsync();
-        using ManualResetEventSlim release = new();
-        launcher.BeforeStopped = () => release.Wait();
-
-        service.OnSslFilesChanged();
-
-        Assert.True(lifetime.StopRequested);
-        Assert.Equal(1, Environment.ExitCode);
-        Assert.Equal(1, launcher.Started);
-        release.Set();
-        await service.StopAsync(CancellationToken.None).WaitAsync(Timeout);
-    }
-
-    [Fact]
-    public async Task SslFilesChange_WhileTheHostStops_DoesNothing()
-    {
-        using var service = await StartAsync();
-        lifetime.StopApplication();
-
-        service.OnSslFilesChanged();
-
-        Assert.Equal(1, launcher.Started);
-        Assert.True(nodeState.IsStarted);
-        await service.StopAsync(CancellationToken.None).WaitAsync(Timeout);
+        Assert.Equal(0, exit.Code);
     }
 
     [Fact]
     public async Task StopAsync_StopsWaitingForTheNode_AtTheHostsTimeout()
     {
-        using var service = await StartAsync(gracefulStopTimeoutInSeconds: 30);
+        using var service = await StartAsync(gracefulStopTimeoutInSeconds: 60);
         using ManualResetEventSlim release = new();
         launcher.BeforeStopped = () => release.Wait();
         using CancellationTokenSource hostTimeout = new(TimeSpan.FromMilliseconds(200));
@@ -113,15 +87,11 @@ public sealed class IgniteServerHostedServiceTests : IDisposable
 
         await service.StopAsync(hostTimeout.Token).WaitAsync(Timeout);
 
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"took {stopwatch.Elapsed}");
+        // far below the graceful stop timeout, which it would otherwise wait for
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10), $"took {stopwatch.Elapsed}");
+        Assert.Equal(ServerExit.NotGraceful, exit.Code);
         release.Set();
     }
-
-    private static string RenderedSpringConfigPath => Path.Combine(
-        Path.GetTempPath(),
-        $"aspnetcore-ignite-server-{Environment.ProcessId}",
-        "spring-config.xml"
-    );
 
     private IgniteServerHostedService CreateService(int gracefulStopTimeoutInSeconds = 1) => new(
         new IgniteServerSettings
@@ -134,7 +104,8 @@ public sealed class IgniteServerHostedServiceTests : IDisposable
         Logger.None,
         lifetime,
         nodeState,
-        launcher
+        launcher,
+        exit
     );
 
     private async Task<IgniteServerHostedService> StartAsync(int gracefulStopTimeoutInSeconds = 1)

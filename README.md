@@ -26,5 +26,7 @@ Thin clients connect to port 10800 (user `ignite`); `/metrics` on port 9464 serv
 * [Client library](docs/client.md): `AspNetCore.Ignite` for ASP.NET Core applications
 * [Kubernetes](docs/kubernetes.md): deployment guidance, alerts and the
   [Helm chart](https://github.com/dradoaica/helm-charts/tree/main/charts/aspnetcore-ignite-server)
+* [Architecture](docs/architecture.md): the components of the server and the client library, the node lifecycle,
+  configuration, certificate rotation and exit codes, with diagrams
 * [Development](docs/development.md): Java modules, tests, building the image
 * [Upgrading to 2.19.0](docs/upgrading.md)

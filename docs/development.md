@@ -27,6 +27,10 @@ dotnet test tests/AspNetCore.Ignite.IntegrationTests
 ./scripts/check-vulnerable-packages.sh
 ```
 
+The unit tests need neither Docker nor a JVM. The node lifecycle (the runner, the hosted service, the SSL restarts and
+the metrics) runs on fake nodes of `FakeNodeLauncher`, whose stops a test can hold back to reproduce the orderings that
+the integration tests cannot time; `Fake` answers the calls of any other Ignite interface by member name.
+
 The integration tests build the server image from the `Dockerfile` and run it with Docker (via Testcontainers):
 authentication and password rotation, the client library and its health check, SSL with client certificates and
 certificate rotation, cluster activation, rebalancing and lost partitions (in-memory and persistent), the management

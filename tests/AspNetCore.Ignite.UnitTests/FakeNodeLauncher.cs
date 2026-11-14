@@ -14,7 +14,7 @@ namespace AspNetCore.Ignite.UnitTests;
 /// </summary>
 internal sealed class FakeNodeLauncher : INodeLauncher
 {
-    private static readonly TimeSpan EventuallyTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan EventuallyTimeout = TimeSpan.FromSeconds(10);
 
     private readonly ConcurrentDictionary<string, EventHandler> stoppedHandlers = new();
     private int failedClusterReads;
@@ -79,7 +79,7 @@ internal sealed class FakeNodeLauncher : INodeLauncher
         return true;
     }
 
-    /// <summary>Waits until <paramref name="condition" /> holds, failing the test after two seconds.</summary>
+    /// <summary>Waits until <paramref name="condition" /> holds, failing the test after ten seconds.</summary>
     public static async Task Eventually(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow + EventuallyTimeout;

@@ -35,6 +35,7 @@ return await new ServerCommandLine(overrides => RunServerAsync(overrides, sigTer
 
 static async Task<int> RunServerAsync(IReadOnlyDictionary<string, string?> overrides, CancellationToken stopToken)
 {
+    ServerExit exit = new();
     var configuration = new ConfigurationBuilder().SetBasePath(AppContext.BaseDirectory)
         .AddJsonFile("appsettings.json", false, true)
         .AddJsonFile("serilog.config.json", false, true)
@@ -64,11 +65,11 @@ static async Task<int> RunServerAsync(IReadOnlyDictionary<string, string?> overr
                 await Console.Error.WriteLineAsync($"ERROR: {error}").ConfigureAwait(false);
             }
 
-            return 1;
+            return ServerExit.Failure;
         }
 
-        using var host = settings.ManagementEnabled ? BuildWithManagement(configuration, settings)
-            : BuildWithoutManagement(configuration, settings);
+        using var host = settings.ManagementEnabled ? BuildWithManagement(configuration, settings, exit)
+            : BuildWithoutManagement(configuration, settings, exit);
         if (stopToken.IsCancellationRequested)
         {
             Log.Information("Stopped before the Ignite server started.");
@@ -78,18 +79,18 @@ static async Task<int> RunServerAsync(IReadOnlyDictionary<string, string?> overr
         Log.Information("Starting Ignite server...");
         await host.RunAsync(stopToken).ConfigureAwait(false);
         Log.Information("Ignite server stopped.");
-        return Environment.ExitCode;
+        return exit.Code;
     }
     catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
     {
         // SIGTERM arrived while the host was starting.
         Log.Information("Ignite server stopped while it started.");
-        return Environment.ExitCode;
+        return exit.Code;
     }
     catch (Exception ex)
     {
         Log.Fatal(ex, "The Ignite server failed to start.");
-        return 1;
+        return ServerExit.Failure;
     }
     finally
     {
@@ -97,7 +98,7 @@ static async Task<int> RunServerAsync(IReadOnlyDictionary<string, string?> overr
     }
 }
 
-static IHost BuildWithoutManagement(IConfiguration configuration, IgniteServerSettings settings)
+static IHost BuildWithoutManagement(IConfiguration configuration, IgniteServerSettings settings, ServerExit exit)
 {
     HostApplicationBuilder builder = new(
         new HostApplicationBuilderSettings
@@ -107,12 +108,12 @@ static IHost BuildWithoutManagement(IConfiguration configuration, IgniteServerSe
         }
     );
     builder.Configuration.AddConfiguration(configuration);
-    AddServerServices(builder.Services, settings);
+    AddServerServices(builder.Services, settings, exit);
     return builder.Build();
 }
 
 // /health/liveness, /health/startup, /health/readiness and /metrics (Prometheus) on MANAGEMENT_PORT
-static IHost BuildWithManagement(IConfiguration configuration, IgniteServerSettings settings)
+static IHost BuildWithManagement(IConfiguration configuration, IgniteServerSettings settings, ServerExit exit)
 {
     var builder = WebApplication.CreateEmptyBuilder(
         new WebApplicationOptions
@@ -123,7 +124,7 @@ static IHost BuildWithManagement(IConfiguration configuration, IgniteServerSetti
     builder.Configuration.AddConfiguration(configuration);
     builder.WebHost.UseKestrelCore().ConfigureKestrel(kestrel => kestrel.ListenAnyIP(settings.ManagementPort));
     builder.Services.AddRoutingCore();
-    AddServerServices(builder.Services, settings);
+    AddServerServices(builder.Services, settings, exit);
     builder.Services.AddSingleton(sp => new IgniteNodeMetrics(
             sp.GetRequiredService<IgniteNodeState>(),
             settings.MetricsPerCache,
@@ -172,7 +173,7 @@ static IHost BuildWithManagement(IConfiguration configuration, IgniteServerSetti
     return app;
 }
 
-static void AddServerServices(IServiceCollection services, IgniteServerSettings settings)
+static void AddServerServices(IServiceCollection services, IgniteServerSettings settings, ServerExit exit)
 {
     services.Configure<HostOptions>(hostOptions =>
         hostOptions.ShutdownTimeout = TimeSpan.FromSeconds(settings.ShutdownTimeoutInSeconds)
@@ -180,6 +181,7 @@ static void AddServerServices(IServiceCollection services, IgniteServerSettings 
     services.AddSerilog(Log.Logger);
     services.AddSingleton(Log.Logger);
     services.AddSingleton(settings);
+    services.AddSingleton(exit);
     services.AddSingleton<IgniteNodeState>();
     services.AddSingleton<INodeLauncher>(IgnitionNodeLauncher.Instance);
     services.AddHostedService<IgniteServerHostedService>();

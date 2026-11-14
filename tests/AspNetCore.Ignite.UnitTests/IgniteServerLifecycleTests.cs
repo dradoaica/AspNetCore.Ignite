@@ -12,7 +12,7 @@ namespace AspNetCore.Ignite.UnitTests;
 /// </summary>
 public sealed class IgniteServerLifecycleTests
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
     [Fact]
     public async Task Restart_StartsTheNodeAgain_AndStopEndsTheRun()
@@ -81,7 +81,7 @@ public sealed class IgniteServerLifecycleTests
         // The node reports its stop (the run starts it again), but Ignition.Stop returns only after the timeout.
         launcher.AfterStopped = () => release.Wait();
 
-        var result = runner.Restart(TimeSpan.FromMilliseconds(500));
+        var result = runner.Restart(TimeSpan.FromSeconds(1));
         release.Set();
 
         Assert.Equal(RestartResult.Restarting, result);

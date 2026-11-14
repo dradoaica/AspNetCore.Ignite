@@ -22,7 +22,8 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
 * REST (8080) and the TCP binary protocol (11211) are off (`REST_ENABLED`), peer assembly loading is off
   (`PEER_ASSEMBLY_LOADING`), and OpenCensus metrics are replaced by `/metrics` on port 9464 (`MANAGEMENT_PORT`).
 * Logs go to the console only (JSON in the image); the file sink is opt-in.
-* SSL restarts are graceful and jittered; the process exits with `1` on failures (it always exited with `0`).
+* SSL restarts are graceful and jittered; the process exits with `1` on failures and with `2` when the node did not
+  stop gracefully (it always exited with `0`).
 * The settings inserted into the Spring configuration (`K8S_*` and, with `USE_CLIENT_SSL`, `SSL_*`) must not contain
   `#{`, which Spring would evaluate as an expression: the server refuses to start with one.
 * A list setting (`CLUSTER_ENDPOINTS`, `SQL_SCHEMAS`) comes from one source, the one of the highest priority: `-Cluster`
