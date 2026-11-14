@@ -59,8 +59,10 @@ jobs:
       contents: read # to checkout codebase
       packages: write # to push NuGet packages to GitHub Packages
     runs-on: ubuntu-24.04
+    # whether the secret is set: the secret itself goes only to the step that pushes, not to restore and pack, which
+    # run the MSBuild targets of third-party packages
     env:
-      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      HAS_NUGET_API_KEY: ${{ secrets.NUGET_API_KEY != '' }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
@@ -82,15 +84,19 @@ jobs:
       # the .nupkg, whose assembly embeds its PDB
       - name: Push to GitHub Packages
         if: github.event_name == 'release'
+        env:
+          GITHUB_PACKAGES_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
           dotnet nuget push "artifacts/package/release/*.nupkg"
-          --api-key "${{ secrets.GITHUB_TOKEN }}"
+          --api-key "$GITHUB_PACKAGES_TOKEN"
           --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
           --skip-duplicate
 
       # nuget.org too, with a NUGET_API_KEY secret: installing from GitHub Packages needs a token, even for a public package
       - name: Push to nuget.org
-        if: github.event_name == 'release' && env.NUGET_API_KEY != ''
+        if: github.event_name == 'release' && env.HAS_NUGET_API_KEY == 'true'
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: >-
           dotnet nuget push "artifacts/package/release/*.nupkg"
           --api-key "$NUGET_API_KEY"
@@ -218,26 +224,27 @@ jobs:
   chart:
     needs: [ image-manifest, version ]
     runs-on: ubuntu-24.04
+    # whether the secret is set; the secret itself goes only to the steps that use it
     env:
-      HELM_CHARTS_TOKEN: ${{ secrets.HELM_CHARTS_TOKEN }}
+      HAS_HELM_CHARTS_TOKEN: ${{ secrets.HELM_CHARTS_TOKEN != '' }}
     steps:
       - name: Skip without HELM_CHARTS_TOKEN
-        if: env.HELM_CHARTS_TOKEN == ''
+        if: env.HAS_HELM_CHARTS_TOKEN != 'true'
         run: echo "::notice::HELM_CHARTS_TOKEN is not set; update appVersion of the aspnetcore-ignite-server chart by hand."
 
       - name: Checkout Code
-        if: env.HELM_CHARTS_TOKEN != ''
+        if: env.HAS_HELM_CHARTS_TOKEN == 'true'
         uses: actions/checkout@v6
 
       - name: Resolve Helm Chart Branch
         id: chart-ref
-        if: env.HELM_CHARTS_TOKEN != ''
+        if: env.HAS_HELM_CHARTS_TOKEN == 'true'
         env:
           VERSION: ${{ needs.version.outputs.version }}
         run: echo "ref=$(scripts/ci/resolve-chart-ref.sh "" "release/${VERSION}")" >> "$GITHUB_OUTPUT"
 
       - name: Checkout Helm Chart
-        if: env.HELM_CHARTS_TOKEN != ''
+        if: env.HAS_HELM_CHARTS_TOKEN == 'true'
         uses: actions/checkout@v6
         with:
           repository: dradoaica/helm-charts
@@ -248,7 +255,7 @@ jobs:
       # appVersion and the recorded Ignite version follow the image; the chart version gets a patch bump
       - name: Update Chart
         id: bump
-        if: env.HELM_CHARTS_TOKEN != ''
+        if: env.HAS_HELM_CHARTS_TOKEN == 'true'
         env:
           VERSION: ${{ needs.version.outputs.version }}
           IGNITE_VERSION: ${{ needs.version.outputs.ignite }}
@@ -265,7 +272,7 @@ jobs:
           esac
 
       - name: Open Pull Request
-        if: env.HELM_CHARTS_TOKEN != '' && steps.bump.outputs.result == 'bumped'
+        if: env.HAS_HELM_CHARTS_TOKEN == 'true' && steps.bump.outputs.result == 'bumped'
         working-directory: helm-charts
         env:
           GH_TOKEN: ${{ secrets.HELM_CHARTS_TOKEN }}

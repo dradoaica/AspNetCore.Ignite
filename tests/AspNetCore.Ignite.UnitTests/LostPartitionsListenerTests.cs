@@ -199,6 +199,38 @@ public sealed class LostPartitionsListenerTests
     }
 
     [Fact]
+    public async Task AResetInProgress_DefersTheNextOne()
+    {
+        var timeout = TimeSpan.FromSeconds(2);
+        using ManualResetEventSlim release = new();
+        var resets = 0;
+        FakeCluster cluster = new()
+        {
+            BeforeReset = () =>
+            {
+                Interlocked.Increment(ref resets);
+                release.Wait();
+            },
+        };
+        FakeTimeProvider time = new();
+        using LostPartitionsListener listener = new(cluster.Ignite, Logger.None, true, true, time);
+        Lose(listener, "c");
+        var first = Task.Run(listener.OnBatchEnded);
+        await FakeNodeLauncher.Eventually(() => Volatile.Read(ref resets) == 1);
+
+        // the cache loses partitions again while the first reset runs: that batch does not reset at the same time
+        Lose(listener, "c");
+        // it returns at once rather than waiting for the first reset
+        await Task.Run(listener.OnBatchEnded).WaitAsync(timeout);
+        Assert.Equal(1, Volatile.Read(ref resets));
+
+        release.Set();
+        await first.WaitAsync(timeout);
+        time.Advance(Debounce);
+        Assert.Equal(["ResetLostPartitions c", "ResetLostPartitions c",], cluster.Calls);
+    }
+
+    [Fact]
     public void WithoutAutoReset_TheLossIsOnlyLogged()
     {
         FakeCluster cluster = new();
@@ -258,6 +290,7 @@ public sealed class LostPartitionsListenerTests
         public string[] Online { get; init; } = ["n1",];
         public int ResetFailures { get; set; }
         public int CountFailures { get; set; }
+        public Action BeforeReset { get; set; } = () => { };
         public HashSet<string> CacheNames { get; } = ["c", "d",];
 
         private IClusterGroup Group(IEnumerable<string> consistentIds) => Fake.Of<IClusterGroup>((name, _) =>
@@ -295,6 +328,7 @@ public sealed class LostPartitionsListenerTests
 
         private object? Reset(string caches)
         {
+            BeforeReset();
             if (ResetFailures-- <= 0)
             {
                 return Record($"ResetLostPartitions {caches}");

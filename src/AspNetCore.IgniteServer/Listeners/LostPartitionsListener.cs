@@ -146,7 +146,7 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
         }
     }
 
-    private void OnBatchEnded()
+    internal void OnBatchEnded()
     {
         if (!resetLock.TryEnter())
         {

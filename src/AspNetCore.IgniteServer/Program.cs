@@ -181,5 +181,6 @@ static void AddServerServices(IServiceCollection services, IgniteServerSettings 
     services.AddSingleton(Log.Logger);
     services.AddSingleton(settings);
     services.AddSingleton<IgniteNodeState>();
+    services.AddSingleton<INodeLauncher>(IgnitionNodeLauncher.Instance);
     services.AddHostedService<IgniteServerHostedService>();
 }

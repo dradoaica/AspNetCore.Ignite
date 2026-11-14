@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 
 namespace AspNetCore.IgniteServer;
 
@@ -101,15 +102,28 @@ internal sealed partial class IgniteServerSettings
     internal bool UsesKubernetesDiscovery =>
         ClusterEndpoints.Count == 0 && !UseTcpDiscoveryStaticIpFinder && SpiPort is null;
 
+    /// <summary>The list settings (e.g., CLUSTER_ENDPOINTS), with their keys.</summary>
+    internal static readonly IReadOnlyList<(PropertyInfo Property, string Key)> ListSettings =
+    [
+        .. typeof(IgniteServerSettings).GetProperties()
+            .Where(property => property.PropertyType == typeof(List<string>))
+            .Select(property =>
+                (property, property.GetCustomAttribute<ConfigurationKeyNameAttribute>()?.Name ?? property.Name)
+            ),
+    ];
+
     /// <summary>
-    ///     Binds the settings. CLUSTER_ENDPOINTS and SQL_SCHEMAS are lists (CLUSTER_ENDPOINTS__0, ...) or
+    ///     Binds the settings. The list settings (<see cref="ListSettings" />) are lists (CLUSTER_ENDPOINTS__0, ...) or
     ///     comma-separated values, taken from the source of the highest priority that sets them.
     /// </summary>
     public static IgniteServerSettings Load(IConfiguration configuration)
     {
         var settings = configuration.Get<IgniteServerSettings>() ?? new IgniteServerSettings();
-        settings.ClusterEndpoints = GetList(configuration, "CLUSTER_ENDPOINTS");
-        settings.SqlSchemas = GetList(configuration, "SQL_SCHEMAS");
+        foreach (var (property, key) in ListSettings)
+        {
+            property.SetValue(settings, GetList(configuration, key));
+        }
+
         return settings;
     }
 

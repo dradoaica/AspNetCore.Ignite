@@ -3,6 +3,8 @@ using Apache.Ignite.Core.Cache;
 using Apache.Ignite.Core.Cluster;
 using AspNetCore.IgniteServer;
 using AspNetCore.IgniteServer.Management;
+using Microsoft.Extensions.Time.Testing;
+using Serilog.Core;
 using System.Diagnostics.Metrics;
 using Xunit;
 
@@ -43,6 +45,47 @@ public sealed class IgniteNodeMetricsTests
 
             values.Add(value);
         }
+    }
+
+    [Fact]
+    public void ANodeThatCannotBeRead_IsReadOncePerScrape_NotOncePerInstrument()
+    {
+        FakeNodeLauncher launcher = new();
+        using IgniteServerRunner runner = new(
+            new IgniteServerSettings
+            {
+                EnableAuthentication = false,
+                // readiness would read the cluster too (whether the node is in the baseline)
+                ReadyWhenRebalanced = false,
+            },
+            Logger.None,
+            () => "127.0.0.1",
+            null,
+            launcher
+        );
+        _ = runner.Run();
+        IgniteNodeState nodeState = new();
+        nodeState.SetRunner(runner);
+        FakeTimeProvider time = new();
+        using IgniteNodeMetrics metrics = new(nodeState, true, time);
+        using MeterListener listener = new();
+        listener.InstrumentPublished = (instrument, meterListener) =>
+        {
+            if (instrument.Meter.Name == IgniteNodeMetrics.MeterName)
+            {
+                meterListener.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.Start();
+        launcher.FailClusterReads = true;
+
+        listener.RecordObservableInstruments();
+        listener.RecordObservableInstruments();
+        Assert.Equal(1, launcher.FailedClusterReads);
+
+        time.Advance(TimeSpan.FromSeconds(1));
+        listener.RecordObservableInstruments();
+        Assert.Equal(2, launcher.FailedClusterReads);
     }
 
     [Fact]

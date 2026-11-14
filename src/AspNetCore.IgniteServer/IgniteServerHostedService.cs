@@ -16,7 +16,8 @@ internal sealed class IgniteServerHostedService(
     IgniteServerSettings settings,
     ILogger logger,
     IHostApplicationLifetime lifetime,
-    IgniteNodeState nodeState
+    IgniteNodeState nodeState,
+    INodeLauncher launcher
 ) : BackgroundService
 {
     private static readonly TimeSpan SslFileChangeDebounce = TimeSpan.FromSeconds(10);
@@ -27,6 +28,8 @@ internal sealed class IgniteServerHostedService(
     private IgniteServerRunner? runner;
     private FileChangeWatcher? sslFileWatcher;
     private volatile bool stopping;
+
+    private bool IsStopping => stopping || lifetime.ApplicationStopping.IsCancellationRequested;
 
     // Since .NET 10, the host runs all of ExecuteAsync on a thread pool thread: the long Ignition.Start does not
     // delay the start of the host.
@@ -42,7 +45,25 @@ internal sealed class IgniteServerHostedService(
             current = runner;
         }
 
-        current?.Stop(TimeSpan.FromSeconds(settings.GracefulStopTimeoutInSeconds));
+        if (current != null)
+        {
+            try
+            {
+                // Off the host's thread, so that the host can stop waiting at its own timeout. Validation keeps
+                // GRACEFUL_STOP_TIMEOUT_IN_SECONDS below it, so this happens only when the host is stopped otherwise.
+                await Task.Run(
+                        () => current.Stop(TimeSpan.FromSeconds(settings.GracefulStopTimeoutInSeconds)),
+                        CancellationToken.None
+                    )
+                    .WaitAsync(cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                logger.Warning("The host stopped waiting for the Ignite node to stop; it stops with the process.");
+            }
+        }
+
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -94,7 +115,13 @@ internal sealed class IgniteServerHostedService(
                 )
                 .ConfigureAwait(false);
             EnsureWellFormed(springConfigPath);
-            IgniteServerRunner created = new(settings, logger, DnsUtils.GetLocalIpAddress, springConfigPath);
+            IgniteServerRunner created = new(
+                settings,
+                logger,
+                DnsUtils.GetLocalIpAddress,
+                springConfigPath,
+                launcher
+            );
             lock (gate)
             {
                 if (stopping)
@@ -190,9 +217,9 @@ internal sealed class IgniteServerHostedService(
         );
     }
 
-    private void OnSslFilesChanged()
+    internal void OnSslFilesChanged()
     {
-        if (stopping || lifetime.ApplicationStopping.IsCancellationRequested)
+        if (IsStopping)
         {
             return;
         }
@@ -230,6 +257,12 @@ internal sealed class IgniteServerHostedService(
     /// </summary>
     private void RestartOnceStarted()
     {
+        // e.g., Restart found no node because the host stopped it in the meantime
+        if (IsStopping)
+        {
+            return;
+        }
+
         logger.Information("SSL files changed while the Ignite node starts: it restarts once started.");
         sslFileWatcher?.NotifyChanged();
     }
