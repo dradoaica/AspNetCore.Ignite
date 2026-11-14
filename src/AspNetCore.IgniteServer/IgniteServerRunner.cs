@@ -33,6 +33,9 @@ internal sealed class IgniteServerRunner : IDisposable
     // The stop of the last node, which may still run after its timeout. Ignite stops a node once: a later stop can only
     // wait for this one.
     private Task<bool>? nodeStop;
+
+    // The start in progress (Ignition.Start, until the node is the running node); completed when there is none.
+    private Task nodeStart = Task.CompletedTask;
     private volatile bool ready;
 
     // What Restart() or Stop() asked for: a stop is final, a restart is taken by the next start.
@@ -120,21 +123,35 @@ internal sealed class IgniteServerRunner : IDisposable
     {
         logger.Information("Starting Ignite server runner...");
         RebalanceTracker.Reset();
-        var node = launcher.Start(Configuration);
+        // Stop() waits for this start, so that it stops the node gracefully rather than report a stop that the process
+        // exit then makes for it.
+        TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        Volatile.Write(ref nodeStart, started.Task);
+        IIgnite node;
         TaskCompletionSource<string?> stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        node.Stopped += (s, _) =>
+        try
         {
-            ready = false;
-            // The node may also have stopped on its own (e.g., segmented): it is no longer the running node.
-            Interlocked.CompareExchange(ref ignite, null, node);
-            stopped.TrySetResult(s?.ToString());
-        };
-        // From here on, Stop() and Restart() find this node and stop it.
-        Volatile.Write(ref ignite, node);
+            node = launcher.Start(Configuration);
+            node.Stopped += (s, _) =>
+            {
+                ready = false;
+                // The node may also have stopped on its own (e.g., segmented): it is no longer the running node.
+                Interlocked.CompareExchange(ref ignite, null, node);
+                stopped.TrySetResult(s?.ToString());
+            };
+            // From here on, Stop() and Restart() find this node and stop it.
+            Volatile.Write(ref ignite, node);
+        }
+        finally
+        {
+            started.TrySetResult();
+        }
+
         if (request == Request.Stop)
         {
-            // Stop() was called while the node was starting, when there was no node for it to stop.
-            StopRunningNode(false)?.Wait();
+            // Stop() was called while the node was starting. It stops the node once started, unless its timeout ran
+            // out first: then this stop does.
+            (StopRunningNode(false) ?? Volatile.Read(ref nodeStop))?.Wait();
             logger.Information("'{IgniteInstance}' stopped.", node.Name);
             return;
         }
@@ -221,7 +238,7 @@ internal sealed class IgniteServerRunner : IDisposable
 
         logger.Error(
             "The Ignite node did not stop gracefully within {Timeout} (it waits for other nodes to take over its " +
-            "partitions); it stops with the process.",
+            "partitions, or it was still starting); it stops with the process.",
             timeout
         );
         return false;
@@ -289,15 +306,23 @@ internal sealed class IgniteServerRunner : IDisposable
     private bool StopNodeGracefully(TimeSpan timeout, bool restarting)
     {
         var stopping = Stopwatch.StartNew();
-        if (DeactivateIfLastServerNode(timeout) && restarting)
+        // A node that is still starting is stopped once started, within the same timeout.
+        if (!Volatile.Read(ref nodeStart).Wait(timeout))
+        {
+            return false;
+        }
+
+        if (DeactivateIfLastServerNode(Remaining(timeout, stopping)) && restarting)
         {
             deactivatedToRestart = true;
         }
 
-        var remaining = timeout - stopping.Elapsed;
         var stop = StopRunningNode(false) ?? Volatile.Read(ref nodeStop);
-        return stop?.Wait(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero) ?? true;
+        return stop?.Wait(Remaining(timeout, stopping)) ?? true;
     }
+
+    private static TimeSpan Remaining(TimeSpan timeout, Stopwatch elapsed) =>
+        timeout > elapsed.Elapsed ? timeout - elapsed.Elapsed : TimeSpan.Zero;
 
     /// <summary>
     ///     The cluster's last server node deactivates the cluster before it stops, so that it stops at once (a

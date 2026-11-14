@@ -112,10 +112,11 @@ stateDiagram-v2
     Starting --> Activating: in memory, or reactivation
     WaitingForServerNodes --> Activating: ACTIVATION_MIN_SERVER_NODES joined
     Activating --> CatchingUp: cluster active, password applied
-    CatchingUp --> Ready: in the baseline, no rebalancing for 10 s
+    CatchingUp --> Ready: caught up, or REBALANCE_READINESS_MAX_WAIT_IN_SECONDS passed
     Ready --> Stopping: Restart (SSL files changed)
     CatchingUp --> Stopping: Restart
     Ready --> Stopping: Stop (SIGTERM)
+    Starting --> Stopping: Stop, once started
     Stopping --> Starting: restart requested
     Stopping --> [*]: stop requested, or stopped on its own
 ```
@@ -124,11 +125,14 @@ stateDiagram-v2
   `ACTIVATION_MIN_SERVER_NODES`, so that a startup probe does not restart nodes waiting for each other.
 * **Ready** (`/health/readiness`) once the cluster is active and, with `READY_WHEN_REBALANCED`, the node has caught up:
   it is in the baseline (which the baseline auto-adjust adds it to) and has not rebalanced for 10 seconds
-  (`RebalanceTracker`). A rolling restart therefore moves on only once the restarted node holds its data again.
+  (`RebalanceTracker`). A rolling restart therefore moves on only once the restarted node holds its data again. So that
+  a node is never unready for good, it is ready anyway `REBALANCE_READINESS_MAX_WAIT_IN_SECONDS` (600 by default) after
+  it runs when it is still not in the baseline, and a rebalance that started longer ago than that is ignored.
 * **Restart and stop requests** are one field of the runner: a stop always wins over a restart, and a restart is taken
   by the next start. `Restart` returns `Restarting`, `NotRunning` or `TimedOut`.
 * **The graceful stop** (Ignite's GRACEFUL shutdown policy) waits until the node's partitions have copies on other
-  nodes, within `GRACEFUL_STOP_TIMEOUT_IN_SECONDS`. No other node can take over the partitions of the cluster's last
+  nodes, within `GRACEFUL_STOP_TIMEOUT_IN_SECONDS`; a node that is still starting is stopped once started, within the
+  same timeout. No other node can take over the partitions of the cluster's last
   server node, so that node deactivates the cluster first and stops at once; after a restart, it activates the cluster
   again without waiting for other nodes.
 * **A node that stops on its own** (e.g., segmented from the cluster) stops the server with exit code `1`, and its
@@ -152,23 +156,21 @@ sequenceDiagram
     else node running
         restarter->>runner: Restart(GRACEFUL_STOP_TIMEOUT_IN_SECONDS)
         runner->>node: graceful stop (the last server node deactivates the cluster first)
-        node-->>runner: Stopped
-        runner->>node: start with the renewed files
-        alt the stop timed out
-            restarter->>restarter: fail: exit 1, the container restarts with the renewed files
+        alt stopped within the timeout
+            node-->>runner: Stopped
+            runner->>node: start again, with the renewed files
+        else the stop timed out
+            runner-->>restarter: TimedOut
+            restarter->>restarter: fail (exit 1): the container restarts with the renewed files
         end
     end
 ```
 
 ### Exit codes
 
-| Exit code | Meaning                                                                                        |
-|-----------|------------------------------------------------------------------------------------------------|
-| `0`       | Stopped gracefully.                                                                            |
-| `1`       | Invalid arguments or settings, failed start, or the Ignite node stopped unexpectedly.          |
-| `2`       | Stopped, but not within `GRACEFUL_STOP_TIMEOUT_IN_SECONDS`: the node stopped with the process. |
-
-`ServerExit` keeps the first cause: a failure stops the server, and that stop is then not graceful either.
+`0` after a graceful stop, `1` after a failure (invalid settings, a failed start, a node that stopped unexpectedly), `2`
+after a stop that was not graceful: see [Configuration](configuration.md#exit-codes) for the table. `ServerExit` keeps
+the first cause: a failure stops the server, and that stop is then not graceful either.
 
 ## Cluster maintenance on the node
 

@@ -38,6 +38,17 @@ permissions:
   contents: read
 
 jobs:
+  # the names of docs/architecture.md's "Where to change what" exist, and the Mermaid diagrams of docs/ parse
+  docs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Check Docs
+        run: scripts/ci/check-docs.sh --diagrams
+
   # the server image, built once for the integration tests and the chart jobs
   image:
     runs-on: ubuntu-24.04

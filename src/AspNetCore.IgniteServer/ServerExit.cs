@@ -21,5 +21,6 @@ internal sealed class ServerExit
 
     public int Code => Volatile.Read(ref code);
 
-    public void Set(int exitCode) => Interlocked.CompareExchange(ref code, exitCode, 0);
+    /// <summary>Sets the exit code, unless an earlier cause set one.</summary>
+    public void SetIfUnset(int exitCode) => Interlocked.CompareExchange(ref code, exitCode, 0);
 }

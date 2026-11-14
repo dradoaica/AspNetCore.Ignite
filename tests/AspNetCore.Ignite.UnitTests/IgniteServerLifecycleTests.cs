@@ -105,6 +105,53 @@ public sealed class IgniteServerLifecycleTests
     }
 
     [Fact]
+    public async Task Stop_WhileTheNodeStarts_WaitsForTheStart_AndStopsTheNode()
+    {
+        FakeNodeLauncher launcher = new();
+        using var runner = CreateRunner(launcher);
+        using ManualResetEventSlim starting = new(), release = new();
+        launcher.BeforeStarted = () =>
+        {
+            starting.Set();
+            release.Wait();
+        };
+        var run = Task.Run(runner.Run);
+        Assert.True(starting.Wait(Timeout));
+
+        var stop = Task.Run(() => runner.Stop(Timeout));
+        await Task.Delay(200);
+        // it does not report a stop while the node still starts
+        Assert.False(stop.IsCompleted);
+        release.Set();
+
+        Assert.True(await stop.WaitAsync(Timeout));
+        await run.WaitAsync(Timeout);
+        Assert.Equal(1, launcher.Stops);
+    }
+
+    [Fact]
+    public async Task Stop_WhileTheNodeStartsLongerThanTheTimeout_IsNotGraceful_AndTheNodeStopsOnceStarted()
+    {
+        FakeNodeLauncher launcher = new();
+        using var runner = CreateRunner(launcher);
+        using ManualResetEventSlim starting = new(), release = new();
+        launcher.BeforeStarted = () =>
+        {
+            starting.Set();
+            release.Wait();
+        };
+        var run = Task.Run(runner.Run);
+        Assert.True(starting.Wait(Timeout));
+
+        Assert.False(runner.Stop(TimeSpan.FromMilliseconds(100)));
+        release.Set();
+
+        await run.WaitAsync(Timeout);
+        Assert.Equal(1, launcher.Stops);
+        Assert.Null(runner.Node);
+    }
+
+    [Fact]
     public async Task Stop_BeforeTheRun_StartsNoNode()
     {
         FakeNodeLauncher launcher = new();

@@ -43,7 +43,9 @@ the job summary, and tests the image with its
 cluster in kind, checked by the chart's probes and `helm test` (the `helm-charts-ref` input selects the chart revision).
 The logic of the workflows lives in scripts that also run locally: `scripts/test-chart.sh` (the chart test, against any
 cluster that has the image; its header shows how to load the image into kind or microk8s) and `scripts/ci/` (which chart
-revision is tested, the paired versions check, and the chart update of a release).
+revision is tested, the paired versions check, the chart update of a release, and `check-docs.sh`, which checks that
+the names of [Architecture](architecture.md)'s "Where to change what" table exist and, with `--diagrams`, that its
+Mermaid diagrams parse).
 
 The integration tests wait for texts in the server's logs. Those texts are listed in
 `tests/AspNetCore.Ignite.IntegrationTests/ServerLog.cs`, and a unit test fails when one of them is no longer part of a

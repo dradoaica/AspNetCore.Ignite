@@ -59,13 +59,13 @@ internal sealed class IgniteServerHostedService(
                     .ConfigureAwait(false);
                 if (!graceful)
                 {
-                    exit.Set(ServerExit.NotGraceful);
+                    exit.SetIfUnset(ServerExit.NotGraceful);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 logger.Warning("The host stopped waiting for the Ignite node to stop; it stops with the process.");
-                exit.Set(ServerExit.NotGraceful);
+                exit.SetIfUnset(ServerExit.NotGraceful);
             }
         }
 
@@ -194,7 +194,7 @@ internal sealed class IgniteServerHostedService(
 
     private void Fail()
     {
-        exit.Set(ServerExit.Failure);
+        exit.SetIfUnset(ServerExit.Failure);
         lifetime.StopApplication();
     }
 }

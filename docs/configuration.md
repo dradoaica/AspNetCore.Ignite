@@ -37,6 +37,8 @@ from the WAL on the next start). The cluster's last server node deactivates the 
 next start activates it again); to stop several nodes at once (e.g., `helm uninstall`), deactivate the cluster first
 (`control.sh --set-state INACTIVE --yes`).
 
+### Exit codes
+
 | Exit code | Meaning                                                                                        |
 |-----------|------------------------------------------------------------------------------------------------|
 | `0`       | Stopped gracefully (SIGTERM/CTRL+C).                                                           |

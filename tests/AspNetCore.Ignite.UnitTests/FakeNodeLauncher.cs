@@ -8,9 +8,9 @@ using Xunit;
 namespace AspNetCore.Ignite.UnitTests;
 
 /// <summary>
-///     Starts fake nodes in a cluster of two server nodes (so a stopping node does not deactivate it). A stop runs
-///     <see cref="BeforeStopped" />, raises the node's Stopped event and runs <see cref="AfterStopped" />, so a test
-///     can hold it back before or after the node reports it.
+///     Starts fake nodes in a cluster of two server nodes (so a stopping node does not deactivate it). A start runs
+///     <see cref="BeforeStarted" />, and a stop runs <see cref="BeforeStopped" />, raises the node's Stopped event and
+///     runs <see cref="AfterStopped" />, so a test can hold either back.
 /// </summary>
 internal sealed class FakeNodeLauncher : INodeLauncher
 {
@@ -19,8 +19,11 @@ internal sealed class FakeNodeLauncher : INodeLauncher
     private readonly ConcurrentDictionary<string, EventHandler> stoppedHandlers = new();
     private int failedClusterReads;
     private int started;
+    private int stops;
 
     public int Started => Volatile.Read(ref started);
+    public int Stops => Volatile.Read(ref stops);
+    public Action BeforeStarted { get; set; } = () => { };
     public Action BeforeStopped { get; set; } = () => { };
     public Action AfterStopped { get; set; } = () => { };
 
@@ -34,6 +37,7 @@ internal sealed class FakeNodeLauncher : INodeLauncher
 
     public IIgnite Start(IgniteConfiguration configuration)
     {
+        BeforeStarted();
         var name = $"node-{Interlocked.Increment(ref started)}";
         var active = false;
         var servers = Fake.Of<IClusterGroup>((member, _) => member switch
@@ -73,6 +77,7 @@ internal sealed class FakeNodeLauncher : INodeLauncher
 
     public bool Stop(string name, bool cancel)
     {
+        Interlocked.Increment(ref stops);
         BeforeStopped();
         stoppedHandlers[name](name, EventArgs.Empty);
         AfterStopped();
