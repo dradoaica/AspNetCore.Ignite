@@ -269,10 +269,16 @@ internal static class IgniteConfigurationFactory
 
     private static TimeSpan? Milliseconds(int? value) => value.HasValue ? TimeSpan.FromMilliseconds(value.Value) : null;
 
-    /// <summary>Entries separated by ':' (or ';'); a directory stands for the *.jar files in it.</summary>
+    /// <summary>
+    ///     Entries separated by ':' or ';' (only ';' on Windows, where ':' follows the drive letter); a directory
+    ///     stands for the *.jar files in it.
+    /// </summary>
     internal static string ExpandClasspath(string classpath) => string.Join(
         Path.PathSeparator,
-        classpath.Split([':', ';',], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        classpath.Split(
+                OperatingSystem.IsWindows() ? [';',] : [':', ';',],
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+            )
             .SelectMany<string, string>(entry => Directory.Exists(entry)
                 ? Directory.GetFiles(entry, "*.jar").Order(StringComparer.Ordinal) : [entry,]
             )
@@ -294,7 +300,8 @@ internal static class IgniteConfigurationFactory
         // An in-memory region evicts pages when it is full. A persistent region writes them to disk instead, and
         // Ignite warns about an eviction mode there.
         var inMemoryMode = settings.PageEvictionMode is { } mode
-            ? IgniteServerSettings.ParseEnum<DataPageEvictionMode>(mode)!.Value : DataPageEvictionMode.Random2Lru;
+            ? IgniteServerSettings.ParseValidEnum<DataPageEvictionMode>("PAGE_EVICTION_MODE", mode)
+            : DataPageEvictionMode.Random2Lru;
         region.PageEvictionMode = region.PersistenceEnabled ? DataPageEvictionMode.Disabled : inMemoryMode;
 
         var dataStorage = igniteConfiguration.DataStorageConfiguration;
@@ -303,15 +310,15 @@ internal static class IgniteConfigurationFactory
         dataStorage.WalPath = NullIfBlank(settings.WalPath) ?? dataStorage.WalPath;
         dataStorage.WalArchivePath = NullIfBlank(settings.WalArchivePath) ?? dataStorage.WalArchivePath;
         dataStorage.WalCompactionEnabled = settings.WalCompactionEnabled ?? dataStorage.WalCompactionEnabled;
-        dataStorage.WalMode = settings.WalMode is { } walMode ? IgniteServerSettings.ParseEnum<WalMode>(walMode)!.Value
-            : dataStorage.WalMode;
+        dataStorage.WalMode = settings.WalMode is { } walMode
+            ? IgniteServerSettings.ParseValidEnum<WalMode>("WAL_MODE", walMode) : dataStorage.WalMode;
     }
 
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     /// <summary>
-    ///     Configures static discovery from .NET when a discovery port or endpoints are set. It then replaces the
-    ///     discovery of the Spring configuration (Kubernetes), which stays in place otherwise.
+    ///     Configures static discovery from .NET, unless <see cref="IgniteServerSettings.UsesKubernetesDiscovery" />.
+    ///     It then replaces the discovery of the Spring configuration (Kubernetes).
     /// </summary>
     private static void ApplyDiscovery(
         IgniteConfiguration igniteConfiguration,
@@ -319,18 +326,15 @@ internal static class IgniteConfigurationFactory
         Func<string> getLocalIpAddress
     )
     {
-        var endpoints = settings.ClusterEndpoints;
-        if (endpoints.Count == 0 && settings.UseTcpDiscoveryStaticIpFinder)
-        {
-            // No other node is known, so the node is its own discovery endpoint. Other nodes join it by naming it
-            // in their CLUSTER_ENDPOINTS.
-            endpoints = [$"{getLocalIpAddress()}:{DefaultDiscoveryPort}",];
-        }
-
-        if (settings.SpiPort is null && endpoints.Count == 0)
+        if (settings.UsesKubernetesDiscovery)
         {
             return;
         }
+
+        // Without CLUSTER_ENDPOINTS, no other node is known, so the node is its own discovery endpoint. Other nodes
+        // join it by naming it in their CLUSTER_ENDPOINTS.
+        List<string> endpoints = settings.ClusterEndpoints.Count > 0 ? settings.ClusterEndpoints
+            : settings.UseTcpDiscoveryStaticIpFinder ? [$"{getLocalIpAddress()}:{DefaultDiscoveryPort}",] : [];
 
         if (igniteConfiguration.DiscoverySpi is not null and not TcpDiscoverySpi)
         {

@@ -48,6 +48,38 @@ public sealed class IgniteServerSettingsTests
         Assert.Equal(TimeSpan.FromSeconds(5), settings.GetBaselineAutoAdjustTimeout(true));
     }
 
+    [Theory]
+    [InlineData(null, null, null, null, true)]
+    [InlineData("prod", null, null, null, true)]
+    [InlineData("prod", "ignite-svc", null, null, false)]
+    [InlineData(null, null, "a:47500", null, false)]
+    [InlineData(null, null, null, "/config/ignite.xml", false)]
+    public void Validate_KubernetesDiscovery_NeedsItsNamespaceAndService(
+        string? k8sNamespace,
+        string? k8sServiceName,
+        string? clusterEndpoints,
+        string? configFile,
+        bool invalid
+    )
+    {
+        var settings = Load(
+            new Dictionary<string, string?>
+            {
+                ["USE_TCP_DISCOVERY_STATIC_IP_FINDER"] = "false",
+                ["K8S_NAMESPACE"] = k8sNamespace,
+                ["K8S_SERVICE_NAME"] = k8sServiceName,
+                ["CLUSTER_ENDPOINTS"] = clusterEndpoints,
+                ["CONFIG_FILE"] = configFile,
+            }
+        );
+
+        Assert.Equal(
+            invalid,
+            settings.Validate()
+                .Any(error => error.StartsWith("K8S_NAMESPACE and K8S_SERVICE_NAME", StringComparison.Ordinal))
+        );
+    }
+
     [Fact]
     public void Load_ClusterEndpoints_CommaSeparated() => Assert.Equal(
         ["a:47500", "b:47500",],
@@ -109,6 +141,9 @@ public sealed class IgniteServerSettingsTests
             {
                 Assert.DoesNotContain(placeholder, rendered);
             }
+
+            // a {{NAME}} of the template without a value in ToSpringConfigPlaceholders
+            Assert.DoesNotContain("{{", rendered);
 
             // no connector configuration: neither the REST API nor the TCP binary protocol
             Assert.Equal(

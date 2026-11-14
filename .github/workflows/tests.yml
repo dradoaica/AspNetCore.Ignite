@@ -151,7 +151,7 @@ jobs:
           --collect "XPlat Code Coverage" --results-directory coverage
 
       - name: Coverage Report
-        uses: danielpalme/ReportGenerator-GitHub-Action@5
+        uses: danielpalme/ReportGenerator-GitHub-Action@v5
         with:
           reports: coverage/**/coverage.cobertura.xml
           targetdir: coverage-report

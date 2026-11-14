@@ -24,16 +24,13 @@ internal sealed class IgniteServerHostedService(
     // Guards stopping and runner together: StopAsync either finds the runner and stops it, or sets stopping before
     // the runner exists, and RunAsync then does not start the node.
     private readonly Lock gate = new();
-    private volatile bool restartRequested;
     private IgniteServerRunner? runner;
     private FileChangeWatcher? sslFileWatcher;
     private volatile bool stopping;
 
-    // Ignition.Start blocks for a long time, so the node runs on a thread pool thread and the host starts at once.
-    protected override Task ExecuteAsync(CancellationToken stoppingToken) => Task.Run(
-        () => RunAsync(stoppingToken),
-        CancellationToken.None
-    );
+    // Since .NET 10, the host runs all of ExecuteAsync on a thread pool thread: the long Ignition.Start does not
+    // delay the start of the host.
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) => RunAsync(stoppingToken);
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
@@ -58,6 +55,7 @@ internal sealed class IgniteServerHostedService(
 
     private async Task RunAsync(CancellationToken stoppingToken)
     {
+        string? springConfigPath = null;
         try
         {
             if (settings.EnableAuthentication && string.IsNullOrWhiteSpace(settings.IgniteUserPassword))
@@ -85,7 +83,7 @@ internal sealed class IgniteServerHostedService(
                 );
             }
 
-            var springConfigPath = await SpringConfigRenderer.RenderToFileAsync(
+            springConfigPath = await SpringConfigRenderer.RenderToFileAsync(
                     Path.Combine(
                         AppContext.BaseDirectory,
                         "config",
@@ -111,12 +109,8 @@ internal sealed class IgniteServerHostedService(
 
             nodeState.SetRunner(created);
             sslFileWatcher = CreateSslFileWatcher();
-            do
-            {
-                restartRequested = false;
-                // WaitAsync lets the host stop even when the node itself cannot.
-                await created.Run().WaitAsync(stoppingToken).ConfigureAwait(false);
-            } while (restartRequested && !stopping && !stoppingToken.IsCancellationRequested);
+            // WaitAsync lets the host stop even when the node itself cannot.
+            await created.Run().WaitAsync(stoppingToken).ConfigureAwait(false);
 
             if (!stopping && !stoppingToken.IsCancellationRequested)
             {
@@ -136,6 +130,11 @@ internal sealed class IgniteServerHostedService(
         finally
         {
             sslFileWatcher?.Dispose();
+            if (springConfigPath != null)
+            {
+                // Read by every (re)start of the node, so it is removed only now. It may contain keystore passwords.
+                SpringConfigRenderer.DeleteRendered(springConfigPath);
+            }
         }
     }
 
@@ -208,7 +207,6 @@ internal sealed class IgniteServerHostedService(
         }
 
         logger.Information("SSL files changed, restarting the Ignite node...");
-        restartRequested = true;
         var timeout = TimeSpan.FromSeconds(settings.GracefulStopTimeoutInSeconds);
         if (runner.Restart(timeout))
         {

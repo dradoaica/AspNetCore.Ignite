@@ -35,17 +35,17 @@
             <bean class="org.apache.ignite.configuration.ClientConnectorConfiguration">
                 <property name="sslEnabled" value="true"/>
                 <property name="useIgniteSslContextFactory" value="false"/>
-                <property name="sslClientAuth" value="SSL_CLIENT_AUTH"/>
+                <property name="sslClientAuth" value="{{SSL_CLIENT_AUTH}}"/>
                 <property name="sslContextFactory">
                     <bean class="org.apache.ignite.ssl.SslContextFactory">
-                        <property name="keyAlgorithm" value="SSL_KEY_ALGORITHM"/>
-                        <property name="keyStoreType" value="SSL_KEY_STORE_TYPE"/>
-                        <property name="trustStoreType" value="SSL_TRUST_STORE_TYPE"/>
-                        <property name="keyStoreFilePath" value="SSL_KEY_STORE_FILE_PATH"/>
-                        <property name="keyStorePassword" value="SSL_KEY_STORE_PASSWORD"/>
-                        <property name="trustStoreFilePath" value="SSL_TRUST_STORE_FILE_PATH"/>
-                        <property name="trustStorePassword" value="SSL_TRUST_STORE_PASSWORD"/>
-                        <property name="protocol" value="SSL_PROTOCOL"/>
+                        <property name="keyAlgorithm" value="{{SSL_KEY_ALGORITHM}}"/>
+                        <property name="keyStoreType" value="{{SSL_KEY_STORE_TYPE}}"/>
+                        <property name="trustStoreType" value="{{SSL_TRUST_STORE_TYPE}}"/>
+                        <property name="keyStoreFilePath" value="{{SSL_KEY_STORE_FILE_PATH}}"/>
+                        <property name="keyStorePassword" value="{{SSL_KEY_STORE_PASSWORD}}"/>
+                        <property name="trustStoreFilePath" value="{{SSL_TRUST_STORE_FILE_PATH}}"/>
+                        <property name="trustStorePassword" value="{{SSL_TRUST_STORE_PASSWORD}}"/>
+                        <property name="protocol" value="{{SSL_PROTOCOL}}"/>
                     </bean>
                 </property>
             </bean>
@@ -56,8 +56,8 @@
                     <bean class="org.apache.ignite.spi.discovery.tcp.ipfinder.kubernetes.TcpDiscoveryKubernetesIpFinder">
                         <constructor-arg>
                             <bean class="org.apache.ignite.kubernetes.configuration.KubernetesConnectionConfiguration">
-                                <property name="namespace" value="K8S_NAMESPACE"/>
-                                <property name="serviceName" value="K8S_SERVICE_NAME"/>
+                                <property name="namespace" value="{{K8S_NAMESPACE}}"/>
+                                <property name="serviceName" value="{{K8S_SERVICE_NAME}}"/>
                             </bean>
                         </constructor-arg>
                     </bean>

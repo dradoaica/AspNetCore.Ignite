@@ -25,6 +25,9 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
 * SSL restarts are graceful and jittered; the process exits with `1` on failures (it always exited with `0`).
 * The settings inserted into the Spring configuration (`K8S_*` and, with `USE_CLIENT_SSL`, `SSL_*`) must not contain
   `#{`, which Spring would evaluate as an expression: the server refuses to start with one.
+* Kubernetes discovery (`USE_TCP_DISCOVERY_STATIC_IP_FINDER=false` without `CLUSTER_ENDPOINTS`, `SPI_PORT` or
+  `CONFIG_FILE`) needs `K8S_NAMESPACE` and `K8S_SERVICE_NAME`: the server refuses to start without them (the chart sets
+  both).
 * Node attributes no longer contain the environment variables and Java system properties (they showed secrets such as
   `IGNITE_USER_PASSWORD` to every node and client): code that reads them, e.g., a node filter, uses `userAttributes`.
 * Baseline auto-adjust waits 5 minutes with persistence (it waited 30 seconds, as in-memory clusters still do), so that

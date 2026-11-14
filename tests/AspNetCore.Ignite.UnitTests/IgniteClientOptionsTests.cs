@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
+using System.Diagnostics;
 using Xunit;
 
 namespace AspNetCore.Ignite.UnitTests;
@@ -193,6 +194,26 @@ public sealed class IgniteClientOptionsTests
         var nextAttempt = igniteManager.GetClientAsync();
         Assert.NotSame(attempts[0], nextAttempt);
         await Assert.ThrowsAnyAsync<Exception>(() => nextAttempt);
+    }
+
+    [Fact]
+    public void IgniteManager_OperationRetries_DoNotRetryAFailedConnection()
+    {
+        // nothing listens on port 1; the 3 operation retries would wait 2 + 4 + 8 s if they connected again
+        using IgniteManager igniteManager = new(
+            new IgniteClientOptions
+            {
+                Endpoints = ["127.0.0.1:1",],
+                ConnectRetryCount = 0,
+                OperationRetryCount = 3,
+                SocketTimeout = TimeSpan.FromSeconds(1),
+            }
+        );
+        var stopwatch = Stopwatch.StartNew();
+
+        Assert.ThrowsAny<Exception>(() => igniteManager.GetOrCreateCacheClient<string, string>("c"));
+
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10), $"took {stopwatch.Elapsed}");
     }
 
     private static HealthCheckContext Context(IHealthCheck healthCheck, HealthStatus failureStatus) => new()

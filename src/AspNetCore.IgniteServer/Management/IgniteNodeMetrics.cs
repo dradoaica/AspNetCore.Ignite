@@ -1,6 +1,7 @@
 using Apache.Ignite.Core;
 using Apache.Ignite.Core.Cache;
 using Apache.Ignite.Core.Cluster;
+using Serilog;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.Metrics;
@@ -22,6 +23,7 @@ internal sealed class IgniteNodeMetrics : IDisposable
 
     private static readonly TimeSpan SnapshotMaxAge = TimeSpan.FromSeconds(1);
 
+    private readonly ILogger? logger;
     private readonly Meter meter = new(MeterName);
     private readonly IgniteNodeState nodeState;
 
@@ -31,9 +33,15 @@ internal sealed class IgniteNodeMetrics : IDisposable
     private NodeSnapshot? snapshot;
     private DateTimeOffset snapshotTime;
 
-    public IgniteNodeMetrics(IgniteNodeState nodeState, bool perCache = true, TimeProvider? timeProvider = null)
+    public IgniteNodeMetrics(
+        IgniteNodeState nodeState,
+        bool perCache = true,
+        TimeProvider? timeProvider = null,
+        ILogger? logger = null
+    )
     {
         this.nodeState = nodeState;
+        this.logger = logger;
         this.perCache = perCache;
         this.timeProvider = timeProvider ?? TimeProvider.System;
         meter.CreateObservableGauge(
@@ -193,8 +201,9 @@ internal sealed class IgniteNodeMetrics : IDisposable
         {
             return GetSnapshot() is { } current ? read(current).ToList() : [];
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            logger?.Debug(ex, "Ignite metrics were not read.");
             return [];
         }
     }
@@ -208,7 +217,7 @@ internal sealed class IgniteNodeMetrics : IDisposable
                 now - snapshotTime >= SnapshotMaxAge ||
                 !ReferenceEquals(snapshot.Node, nodeState.Node))
             {
-                snapshot = nodeState.Node is { } node ? NodeSnapshot.Take(node, perCache) : null;
+                snapshot = nodeState.Node is { } node ? NodeSnapshot.Take(node, perCache, logger) : null;
                 snapshotTime = now;
             }
 
@@ -227,7 +236,7 @@ internal sealed class IgniteNodeMetrics : IDisposable
         IReadOnlyDictionary<string, int> LostPartitions
     )
     {
-        public static NodeSnapshot Take(IIgnite node, bool perCache)
+        public static NodeSnapshot Take(IIgnite node, bool perCache, ILogger? logger = null)
         {
             var cluster = node.GetCluster();
             var clusterActive = cluster.IsActive();
@@ -247,10 +256,11 @@ internal sealed class IgniteNodeMetrics : IDisposable
                         cacheEntries[cacheName] = cache.GetLocalSizeLong(CachePeekMode.Primary, CachePeekMode.Backup);
                     }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    // The cache was destroyed while it was read (e.g., the temporary cache of a password change).
-                    // The other caches are still reported.
+                    // E.g., the cache was destroyed while it was read (such as the temporary cache of a password
+                    // change). The other caches are still reported.
+                    logger?.Debug(ex, "The metrics of cache {CacheName} were not read.", cacheName);
                     lostPartitions.Remove(cacheName);
                 }
             }

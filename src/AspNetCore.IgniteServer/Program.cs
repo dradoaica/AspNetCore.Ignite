@@ -126,7 +126,8 @@ static IHost BuildWithManagement(IConfiguration configuration, IgniteServerSetti
     AddServerServices(builder.Services, settings);
     builder.Services.AddSingleton(sp => new IgniteNodeMetrics(
             sp.GetRequiredService<IgniteNodeState>(),
-            settings.MetricsPerCache
+            settings.MetricsPerCache,
+            logger: Log.Logger
         )
     );
     // With an OTLP endpoint, the same instruments are also pushed to an OpenTelemetry collector (OTEL_* settings).

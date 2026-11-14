@@ -9,7 +9,7 @@ public sealed class SpringConfigRendererTests
     public void Render_ReplacesAndEscapesPlaceholders()
     {
         var rendered = SpringConfigRenderer.Render(
-            "<a ns=\"K8S_NAMESPACE\" pwd=\"SSL_KEY_STORE_PASSWORD\" svc=\"K8S_SERVICE_NAME\"/>",
+            "<a ns=\"{{K8S_NAMESPACE}}\" pwd=\"{{SSL_KEY_STORE_PASSWORD}}\" svc=\"{{K8S_SERVICE_NAME}}\"/>",
             new Dictionary<string, string?>
             {
                 ["K8S_NAMESPACE"] = "prod",
@@ -20,6 +20,18 @@ public sealed class SpringConfigRendererTests
 
         Assert.Equal("<a ns=\"prod\" pwd=\"a&amp;b&lt;&quot;c&quot;&gt;\" svc=\"\"/>", rendered);
     }
+
+    [Fact]
+    public void Render_LeavesBareNamesAlone() => Assert.Equal(
+        "<!-- K8S_NAMESPACE: the namespace --><a ns=\"prod\"/>",
+        SpringConfigRenderer.Render(
+            "<!-- K8S_NAMESPACE: the namespace --><a ns=\"{{K8S_NAMESPACE}}\"/>",
+            new Dictionary<string, string?>
+            {
+                ["K8S_NAMESPACE"] = "prod",
+            }
+        )
+    );
 
     [Fact]
     public void Render_InsertsXmlPlaceholdersVerbatim() => Assert.Equal(
@@ -42,7 +54,7 @@ public sealed class SpringConfigRendererTests
         try
         {
             var templatePath = Path.Combine(directory, "spring-config.xml");
-            const string template = "<p value=\"K8S_NAMESPACE\"/>";
+            const string template = "<p value=\"{{K8S_NAMESPACE}}\"/>";
             await File.WriteAllTextAsync(templatePath, template);
             var outputDirectory = Path.Combine(directory, "out");
 
@@ -69,7 +81,14 @@ public sealed class SpringConfigRendererTests
             if (!OperatingSystem.IsWindows())
             {
                 Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(second));
+                Assert.Equal(
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+                    File.GetUnixFileMode(outputDirectory)
+                );
             }
+
+            SpringConfigRenderer.DeleteRendered(second);
+            Assert.False(Directory.Exists(outputDirectory));
         }
         finally
         {
@@ -81,20 +100,20 @@ public sealed class SpringConfigRendererTests
     public void Render_DoesNotSearchInsertedValuesAndFragments()
     {
         var rendered = SpringConfigRenderer.Render(
-            "<a ns=\"K8S_NAMESPACE\" pwd=\"SSL_KEY_STORE_PASSWORD\"/><!-- X -->",
+            "<a ns=\"{{K8S_NAMESPACE}}\" pwd=\"{{SSL_KEY_STORE_PASSWORD}}\"/><!-- X -->",
             new Dictionary<string, string?>
             {
-                ["K8S_NAMESPACE"] = "SSL_KEY_STORE_PASSWORD",
+                ["K8S_NAMESPACE"] = "{{SSL_KEY_STORE_PASSWORD}}",
                 ["SSL_KEY_STORE_PASSWORD"] = "secret",
             },
             new Dictionary<string, string?>
             {
-                ["<!-- X -->"] = "<b key=\"K8S_NAMESPACE\" value=\"${SSL_KEY_STORE_PASSWORD}\"/>",
+                ["<!-- X -->"] = "<b key=\"{{K8S_NAMESPACE}}\" value=\"${SSL_KEY_STORE_PASSWORD}\"/>",
             }
         );
 
         Assert.Equal(
-            "<a ns=\"SSL_KEY_STORE_PASSWORD\" pwd=\"secret\"/><b key=\"K8S_NAMESPACE\" value=\"${SSL_KEY_STORE_PASSWORD}\"/>",
+            "<a ns=\"{{SSL_KEY_STORE_PASSWORD}}\" pwd=\"secret\"/><b key=\"{{K8S_NAMESPACE}}\" value=\"${SSL_KEY_STORE_PASSWORD}\"/>",
             rendered
         );
     }

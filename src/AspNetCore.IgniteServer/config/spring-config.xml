@@ -37,8 +37,8 @@
                     <bean class="org.apache.ignite.spi.discovery.tcp.ipfinder.kubernetes.TcpDiscoveryKubernetesIpFinder">
                         <constructor-arg>
                             <bean class="org.apache.ignite.kubernetes.configuration.KubernetesConnectionConfiguration">
-                                <property name="namespace" value="K8S_NAMESPACE"/>
-                                <property name="serviceName" value="K8S_SERVICE_NAME"/>
+                                <property name="namespace" value="{{K8S_NAMESPACE}}"/>
+                                <property name="serviceName" value="{{K8S_SERVICE_NAME}}"/>
                             </bean>
                         </constructor-arg>
                     </bean>

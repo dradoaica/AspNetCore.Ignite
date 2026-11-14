@@ -1,6 +1,7 @@
 using Apache.Ignite.Core;
 using Apache.Ignite.Core.Cache;
 using Apache.Ignite.Core.Cluster;
+using Apache.Ignite.Core.Common;
 using AspNetCore.IgniteServer.Listeners;
 using Microsoft.Extensions.Time.Testing;
 using Serilog;
@@ -164,6 +165,40 @@ public sealed class LostPartitionsListenerTests
     }
 
     [Fact]
+    public void DestroyedCaches_AreForgotten()
+    {
+        FakeCluster cluster = new();
+        FakeTimeProvider time = new();
+        using LostPartitionsListener listener = new(cluster.Ignite, Logger.None, true, true, time);
+
+        Lose(listener, "c");
+        Lose(listener, "d");
+        cluster.CacheNames.Remove("c");
+        time.Advance(Debounce);
+
+        Assert.Equal(["ResetLostPartitions d",], cluster.Calls);
+    }
+
+    [Fact]
+    public void AFailureToCount_KeepsTheLossForTheNextTopologyChange()
+    {
+        FakeCluster cluster = new()
+        {
+            CountFailures = 1,
+        };
+        FakeTimeProvider time = new();
+        using LostPartitionsListener listener = new(cluster.Ignite, Logger.None, true, true, time);
+
+        Lose(listener, "c");
+        time.Advance(Debounce);
+        Assert.Empty(cluster.Calls);
+
+        listener.OnTopologyChanged();
+        time.Advance(Debounce);
+        Assert.Equal(["ResetLostPartitions c",], cluster.Calls);
+    }
+
+    [Fact]
     public void WithoutAutoReset_TheLossIsOnlyLogged()
     {
         FakeCluster cluster = new();
@@ -207,6 +242,7 @@ public sealed class LostPartitionsListenerTests
             Ignite = Fake.Of<IIgnite>((name, args) => name switch
                 {
                     nameof(IIgnite.GetCluster) => cluster,
+                    nameof(IIgnite.GetCacheNames) => CacheNames.ToList(),
                     nameof(IIgnite.GetCache) => Cache((string)args[0]!),
                     nameof(IIgnite.ResetLostPartitions) => Reset(string.Join(",", (string[])args[0]!)),
                     _ => throw new NotSupportedException(name),
@@ -221,6 +257,8 @@ public sealed class LostPartitionsListenerTests
         public string[] Baseline { get; init; } = ["n1",];
         public string[] Online { get; init; } = ["n1",];
         public int ResetFailures { get; set; }
+        public int CountFailures { get; set; }
+        public HashSet<string> CacheNames { get; } = ["c", "d",];
 
         private IClusterGroup Group(IEnumerable<string> consistentIds) => Fake.Of<IClusterGroup>((name, _) =>
             name switch
@@ -242,8 +280,9 @@ public sealed class LostPartitionsListenerTests
         private ICache<object, object> Cache(string cacheName) => Fake.Of<ICache<object, object>>((name, _) =>
             name switch
             {
-                nameof(ICache<object, object>.GetLostPartitions) => WithoutLostPartitions.Contains(cacheName)
-                    ? new List<int>() : [0,],
+                nameof(ICache<object, object>.GetLostPartitions) => CountFailures-- > 0
+                    ? throw new IgniteException("Topology changed") : WithoutLostPartitions.Contains(cacheName)
+                        ? new List<int>() : [0,],
                 _ => throw new NotSupportedException(name),
             }
         );

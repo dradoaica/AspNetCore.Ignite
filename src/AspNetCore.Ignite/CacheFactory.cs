@@ -12,7 +12,9 @@ using System.Security.Authentication;
 
 namespace AspNetCore.Ignite;
 
-/// <summary>Creates thin client configurations, connections and caches with the defaults of this library.</summary>
+/// <summary>
+///     Creates thin client configurations, connections (thin and thick) and caches with the defaults of this library.
+/// </summary>
 public static class CacheFactory
 {
     /// <summary>The endpoint used when none is configured.</summary>
@@ -99,8 +101,8 @@ public static class CacheFactory
         return igniteClientConfiguration;
     }
 
-    /// <summary>Starts a thick client node (in this process) with <paramref name="igniteConfiguration" />, set to client mode.</summary>
-    /// <param name="igniteConfiguration">The node configuration.</param>
+    /// <summary>Starts a thick client node (in this process) with <paramref name="igniteConfiguration" />.</summary>
+    /// <param name="igniteConfiguration">The node configuration; its <c>ClientMode</c> is set to true.</param>
     public static IIgnite ConnectAsClient(IgniteConfiguration igniteConfiguration)
     {
         igniteConfiguration.ClientMode = true;

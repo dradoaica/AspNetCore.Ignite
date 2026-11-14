@@ -47,7 +47,10 @@ public sealed class IgniteClientOptions
     /// <summary>Connection attempts (exponential backoff: 2, 4, 8, ... seconds) when the first operation connects.</summary>
     public int ConnectRetryCount { get; set; } = 6;
 
-    /// <summary>Retries (exponential backoff) of transient failures of <see cref="IgniteManager" /> operations.</summary>
+    /// <summary>
+    ///     Retries (exponential backoff) of transient failures of <see cref="IgniteManager" /> operations once
+    ///     connected; a connection that failed after <see cref="ConnectRetryCount" /> attempts is not retried by them.
+    /// </summary>
     public int OperationRetryCount { get; set; } = 3;
 
     /// <summary>Defaults of the caches created by <see cref="IgniteManager.GetOrCreateCacheClient{TKey,TData}" />.</summary>

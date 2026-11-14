@@ -76,13 +76,19 @@ public class IgniteManager : IIgniteManager, IDisposable
     public ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
         string cacheName,
         Action<CacheClientConfiguration>? extendConfigurationAction = null
-    ) => operationRetryPolicy.Execute(() => CacheFactory.GetOrCreateCacheClient<TKey, TData>(
-            GetIgniteClient(),
-            cacheName,
-            extendConfigurationAction,
-            options.Cache
-        )
-    );
+    )
+    {
+        // Connected first, outside the operation retries: a connection that failed after its own retries is not
+        // retried again by each of them.
+        var client = GetIgniteClient();
+        return operationRetryPolicy.Execute(() => CacheFactory.GetOrCreateCacheClient<TKey, TData>(
+                client,
+                cacheName,
+                extendConfigurationAction,
+                options.Cache
+            )
+        );
+    }
 
     /// <inheritdoc />
     public void DestroyCache(string cacheName)

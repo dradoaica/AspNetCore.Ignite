@@ -94,6 +94,13 @@ internal sealed partial class IgniteServerSettings
     [ConfigurationKeyName("AUTO_RESET_LOST_PARTITIONS")]
     public bool AutoResetLostPartitions { get; set; } = true;
 
+    /// <summary>
+    ///     No discovery is configured from .NET (no static endpoints, not even this node's own, and no discovery port),
+    ///     so the nodes find each other through the Kubernetes API, as the Spring configuration says.
+    /// </summary>
+    internal bool UsesKubernetesDiscovery =>
+        ClusterEndpoints.Count == 0 && !UseTcpDiscoveryStaticIpFinder && SpiPort is null;
+
     /// <summary>Binds the settings; CLUSTER_ENDPOINTS is a list (CLUSTER_ENDPOINTS__0, ...) or a comma-separated value.</summary>
     public static IgniteServerSettings Load(IConfiguration configuration)
     {
@@ -144,6 +151,17 @@ internal sealed partial class IgniteServerSettings
         if (SqlQueryHistorySize < 0)
         {
             errors.Add("SQL_QUERY_HISTORY_SIZE must not be negative.");
+        }
+
+        // A -ConfigFile may configure the discovery instead.
+        if (UsesKubernetesDiscovery &&
+            string.IsNullOrWhiteSpace(ConfigFile) &&
+            (string.IsNullOrWhiteSpace(K8sNamespace) || string.IsNullOrWhiteSpace(K8sServiceName)))
+        {
+            errors.Add(
+                "K8S_NAMESPACE and K8S_SERVICE_NAME must be set for Kubernetes discovery (without CLUSTER_ENDPOINTS " +
+                "and with USE_TCP_DISCOVERY_STATIC_IP_FINDER=false)."
+            );
         }
     }
 
@@ -212,6 +230,11 @@ internal sealed partial class IgniteServerSettings
         where T : struct, Enum =>
         Enum.TryParse<T>(value.Replace("_", string.Empty, StringComparison.Ordinal), true, out var parsed) &&
         Enum.IsDefined(parsed) ? parsed : null;
+
+    /// <summary>The enum value of a setting that <see cref="Validate" /> accepts; throws for one it reports.</summary>
+    internal static T ParseValidEnum<T>(string key, string value)
+        where T : struct, Enum =>
+        ParseEnum<T>(value) ?? throw new InvalidOperationException($"{key} '{value}' is not valid (see Validate).");
 
     private static void RequirePositive(List<string> errors, string key, int? value)
     {

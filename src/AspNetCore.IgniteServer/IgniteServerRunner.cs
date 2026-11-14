@@ -21,14 +21,21 @@ internal sealed class IgniteServerRunner : IDisposable
 
     private readonly ILogger logger;
     private readonly IgniteServerSettings settings;
+    private readonly Lock stopLock = new();
 
     // Set when this node, as the cluster's last server node, deactivated the cluster in order to restart. The next
     // run then activates the cluster again without waiting for other nodes.
     private volatile bool deactivatedToRestart;
     private volatile bool disposed;
     private IIgnite? ignite;
+
+    // The stop of the last node, which may still run after its timeout. Ignite stops a node once: a later stop can only
+    // wait for this one.
+    private Task<bool>? nodeStop;
     private volatile bool ready;
-    private volatile bool stopRequested;
+
+    // What Restart() or Stop() asked for: a stop is final, a restart is taken by the next start.
+    private volatile Request request;
 
     public IgniteServerRunner(
         IgniteServerSettings settings,
@@ -81,20 +88,33 @@ internal sealed class IgniteServerRunner : IDisposable
             return;
         }
 
-        stopRequested = true;
-        StopNode(true);
+        Interlocked.Exchange(ref request, Request.Stop);
+        // A running node is stopped, cancelling its jobs. A stop that timed out earlier is not waited for: that node
+        // stops with the process.
+        StopRunningNode(true)?.Wait();
         disposed = true;
     }
 
-    /// <summary>Starts the node, activates its cluster and returns once the node has stopped.</summary>
+    /// <summary>
+    ///     Starts the node and activates its cluster, again after each <see cref="Restart" />; returns once the node
+    ///     has stopped otherwise (<see cref="Stop" />, or on its own).
+    /// </summary>
     public async Task Run()
     {
         ObjectDisposedException.ThrowIf(disposed, this);
-        if (stopRequested)
+        do
         {
-            return;
-        }
+            if (request == Request.Stop)
+            {
+                return;
+            }
 
+            await RunOnce().ConfigureAwait(false);
+        } while (Interlocked.CompareExchange(ref request, Request.None, Request.Restart) == Request.Restart);
+    }
+
+    private async Task RunOnce()
+    {
         logger.Information("Starting Ignite server runner...");
         RebalanceTracker.Reset();
         var node = Ignition.Start(Configuration);
@@ -108,10 +128,10 @@ internal sealed class IgniteServerRunner : IDisposable
         };
         // From here on, Stop() and Restart() find this node and stop it.
         Volatile.Write(ref ignite, node);
-        if (stopRequested)
+        if (request == Request.Stop)
         {
             // Stop() was called while the node was starting, when there was no node for it to stop.
-            StopNode(false);
+            StopRunningNode(false)?.Wait();
             logger.Information("'{IgniteInstance}' stopped.", node.Name);
             return;
         }
@@ -154,27 +174,36 @@ internal sealed class IgniteServerRunner : IDisposable
     }
 
     /// <summary>
-    ///     Stops the running node gracefully so that <see cref="Run" /> can start it again (e.g., with renewed
-    ///     certificates); nothing happens when no node is running. Returns false when the node did not stop within
-    ///     <paramref name="timeout" /> (the GRACEFUL shutdown policy waits until the node's partitions have copies on other
-    ///     nodes, e.g., while another node restarts). The cluster's last server node deactivates the cluster first, so it
-    ///     stops at once, and activates it again once restarted.
+    ///     Stops the running node gracefully so that <see cref="Run" /> starts it again (e.g., with renewed
+    ///     certificates); nothing happens when no node is running or it is being stopped. Returns false when the node
+    ///     did not stop within <paramref name="timeout" /> (see <see cref="StopNodeGracefully" />): it then still
+    ///     stops, but is not started again.
     /// </summary>
     public bool Restart(TimeSpan timeout)
     {
+        if (Node == null || Interlocked.CompareExchange(ref request, Request.Restart, Request.None) == Request.Stop)
+        {
+            return true;
+        }
+
         logger.Information("Restarting Ignite server runner...");
-        return StopNodeGracefully(timeout, true);
+        if (StopNodeGracefully(timeout, true))
+        {
+            return true;
+        }
+
+        Interlocked.CompareExchange(ref request, Request.None, Request.Restart);
+        return false;
     }
 
     /// <summary>
-    ///     Stops the node gracefully; afterward, <see cref="Run" /> does not start it again. Returns false when the node
-    ///     did not stop within <paramref name="timeout" />: the GRACEFUL shutdown policy waits until the node's partitions
-    ///     have copies on other nodes, which never happens when the whole cluster stops; the node then stops with the process.
-    ///     The cluster's last server node deactivates the cluster first, so it stops at once.
+    ///     Stops the node gracefully; afterward, <see cref="Run" /> does not start it again. Returns false when the
+    ///     node did not stop within <paramref name="timeout" /> (see <see cref="StopNodeGracefully" />); it then stops
+    ///     with the process.
     /// </summary>
     public bool Stop(TimeSpan timeout)
     {
-        stopRequested = true;
+        Interlocked.Exchange(ref request, Request.Stop);
         ready = false;
         logger.Information("Stopping Ignite server runner...");
         if (StopNodeGracefully(timeout, false))
@@ -244,8 +273,11 @@ internal sealed class IgniteServerRunner : IDisposable
     }
 
     /// <summary>
-    ///     Stops the running node gracefully within <paramref name="timeout" />, the cluster's last server node after
-    ///     deactivating the cluster (which the next run activates again when <paramref name="restarting" />).
+    ///     Stops the node within <paramref name="timeout" />, or waits for a stop still in progress (e.g., of a restart
+    ///     that timed out). The GRACEFUL shutdown policy waits until the node's partitions have copies on other nodes,
+    ///     which can take long (e.g., while another node restarts too) and never happens for the cluster's last server
+    ///     node: that one deactivates the cluster first (<see cref="DeactivateIfLastServerNode" />), which the next run
+    ///     activates again when <paramref name="restarting" />.
     /// </summary>
     private bool StopNodeGracefully(TimeSpan timeout, bool restarting)
     {
@@ -256,13 +288,14 @@ internal sealed class IgniteServerRunner : IDisposable
         }
 
         var remaining = timeout - stopping.Elapsed;
-        return StopNode(false, remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero);
+        var stop = StopRunningNode(false) ?? Volatile.Read(ref nodeStop);
+        return stop?.Wait(remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero) ?? true;
     }
 
     /// <summary>
-    ///     No other node can take over the partitions of the cluster's last server node, which the GRACEFUL shutdown
-    ///     policy would wait for until the timeout: that node deactivates the cluster (a persistent one checkpoints its data,
-    ///     and the next start activates it again). True when it deactivated the cluster.
+    ///     The cluster's last server node deactivates the cluster before it stops, so that it stops at once (a
+    ///     persistent one checkpoints its data, and the next start activates it again). True when it deactivated the
+    ///     cluster.
     /// </summary>
     private bool DeactivateIfLastServerNode(TimeSpan timeout)
     {
@@ -299,23 +332,28 @@ internal sealed class IgniteServerRunner : IDisposable
     }
 
     /// <summary>
-    ///     Stops the running node, if any, cancelling its jobs or waiting for them; false when it is still stopping after
-    ///     <paramref name="timeout" /> (no timeout: waits until it has stopped).
+    ///     Begins to stop the running node, cancelling its jobs or waiting for them, and returns that stop; null when
+    ///     no node is running.
     /// </summary>
-    private bool StopNode(bool cancel, TimeSpan? timeout = null)
+    private Task<bool>? StopRunningNode(bool cancel)
     {
-        ready = false;
-        if (Interlocked.Exchange(ref ignite, null) is not { } node)
+        lock (stopLock)
         {
-            return true;
-        }
+            ready = false;
+            if (Interlocked.Exchange(ref ignite, null) is not { } node)
+            {
+                return null;
+            }
 
-        return Task.Run(() => Ignition.Stop(node.Name, cancel)).Wait(timeout ?? Timeout.InfiniteTimeSpan);
+            var stop = Task.Run(() => Ignition.Stop(node.Name, cancel));
+            Volatile.Write(ref nodeStop, stop);
+            return stop;
+        }
     }
 
     /// <summary>
-    ///     A persistent cluster records its baseline topology on activation, so wait for the configured number of server
-    ///     nodes before activating it (unless it is already active, e.g., when resuming).
+    ///     A persistent cluster records its baseline topology on activation, so wait for the configured number of
+    ///     server nodes before activating it (unless it is already active, e.g., when resuming).
     /// </summary>
     private async Task WaitForServerNodes(ICluster cluster, Task stopped)
     {
@@ -368,5 +406,12 @@ internal sealed class IgniteServerRunner : IDisposable
         {
             return null;
         }
+    }
+
+    private enum Request
+    {
+        None,
+        Restart,
+        Stop,
     }
 }

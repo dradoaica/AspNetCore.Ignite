@@ -1,6 +1,7 @@
 using Apache.Ignite.Core;
 using Apache.Ignite.Core.Cache.Query;
 using Apache.Ignite.Core.Client;
+using Apache.Ignite.Core.Common;
 using AspNetCore.Ignite;
 using AspNetCore.Ignite.Options;
 using Serilog;
@@ -143,11 +144,30 @@ internal sealed class IgniteUserPasswordManager(IgniteServerSettings settings, I
                 null,
                 DdlCacheOptions
             );
-            ddlCache.Query(new SqlFieldsQuery(BuildAlterUserPasswordSql(DefaultUserName, password))).GetAll();
-            igniteClient.DestroyCache(ddlCacheName);
+            try
+            {
+                ddlCache.Query(new SqlFieldsQuery(BuildAlterUserPasswordSql(DefaultUserName, password))).GetAll();
+            }
+            finally
+            {
+                DestroyDdlCache(igniteClient, ddlCacheName);
+            }
         }
 
         return true;
+    }
+
+    /// <summary>Not fatal: the next password change of this node reuses a cache left behind, then destroys it.</summary>
+    private void DestroyDdlCache(IIgniteClient igniteClient, string ddlCacheName)
+    {
+        try
+        {
+            igniteClient.DestroyCache(ddlCacheName);
+        }
+        catch (Exception ex) when (ex is IgniteClientException or IgniteException)
+        {
+            logger.Warning(ex, "The temporary cache {CacheName} was not destroyed.", ddlCacheName);
+        }
     }
 
     private IIgniteClient Connect(string endpoint, string password) =>

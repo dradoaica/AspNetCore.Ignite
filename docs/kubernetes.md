@@ -3,6 +3,10 @@
 The [Helm chart](https://github.com/dradoaica/helm-charts/tree/main/charts/aspnetcore-ignite-server) runs the server as
 a StatefulSet. A deployment should:
 
+* find the other pods through the Kubernetes API, as the chart does: set `USE_TCP_DISCOVERY_STATIC_IP_FINDER=false`,
+  `K8S_NAMESPACE` and `K8S_SERVICE_NAME` (a headless Service of the pods). By default, each node is its own static
+  discovery endpoint, so pods without these settings form clusters of one node each; with only the first of them, the
+  server refuses to start,
 * probe `/health/startup` (startup), `/health/liveness` and `/health/readiness` on port 9464 (and scrape `/metrics`),
 * start the pods in parallel (`podManagementPolicy: Parallel`) when `ACTIVATION_MIN_SERVER_NODES` is above 1: with
   `OrderedReady`, the first pod is never ready (its cluster waits for the others) and the others never start,

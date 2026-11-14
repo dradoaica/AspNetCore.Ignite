@@ -161,10 +161,13 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
 
         try
         {
+            var cacheNames = ignite.GetCacheNames().ToHashSet(StringComparer.Ordinal);
             Dictionary<string, int> partitions = [];
             foreach (var cacheName in lost.Keys)
             {
-                var count = CountLostPartitions(cacheName);
+                // A failure to count (e.g., during a topology change) propagates: the record stays for the next try.
+                var count = cacheNames.Contains(cacheName)
+                    ? ignite.GetCache<object, object>(cacheName).GetLostPartitions().Count : 0;
                 if (count == 0)
                 {
                     // Nothing is lost any more: the oldest node reset the cache, or the cache was destroyed.
@@ -188,10 +191,28 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
                 DropDepartedBaselineNodes(cluster);
             }
 
-            ignite.ResetLostPartitions(partitions.Keys.ToArray());
-            foreach (var (cacheName, count) in partitions)
+            // Removed before the reset, so that a loss reported in the meantime stays recorded for the next one.
+            foreach (var cacheName in partitions.Keys)
             {
                 lost.TryRemove(cacheName, out _);
+            }
+
+            try
+            {
+                ignite.ResetLostPartitions(partitions.Keys.ToArray());
+            }
+            catch
+            {
+                foreach (var cacheName in partitions.Keys)
+                {
+                    lost.TryAdd(cacheName, 0);
+                }
+
+                throw;
+            }
+
+            foreach (var (cacheName, count) in partitions)
+            {
                 logger.Warning(persistent ? ResetWithReturnedData : ResetWithoutData, count, cacheName);
             }
         }
@@ -211,19 +232,6 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
                 "Failed to reset the lost partitions of caches {CacheNames}.",
                 string.Join(", ", lost.Keys)
             );
-        }
-    }
-
-    private int CountLostPartitions(string cacheName)
-    {
-        try
-        {
-            return ignite.GetCache<object, object>(cacheName).GetLostPartitions().Count;
-        }
-        catch (Exception)
-        {
-            // The cache was destroyed in the meantime.
-            return 0;
         }
     }
 

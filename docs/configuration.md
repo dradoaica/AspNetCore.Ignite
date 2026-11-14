@@ -56,7 +56,8 @@ same name, and by the command line options.
 - `CLUSTER_ENDPOINTS` (option `-Cluster`, default _(empty)_): Static discovery endpoints: comma-separated, or
   `CLUSTER_ENDPOINTS__0`, `CLUSTER_ENDPOINTS__1`, ...
 - `USE_TCP_DISCOVERY_STATIC_IP_FINDER` (default `true`): Use the local address as the static discovery endpoint when no
-  cluster endpoints are given.
+  cluster endpoints are given. Set it to `false` for Kubernetes discovery (with neither `CLUSTER_ENDPOINTS` nor
+  `SPI_PORT`), which needs `K8S_NAMESPACE` and `K8S_SERVICE_NAME`.
 - `DEFAULT_CONSISTENT_ID` (option `-ConsistentId`, default _(empty)_): Consistent id of the node. Must be **unique per
   node**; leave empty to let Ignite derive one.
 - `K8S_NAMESPACE` / `K8S_SERVICE_NAME` (default _(empty)_): Kubernetes IP finder settings.

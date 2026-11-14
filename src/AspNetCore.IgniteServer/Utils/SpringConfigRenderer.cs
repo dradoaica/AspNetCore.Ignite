@@ -12,9 +12,10 @@ namespace AspNetCore.IgniteServer.Utils;
 internal static class SpringConfigRenderer
 {
     /// <summary>
-    ///     Replaces each placeholder in <paramref name="template" /> with its XML-escaped value, and each of
-    ///     <paramref name="xmlPlaceholders" /> with its value as is (XML elements). One pass: the values and fragments
-    ///     inserted are not searched for placeholders (a fragment may contain e.g. <c>${SSL_KEY_STORE_PASSWORD}</c>).
+    ///     Replaces each <c>{{NAME}}</c> of <paramref name="placeholders" /> in <paramref name="template" /> with its
+    ///     XML-escaped value, and each of <paramref name="xmlPlaceholders" /> (as is, e.g., an XML comment) with its
+    ///     value as is (XML elements). One pass: the values and fragments inserted are not searched for placeholders (a
+    ///     fragment may contain e.g. <c>${SSL_KEY_STORE_PASSWORD}</c>).
     /// </summary>
     internal static string Render(
         string template,
@@ -22,26 +23,31 @@ internal static class SpringConfigRenderer
         IReadOnlyDictionary<string, string?>? xmlPlaceholders = null
     )
     {
-        xmlPlaceholders ??= new Dictionary<string, string?>();
-        var names = placeholders.Keys.Concat(xmlPlaceholders.Keys).ToList();
-        if (names.Count == 0)
+        Dictionary<string, string> replacements = new(StringComparer.Ordinal);
+        foreach (var (name, value) in placeholders)
+        {
+            replacements[$"{{{{{name}}}}}"] = SecurityElement.Escape(value ?? string.Empty);
+        }
+
+        foreach (var (token, xml) in xmlPlaceholders ?? new Dictionary<string, string?>())
+        {
+            replacements[token] = xml ?? string.Empty;
+        }
+
+        if (replacements.Count == 0)
         {
             return template;
         }
 
-        // the longest name first, should one contain another
-        var pattern = string.Join('|', names.OrderByDescending(name => name.Length).Select(Regex.Escape));
-        return Regex.Replace(
-            template,
-            pattern,
-            match => xmlPlaceholders.TryGetValue(match.Value, out var xml) ? xml ?? string.Empty
-                : SecurityElement.Escape(placeholders[match.Value] ?? string.Empty)
-        );
+        // the longest token first, should one contain another
+        var pattern = string.Join('|', replacements.Keys.OrderByDescending(token => token.Length).Select(Regex.Escape));
+        return Regex.Replace(template, pattern, match => replacements[match.Value]);
     }
 
     /// <summary>
-    ///     Renders the template into a private file under the temp directory and returns its path. The template itself is
-    ///     never modified, so every start re-applies the current configuration (and works on a read-only file system).
+    ///     Renders the template into a private file and returns its path: by default under a directory of this process
+    ///     in the temp directory, so that several servers on one machine do not share it. The template itself is never
+    ///     modified, so every start re-applies the current configuration (and works on a read-only file system).
     /// </summary>
     internal static async Task<string> RenderToFileAsync(
         string templatePath,
@@ -51,7 +57,7 @@ internal static class SpringConfigRenderer
     )
     {
         var template = await File.ReadAllTextAsync(templatePath, Encoding.UTF8).ConfigureAwait(false);
-        outputDirectory ??= Path.Combine(Path.GetTempPath(), "aspnetcore-ignite-server");
+        outputDirectory ??= Path.Combine(Path.GetTempPath(), $"aspnetcore-ignite-server-{Environment.ProcessId}");
         var outputPath = Path.Combine(outputDirectory, Path.GetFileName(templatePath));
         if (OperatingSystem.IsWindows())
         {
@@ -59,11 +65,12 @@ internal static class SpringConfigRenderer
         }
         else
         {
-            // the rendered file may contain keystore passwords
-            Directory.CreateDirectory(
-                outputDirectory,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
-            );
+            // The rendered file may contain keystore passwords. A directory left by an earlier process of the same id
+            // is made private again; one of another user cannot be (this throws), so it is not written to.
+            const UnixFileMode privateDirectory = UnixFileMode.UserRead | UnixFileMode.UserWrite |
+                                                  UnixFileMode.UserExecute;
+            Directory.CreateDirectory(outputDirectory, privateDirectory);
+            File.SetUnixFileMode(outputDirectory, privateDirectory);
             if (File.Exists(outputPath))
             {
                 File.Delete(outputPath);
@@ -72,7 +79,8 @@ internal static class SpringConfigRenderer
 
         FileStreamOptions options = new()
         {
-            Mode = FileMode.Create,
+            // a new file (not one planted in its place in the meantime) where the previous one was deleted
+            Mode = OperatingSystem.IsWindows() ? FileMode.Create : FileMode.CreateNew,
             Access = FileAccess.Write,
         };
         if (!OperatingSystem.IsWindows())
@@ -84,5 +92,23 @@ internal static class SpringConfigRenderer
         await writer.WriteAsync(Render(template, placeholders, xmlPlaceholders)).ConfigureAwait(false);
 
         return outputPath;
+    }
+
+    /// <summary>Removes a rendered file, and its directory once empty; best effort.</summary>
+    internal static void DeleteRendered(string renderedPath)
+    {
+        try
+        {
+            File.Delete(renderedPath);
+            if (Path.GetDirectoryName(renderedPath) is { } directory &&
+                !Directory.EnumerateFileSystemEntries(directory).Any())
+            {
+                Directory.Delete(directory);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The temp directory is cleaned up with the container, or by the system.
+        }
     }
 }
