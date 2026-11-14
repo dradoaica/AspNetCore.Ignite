@@ -2,8 +2,8 @@ namespace AspNetCore.Ignite.IntegrationTests;
 
 /// <summary>
 ///     The parts of the server's log messages that the integration tests wait for. Each one must be part of a message
-///     in the server's code: a unit test (<c>ServerLogTests</c>) fails when a message is reworded without updating
-///     this list, long before an integration test would time out waiting for it.
+///     in the server's code: a unit test (<c>ServerLogTests</c>) fails when a message is reworded without updating this
+///     list, long before an integration test would time out waiting for it.
 /// </summary>
 internal static class ServerLog
 {

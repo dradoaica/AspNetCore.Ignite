@@ -156,9 +156,9 @@ internal sealed class IgniteServerRunner : IDisposable
     /// <summary>
     ///     Stops the running node gracefully so that <see cref="Run" /> can start it again (e.g., with renewed
     ///     certificates); nothing happens when no node is running. Returns false when the node did not stop within
-    ///     <paramref name="timeout" /> (the GRACEFUL shutdown policy waits until the node's partitions have copies on
-    ///     other nodes, e.g., while another node restarts). The cluster's last server node deactivates the cluster
-    ///     first, so it stops at once, and activates it again once restarted.
+    ///     <paramref name="timeout" /> (the GRACEFUL shutdown policy waits until the node's partitions have copies on other
+    ///     nodes, e.g., while another node restarts). The cluster's last server node deactivates the cluster first, so it
+    ///     stops at once, and activates it again once restarted.
     /// </summary>
     public bool Restart(TimeSpan timeout)
     {
@@ -167,10 +167,10 @@ internal sealed class IgniteServerRunner : IDisposable
     }
 
     /// <summary>
-    ///     Stops the node gracefully; afterward, <see cref="Run" /> does not start it again. Returns false when the
-    ///     node did not stop within <paramref name="timeout" />: the GRACEFUL shutdown policy waits until the node's
-    ///     partitions have copies on other nodes, which never happens when the whole cluster stops; the node then stops
-    ///     with the process. The cluster's last server node deactivates the cluster first, so it stops at once.
+    ///     Stops the node gracefully; afterward, <see cref="Run" /> does not start it again. Returns false when the node
+    ///     did not stop within <paramref name="timeout" />: the GRACEFUL shutdown policy waits until the node's partitions
+    ///     have copies on other nodes, which never happens when the whole cluster stops; the node then stops with the process.
+    ///     The cluster's last server node deactivates the cluster first, so it stops at once.
     /// </summary>
     public bool Stop(TimeSpan timeout)
     {
@@ -261,8 +261,8 @@ internal sealed class IgniteServerRunner : IDisposable
 
     /// <summary>
     ///     No other node can take over the partitions of the cluster's last server node, which the GRACEFUL shutdown
-    ///     policy would wait for until the timeout: that node deactivates the cluster (a persistent one checkpoints its
-    ///     data, and the next start activates it again). True when it deactivated the cluster.
+    ///     policy would wait for until the timeout: that node deactivates the cluster (a persistent one checkpoints its data,
+    ///     and the next start activates it again). True when it deactivated the cluster.
     /// </summary>
     private bool DeactivateIfLastServerNode(TimeSpan timeout)
     {
@@ -299,8 +299,7 @@ internal sealed class IgniteServerRunner : IDisposable
     }
 
     /// <summary>
-    ///     Stops the running node, if any, cancelling its jobs or waiting for them; false when it is still stopping
-    ///     after
+    ///     Stops the running node, if any, cancelling its jobs or waiting for them; false when it is still stopping after
     ///     <paramref name="timeout" /> (no timeout: waits until it has stopped).
     /// </summary>
     private bool StopNode(bool cancel, TimeSpan? timeout = null)
@@ -315,8 +314,8 @@ internal sealed class IgniteServerRunner : IDisposable
     }
 
     /// <summary>
-    ///     A persistent cluster records its baseline topology on activation, so wait for the configured number of
-    ///     server nodes before activating it (unless it is already active, e.g., when resuming).
+    ///     A persistent cluster records its baseline topology on activation, so wait for the configured number of server
+    ///     nodes before activating it (unless it is already active, e.g., when resuming).
     /// </summary>
     private async Task WaitForServerNodes(ICluster cluster, Task stopped)
     {
@@ -339,9 +338,7 @@ internal sealed class IgniteServerRunner : IDisposable
         }
     }
 
-    /// <summary>
-    ///     Whether the node's consistent id is in the baseline (false when it cannot tell, e.g., while stopping).
-    /// </summary>
+    /// <summary>Whether the node's consistent id is in the baseline (false when it cannot tell, e.g., while stopping).</summary>
     internal static bool IsInBaseline(IIgnite node)
     {
         try

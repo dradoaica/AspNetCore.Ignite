@@ -17,14 +17,14 @@ public interface IIgniteManager
     IIgniteClient Client { get; }
 
     /// <summary>
-    ///     The thin client, connecting if needed; all callers share one connection attempt, so waiting for it (e.g.,
-    ///     with a timeout) does not tie up a thread per caller.
+    ///     The thin client, connecting if needed; all callers share one connection attempt, so waiting for it (e.g., with
+    ///     a timeout) does not tie up a thread per caller.
     /// </summary>
     Task<IIgniteClient> GetClientAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Gets the cache, creating it (partitioned, with the defaults of <c>IgniteClientOptions.Cache</c>) when it
-    ///     does not exist; transient failures are retried.
+    ///     Gets the cache, creating it (partitioned, with the defaults of <c>IgniteClientOptions.Cache</c>) when it does
+    ///     not exist; transient failures are retried.
     /// </summary>
     /// <param name="cacheName">The cache name.</param>
     /// <param name="extendConfigurationAction">Adjusts the configuration of a cache that is created.</param>

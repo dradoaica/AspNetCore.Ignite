@@ -4,8 +4,8 @@ namespace AspNetCore.Ignite.UnitTests;
 
 /// <summary>
 ///     An implementation of an interface whose calls are answered by one function, given the member name and the
-///     arguments. Name the members with <c>nameof</c> (e.g., <c>nameof(ICluster.IsActive)</c>), so that a renamed
-///     member fails to compile; a property getter is passed as the property name.
+///     arguments. Name the members with <c>nameof</c> (e.g., <c>nameof(ICluster.IsActive)</c>), so that a renamed member
+///     fails to compile; a property getter is passed as the property name.
 /// </summary>
 public class Fake : DispatchProxy
 {

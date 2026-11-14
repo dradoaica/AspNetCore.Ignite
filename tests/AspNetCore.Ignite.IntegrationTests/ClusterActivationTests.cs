@@ -40,12 +40,7 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
         // alone, the first node waits instead of activating a one-node baseline
         await node1.StartAsync();
         await node2.StartAsync();
-        await TestContainerLogs.WaitForMessageAsync(
-            node1,
-            ServerLog.Running,
-            1,
-            TimeSpan.FromSeconds(60)
-        );
+        await TestContainerLogs.WaitForMessageAsync(node1, ServerLog.Running, 1, TimeSpan.FromSeconds(60));
 
         using var igniteClient = CacheFactory.ConnectAsClient(
             IgniteServerFixture.ClientConfiguration(
@@ -162,12 +157,7 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
         await using (var nodeQ = PersistentNode(network, "ignite-q", clusterEndpoints, volume).Build())
         {
             await nodeQ.StartAsync();
-            await TestContainerLogs.WaitForMessageAsync(
-                nodeP,
-                ServerLog.Running,
-                1,
-                TimeSpan.FromSeconds(60)
-            );
+            await TestContainerLogs.WaitForMessageAsync(nodeP, ServerLog.Running, 1, TimeSpan.FromSeconds(60));
             using var igniteClient = CacheFactory.ConnectAsClient(
                 IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeP))
             );

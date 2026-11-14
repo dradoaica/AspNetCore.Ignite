@@ -139,9 +139,7 @@ internal sealed class IgniteServerHostedService(
         }
     }
 
-    /// <summary>
-    ///     A broken SPRING_EXTRA_* fragment fails here, with the file named, rather than deep in the JVM.
-    /// </summary>
+    /// <summary>A broken SPRING_EXTRA_* fragment fails here, with the file named, rather than deep in the JVM.</summary>
     internal static void EnsureWellFormed(string springConfigPath)
     {
         try

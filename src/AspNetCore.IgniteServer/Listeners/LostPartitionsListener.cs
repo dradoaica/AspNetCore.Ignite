@@ -14,19 +14,18 @@ namespace AspNetCore.IgniteServer.Listeners;
 ///     Logs partition data loss and, when <c>autoReset</c> is set, resets the lost partitions so that the caches become
 ///     usable again.
 ///     <para>
-///         Ignite raises one event per lost partition. The events of one second form a batch: each cache is logged
-///         once per batch, and the reset runs once at the end of the batch, off the Ignite thread that raised the
-///         events.
+///         Ignite raises one event per lost partition. The events of one second form a batch: each cache is logged once
+///         per batch, and the reset runs once at the end of the batch, off the Ignite thread that raised the events.
 ///     </para>
 ///     <para>
-///         Every node remembers the caches that lost partitions, but only the oldest server node resets them. The
-///         reset is tried again whenever a node joins or leaves: a node that owns the partitions may be back, or this
-///         node may have become the oldest one.
+///         Every node remembers the caches that lost partitions, but only the oldest server node resets them. The reset
+///         is tried again whenever a node joins or leaves: a node that owns the partitions may be back, or this node may
+///         have become the oldest one.
 ///     </para>
 ///     <para>
-///         Ignite resets partitions only while a baseline node that owns them is online. A persistent cluster
-///         therefore waits for its nodes to return with their data. The departed nodes of an in-memory cluster took
-///         their data with them, so they are dropped from the baseline first; that data is NOT recovered.
+///         Ignite resets partitions only while a baseline node that owns them is online. A persistent cluster therefore
+///         waits for its nodes to return with their data. The departed nodes of an in-memory cluster took their data with
+///         them, so they are dropped from the baseline first; that data is NOT recovered.
 ///     </para>
 /// </summary>
 internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEvent>, IEventListener<DiscoveryEvent>,
@@ -193,11 +192,7 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
             foreach (var (cacheName, count) in partitions)
             {
                 lost.TryRemove(cacheName, out _);
-                logger.Warning(
-                    persistent ? ResetWithReturnedData : ResetWithoutData,
-                    count,
-                    cacheName
-                );
+                logger.Warning(persistent ? ResetWithReturnedData : ResetWithoutData, count, cacheName);
             }
         }
         catch (ClusterTopologyException ex)

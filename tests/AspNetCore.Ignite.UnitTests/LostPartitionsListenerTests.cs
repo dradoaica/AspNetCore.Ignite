@@ -177,15 +177,15 @@ public sealed class LostPartitionsListenerTests
         Assert.Empty(cluster.Calls);
     }
 
+    private static void Lose(LostPartitionsListener listener, string cacheName) =>
+        listener.OnPartitionLost(cacheName, "NODE_LEFT", ["10.0.0.2",], ["ignite-1",]);
+
     private sealed class CollectingSink : ILogEventSink
     {
         public List<LogEvent> Events { get; } = [];
 
         public void Emit(LogEvent logEvent) => Events.Add(logEvent);
     }
-
-    private static void Lose(LostPartitionsListener listener, string cacheName) =>
-        listener.OnPartitionLost(cacheName, "NODE_LEFT", ["10.0.0.2",], ["ignite-1",]);
 
     /// <summary>The cluster of the listener's node (n1), recording the changes made to it.</summary>
     private sealed class FakeCluster
@@ -195,12 +195,12 @@ public sealed class LostPartitionsListenerTests
             var cluster = Fake.Of<ICluster>((name, args) => name switch
                 {
                     nameof(ICluster.ForServers) => Group(Online),
-                    nameof(ICluster.GetBaselineTopology) => Baseline
-                        .Select(id => Fake.Of<IBaselineNode>((_, _) => id))
+                    nameof(ICluster.GetBaselineTopology) => Baseline.Select(id => Fake.Of<IBaselineNode>((_, _) => id))
                         .ToList(),
                     nameof(ICluster.TopologyVersion) => 7L,
-                    nameof(ICluster.SetBaselineAutoAdjustEnabledFlag) or nameof(ICluster.SetBaselineTopology) =>
-                        Record($"{name} {args[0]}"),
+                    nameof(ICluster.SetBaselineAutoAdjustEnabledFlag) or nameof(ICluster.SetBaselineTopology) => Record(
+                        $"{name} {args[0]}"
+                    ),
                     _ => throw new NotSupportedException(name),
                 }
             );
@@ -242,8 +242,8 @@ public sealed class LostPartitionsListenerTests
         private ICache<object, object> Cache(string cacheName) => Fake.Of<ICache<object, object>>((name, _) =>
             name switch
             {
-                nameof(ICache<object, object>.GetLostPartitions) =>
-                    WithoutLostPartitions.Contains(cacheName) ? new List<int>() : [0,],
+                nameof(ICache<object, object>.GetLostPartitions) => WithoutLostPartitions.Contains(cacheName)
+                    ? new List<int>() : [0,],
                 _ => throw new NotSupportedException(name),
             }
         );

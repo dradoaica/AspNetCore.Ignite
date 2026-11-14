@@ -12,8 +12,8 @@ namespace AspNetCore.IgniteServer.Management;
 /// <summary>
 ///     Publishes node, cluster, data region and cache metrics as <see cref="System.Diagnostics.Metrics" />
 ///     instruments (exported by prometheus-net on /metrics). One snapshot of the node is taken per collection (at most
-///     once per second), not one read per instrument; while the node is not running, only readiness is reported, and
-///     while its cluster is inactive, no cache metrics.
+///     once per second), not one read per instrument; while the node is not running, only readiness is reported, and while
+///     its cluster is inactive, no cache metrics.
 /// </summary>
 internal sealed class IgniteNodeMetrics : IDisposable
 {

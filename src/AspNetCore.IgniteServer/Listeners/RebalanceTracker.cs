@@ -100,8 +100,8 @@ internal sealed class RebalanceTracker(ILogger logger, TimeSpan maxWait, TimePro
     ///     </para>
     ///     <para>
     ///         The catch-up ends for good once the node, running and in the baseline, has not rebalanced for
-    ///         <see cref="CatchUpSettleTime" />. Rebalancing after that (e.g., another node left) does not count,
-    ///         because every node of the cluster rebalances then.
+    ///         <see cref="CatchUpSettleTime" />. Rebalancing after that (e.g., another node left) does not count, because
+    ///         every node of the cluster rebalances then.
     ///     </para>
     /// </summary>
     /// <param name="isInBaseline">Whether the node is in the baseline now (read only while it catches up).</param>

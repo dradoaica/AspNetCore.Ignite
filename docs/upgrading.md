@@ -69,8 +69,8 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
       there, readable by every SQL user. Set it empty for Ignite's default.
     * The default `networkPolicy.egress` allows the Kubernetes API server on port 16443 too (MicroK8s, where the nodes
       did not find each other).
-    * The autoscaler (`autoscaling.create`) only scales up, on CPU only
-      (`autoscaling.targetMemoryUtilizationPercentage` is refused), with `autoscaling.minReplicas` not below
+    * The autoscaler (`autoscaling.create`) only scales up, on CPU only (`autoscaling.targetMemoryUtilizationPercentage`
+      is refused), with `autoscaling.minReplicas` not below
       `replicaCount`.
     * Upgrade with `--reset-then-reuse-values`, not `--reuse-values`, which keeps the old defaults and misses the new
       settings (the chart then fails with a message).

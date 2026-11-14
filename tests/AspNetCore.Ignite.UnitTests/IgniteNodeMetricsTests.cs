@@ -91,7 +91,10 @@ public sealed class IgniteNodeMetricsTests
                 cacheName => cacheName == "gone" ? throw new ArgumentException("The cache does not exist.")
                     : Fake.Of<ICache<object, object>>((name, _) => name switch
                         {
-                            nameof(ICache<object, object>.GetLostPartitions) => new List<int> { 3, },
+                            nameof(ICache<object, object>.GetLostPartitions) => new List<int>
+                            {
+                                3,
+                            },
                             nameof(ICache<object, object>.GetLocalSizeLong) => 5L,
                             _ => throw new NotSupportedException(name),
                         }
@@ -101,8 +104,20 @@ public sealed class IgniteNodeMetricsTests
         );
 
         Assert.True(snapshot.ClusterActive);
-        Assert.Equal(new Dictionary<string, long> { ["c"] = 5, }, snapshot.CacheEntries);
-        Assert.Equal(new Dictionary<string, int> { ["c"] = 1, }, snapshot.LostPartitions);
+        Assert.Equal(
+            new Dictionary<string, long>
+            {
+                ["c"] = 5,
+            },
+            snapshot.CacheEntries
+        );
+        Assert.Equal(
+            new Dictionary<string, int>
+            {
+                ["c"] = 1,
+            },
+            snapshot.LostPartitions
+        );
     }
 
     private static IIgnite Node(
@@ -121,7 +136,10 @@ public sealed class IgniteNodeMetricsTests
         );
         var servers = Fake.Of<IClusterGroup>((name, _) => name switch
             {
-                nameof(IClusterGroup.GetNodes) => new List<IClusterNode> { localNode, },
+                nameof(IClusterGroup.GetNodes) => new List<IClusterNode>
+                {
+                    localNode,
+                },
                 _ => throw new NotSupportedException(name),
             }
         );

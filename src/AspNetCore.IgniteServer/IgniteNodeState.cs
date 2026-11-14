@@ -3,9 +3,7 @@ using System.Collections.Generic;
 
 namespace AspNetCore.IgniteServer;
 
-/// <summary>
-///     The state of the node run by <see cref="IgniteServerHostedService" />, for health checks and metrics.
-/// </summary>
+/// <summary>The state of the node run by <see cref="IgniteServerHostedService" />, for health checks and metrics.</summary>
 internal sealed class IgniteNodeState
 {
     private volatile IgniteServerRunner? runner;

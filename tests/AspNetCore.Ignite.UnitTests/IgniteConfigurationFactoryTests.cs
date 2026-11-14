@@ -153,7 +153,8 @@ public sealed class IgniteConfigurationFactoryTests
     {
         Assert.Equal(
             IgniteConfiguration.DefaultSqlQueryHistorySize,
-            IgniteConfigurationFactory.Create(new IgniteServerSettings(), Logger.None, LocalAddress.Resolve).SqlQueryHistorySize
+            IgniteConfigurationFactory.Create(new IgniteServerSettings(), Logger.None, LocalAddress.Resolve)
+                .SqlQueryHistorySize
         );
         Assert.Equal(
             0,

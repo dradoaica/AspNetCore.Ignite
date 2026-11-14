@@ -3,7 +3,6 @@ using Apache.Ignite.Core.Client.Cache;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Containers;
-using DotNet.Testcontainers.Networks;
 using Xunit;
 
 namespace AspNetCore.Ignite.IntegrationTests;
@@ -47,12 +46,7 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
         var (exitCode, _, stderr) = await ExecAsync(node, "touch", $"{CertificatesDirectory}/server.jks");
         Assert.True(exitCode == 0, stderr);
         await TestContainerLogs.WaitForMessageAsync(node, ServerLog.SslFilesChanged, 1, TimeSpan.FromSeconds(60));
-        await TestContainerLogs.WaitForMessageAsync(
-            node,
-            ServerLog.Running,
-            2,
-            TimeSpan.FromSeconds(120)
-        );
+        await TestContainerLogs.WaitForMessageAsync(node, ServerLog.Running, 2, TimeSpan.FromSeconds(120));
         using (var igniteClient = Connect(endpoint, clientCertificate, true))
         {
             Assert.True(igniteClient.GetCluster().IsActive());
@@ -95,12 +89,7 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
             1,
             TimeSpan.FromSeconds(60)
         );
-        await TestContainerLogs.WaitForMessageAsync(
-            node,
-            ServerLog.Running,
-            2,
-            TimeSpan.FromSeconds(120)
-        );
+        await TestContainerLogs.WaitForMessageAsync(node, ServerLog.Running, 2, TimeSpan.FromSeconds(120));
 
         // restarted in the process (which still runs), active again and with its (persistent) data
         Assert.False(node.State == TestcontainersStates.Exited);
@@ -139,12 +128,7 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
             .Build();
         await node1.StartAsync();
         await node2.StartAsync();
-        await TestContainerLogs.WaitForMessageAsync(
-            node1,
-            ServerLog.Running,
-            1,
-            TimeSpan.FromSeconds(60)
-        );
+        await TestContainerLogs.WaitForMessageAsync(node1, ServerLog.Running, 1, TimeSpan.FromSeconds(60));
         var clientConfiguration = IgniteServerFixture.ClientConfiguration(
             IgniteServerFixture.GetEndpoint(node1),
             IgniteServerFixture.UserName,
@@ -172,12 +156,7 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
             1,
             TimeSpan.FromSeconds(120)
         );
-        await TestContainerLogs.WaitForMessageAsync(
-            node1,
-            ServerLog.Running,
-            2,
-            TimeSpan.FromSeconds(60)
-        );
+        await TestContainerLogs.WaitForMessageAsync(node1, ServerLog.Running, 2, TimeSpan.FromSeconds(60));
         using (var igniteClient = CacheFactory.ConnectAsClient(clientConfiguration))
         {
             Assert.True(igniteClient.GetCluster().IsActive());
@@ -185,7 +164,10 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
         }
     }
 
-    /// <summary>A node with SSL between nodes, from the sample keystores, started once it logs <paramref name="startedMessage" />.</summary>
+    /// <summary>
+    ///     A node with SSL between nodes, from the sample keystores, started once it logs
+    ///     <paramref name="startedMessage" />.
+    /// </summary>
     private ContainerBuilder SslNode(string startedMessage = ServerLog.Running)
     {
         const UnixFileModes ownerReadWrite = UnixFileModes.UserRead | UnixFileModes.UserWrite;

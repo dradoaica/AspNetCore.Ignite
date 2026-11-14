@@ -1,6 +1,4 @@
 using Apache.Ignite.Core.Configuration;
-using Apache.Ignite.Core.Discovery.Tcp;
-using Apache.Ignite.Core.Discovery.Tcp.Static;
 using AspNetCore.IgniteServer;
 using AspNetCore.IgniteServer.Utils;
 using Microsoft.Extensions.Configuration;
@@ -388,11 +386,11 @@ public sealed class IgniteServerSettingsTests
 
         var configuration = IgniteConfigurationFactory.Create(
             Load(
-                    new Dictionary<string, string?>
-                    {
-                        ["SQL_SCHEMAS"] = "A, B",
-                    }
-                ),
+                new Dictionary<string, string?>
+                {
+                    ["SQL_SCHEMAS"] = "A, B",
+                }
+            ),
             Logger.None,
             LocalAddress.Resolve
         );

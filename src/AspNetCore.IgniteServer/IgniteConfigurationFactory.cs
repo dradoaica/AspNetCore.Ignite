@@ -32,9 +32,9 @@ internal static class IgniteConfigurationFactory
     /// <param name="settings">The server settings.</param>
     /// <param name="logger">Where the node logs.</param>
     /// <param name="getLocalIpAddress">
-    ///     Resolves the address of this machine. It is called only when the node is its own static discovery endpoint
-    ///     (USE_TCP_DISCOVERY_STATIC_IP_FINDER without CLUSTER_ENDPOINTS), so a failing DNS lookup does not break nodes
-    ///     that do not need it.
+    ///     Resolves the address of this machine. It is called only when the node is its own static
+    ///     discovery endpoint (USE_TCP_DISCOVERY_STATIC_IP_FINDER without CLUSTER_ENDPOINTS), so a failing DNS lookup does not
+    ///     break nodes that do not need it.
     /// </param>
     /// <param name="springConfigPath">The rendered Spring configuration, if any.</param>
     public static IgniteConfiguration Create(
@@ -147,9 +147,9 @@ internal static class IgniteConfigurationFactory
 
     /// <summary>
     ///     Applies the properties the file sets (attributes and elements of its root) over
-    ///     <paramref name="igniteConfiguration" />. The server's defaults (JVM options, timeouts, event types, ...)
-    ///     stay unless the file overrides them. Nested configurations are replaced as a whole (e.g., a
-    ///     dataStorageConfiguration element replaces the default one).
+    ///     <paramref name="igniteConfiguration" />. The server's defaults (JVM options, timeouts, event types, ...) stay
+    ///     unless the file overrides them. Nested configurations are replaced as a whole (e.g., a dataStorageConfiguration
+    ///     element replaces the default one).
     /// </summary>
     internal static void ApplyConfigurationFile(IgniteConfiguration igniteConfiguration, string xml, ILogger logger)
     {
@@ -184,9 +184,7 @@ internal static class IgniteConfigurationFactory
         }
     }
 
-    /// <summary>
-    ///     Ignite refuses to start when clientFailureDetectionTimeout is less than metricsUpdateFrequency.
-    /// </summary>
+    /// <summary>Ignite refuses to start when clientFailureDetectionTimeout is less than metricsUpdateFrequency.</summary>
     internal static void EnsureConsistentTimeouts(IgniteConfiguration igniteConfiguration, ILogger logger)
     {
         if (igniteConfiguration.ClientFailureDetectionTimeout >= igniteConfiguration.MetricsUpdateFrequency)
@@ -243,9 +241,7 @@ internal static class IgniteConfigurationFactory
         jvmOptions.Add($"{prefix}{value}m");
     }
 
-    /// <summary>
-    ///     The settings that are not set keep the value of the default configuration (or of -ConfigFile).
-    /// </summary>
+    /// <summary>The settings that are not set keep the value of the default configuration (or of -ConfigFile).</summary>
     private static void ApplyTimeoutsAndThreadPools(
         IgniteConfiguration igniteConfiguration,
         IgniteServerSettings settings
@@ -282,9 +278,7 @@ internal static class IgniteConfigurationFactory
             )
     );
 
-    /// <summary>
-    ///     The default data region (off-heap memory, persistence, page eviction), the data and WAL storage.
-    /// </summary>
+    /// <summary>The default data region (off-heap memory, persistence, page eviction), the data and WAL storage.</summary>
     private static void ApplyStorage(IgniteConfiguration igniteConfiguration, IgniteServerSettings settings)
     {
         var region = GetDefaultDataRegion(igniteConfiguration);

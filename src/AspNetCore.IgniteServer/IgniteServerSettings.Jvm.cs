@@ -29,9 +29,7 @@ internal sealed partial class IgniteServerSettings
     [ConfigurationKeyName("EXTRA_JVM_OPTS")]
     public string? ExtraJvmOpts { get; set; }
 
-    /// <summary>
-    ///     Extra Java classpath entries separated by ':' (a directory adds its *.jar files), e.g., extra modules.
-    /// </summary>
+    /// <summary>Extra Java classpath entries separated by ':' (a directory adds its *.jar files), e.g., extra modules.</summary>
     [ConfigurationKeyName("EXTRA_CLASSPATH")]
     public string? ExtraClasspath { get; set; }
 

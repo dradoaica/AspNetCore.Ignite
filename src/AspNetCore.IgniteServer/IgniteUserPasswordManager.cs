@@ -101,9 +101,7 @@ internal sealed class IgniteUserPasswordManager(IgniteServerSettings settings, I
         return $"ALTER USER \"{quotedName}\" WITH PASSWORD '{quotedPassword}';";
     }
 
-    /// <summary>
-    ///     The loopback endpoint of the node's thin client connector (as configured, e.g., by -ConfigFile).
-    /// </summary>
+    /// <summary>The loopback endpoint of the node's thin client connector (as configured, e.g., by -ConfigFile).</summary>
     private static string GetThinClientEndpoint(IIgnite node)
     {
         var port = node.GetConfiguration().ClientConnectorConfiguration?.Port ?? DefaultThinClientPort;
@@ -123,9 +121,7 @@ internal sealed class IgniteUserPasswordManager(IgniteServerSettings settings, I
         }
     }
 
-    /// <summary>
-    ///     False when <paramref name="currentPassword" /> is no longer accepted (another node changed it).
-    /// </summary>
+    /// <summary>False when <paramref name="currentPassword" /> is no longer accepted (another node changed it).</summary>
     private bool TryChangePassword(string endpoint, string currentPassword, string password, string ddlCacheName)
     {
         IIgniteClient igniteClient;

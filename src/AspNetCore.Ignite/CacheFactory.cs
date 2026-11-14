@@ -25,9 +25,7 @@ public static class CacheFactory
     /// <param name="useSsl">Connects with SSL.</param>
     /// <param name="certificatePath">The client certificate (PKCS12), when the server requires one.</param>
     /// <param name="certificatePassword">The password of the client certificate.</param>
-    /// <param name="skipServerCertificateValidation">
-    ///     Skips the server certificate validation: insecure, for testing only.
-    /// </param>
+    /// <param name="skipServerCertificateValidation">Skips the server certificate validation: insecure, for testing only.</param>
     /// <param name="checkCertificateRevocation">Checks the revocation of the server certificate.</param>
     /// <param name="logger">The Ignite logger of the client (none when null).</param>
     public static IgniteClientConfiguration GetIgniteClientConfiguration(
@@ -101,10 +99,7 @@ public static class CacheFactory
         return igniteClientConfiguration;
     }
 
-    /// <summary>
-    ///     Starts a thick client node (in this process) with <paramref name="igniteConfiguration" />, set to client
-    ///     mode.
-    /// </summary>
+    /// <summary>Starts a thick client node (in this process) with <paramref name="igniteConfiguration" />, set to client mode.</summary>
     /// <param name="igniteConfiguration">The node configuration.</param>
     public static IIgnite ConnectAsClient(IgniteConfiguration igniteConfiguration)
     {

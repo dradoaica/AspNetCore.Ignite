@@ -38,7 +38,11 @@ public sealed class IgniteServerRunnerTests
     [Fact]
     public void Authentication_EnablesPersistence()
     {
-        var configuration = IgniteConfigurationFactory.Create(new IgniteServerSettings(), Logger.None, LocalAddress.Resolve);
+        var configuration = IgniteConfigurationFactory.Create(
+            new IgniteServerSettings(),
+            Logger.None,
+            LocalAddress.Resolve
+        );
 
         Assert.True(configuration.AuthenticationEnabled);
         Assert.True(configuration.DataStorageConfiguration.DefaultDataRegionConfiguration.PersistenceEnabled);
@@ -110,7 +114,10 @@ public sealed class IgniteServerRunnerTests
     public void LocalAddress_IsResolvedOnlyWhenNeeded()
     {
         // a failing DNS lookup must not break the nodes that do not use the local address
-        static string Fail() => throw new InvalidOperationException("Local IP Address Not Found!");
+        static string Fail()
+        {
+            throw new InvalidOperationException("Local IP Address Not Found!");
+        }
 
         IgniteConfigurationFactory.Create(
             new IgniteServerSettings
@@ -142,7 +149,11 @@ public sealed class IgniteServerRunnerTests
     [Fact]
     public void PeerAssemblyLoading_IsOptIn()
     {
-        var byDefault = IgniteConfigurationFactory.Create(new IgniteServerSettings(), Logger.None, LocalAddress.Resolve);
+        var byDefault = IgniteConfigurationFactory.Create(
+            new IgniteServerSettings(),
+            Logger.None,
+            LocalAddress.Resolve
+        );
         var optedIn = IgniteConfigurationFactory.Create(
             new IgniteServerSettings
             {
@@ -173,10 +184,7 @@ public sealed class IgniteServerRunnerTests
             LocalAddress.Resolve
         );
 
-        Assert.Equal(
-            expected,
-            configuration.DataStorageConfiguration.DefaultDataRegionConfiguration.PageEvictionMode
-        );
+        Assert.Equal(expected, configuration.DataStorageConfiguration.DefaultDataRegionConfiguration.PageEvictionMode);
     }
 
     [Theory]

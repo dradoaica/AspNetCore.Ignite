@@ -8,8 +8,8 @@ using System.Threading;
 namespace AspNetCore.IgniteServer.Utils;
 
 /// <summary>
-///     Watches files and invokes a callback once they have settled: after <c>debounce</c> without further changes, plus
-///     a random delay of up to <c>maxJitter</c> so that nodes whose certificates are rotated at the same time do not
+///     Watches files and invokes a callback once they have settled: after <c>debounce</c> without further changes,
+///     plus a random delay of up to <c>maxJitter</c> so that nodes whose certificates are rotated at the same time do not
 ///     restart at the same time.
 /// </summary>
 internal sealed class FileChangeWatcher : IDisposable

@@ -8,9 +8,7 @@ namespace AspNetCore.Ignite.Options;
 /// <summary>Options of the thin client connection made by <see cref="IgniteManager" />.</summary>
 public sealed class IgniteClientOptions
 {
-    /// <summary>
-    ///     Thin client endpoints (host or host:port); <see cref="CacheFactory.DefaultEndpoint" /> when empty.
-    /// </summary>
+    /// <summary>Thin client endpoints (host or host:port); <see cref="CacheFactory.DefaultEndpoint" /> when empty.</summary>
     public List<string> Endpoints { get; set; } = [];
 
     /// <summary>The user name (authentication).</summary>
@@ -46,19 +44,13 @@ public sealed class IgniteClientOptions
     /// <summary>The socket timeout of the thin client.</summary>
     public TimeSpan SocketTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
-    /// <summary>
-    ///     Connection attempts (exponential backoff: 2, 4, 8, ... seconds) when the first operation connects.
-    /// </summary>
+    /// <summary>Connection attempts (exponential backoff: 2, 4, 8, ... seconds) when the first operation connects.</summary>
     public int ConnectRetryCount { get; set; } = 6;
 
-    /// <summary>
-    ///     Retries (exponential backoff) of transient failures of <see cref="IgniteManager" /> operations.
-    /// </summary>
+    /// <summary>Retries (exponential backoff) of transient failures of <see cref="IgniteManager" /> operations.</summary>
     public int OperationRetryCount { get; set; } = 3;
 
-    /// <summary>
-    ///     Defaults of the caches created by <see cref="IgniteManager.GetOrCreateCacheClient{TKey,TData}" />.
-    /// </summary>
+    /// <summary>Defaults of the caches created by <see cref="IgniteManager.GetOrCreateCacheClient{TKey,TData}" />.</summary>
     public IgniteCacheOptions Cache { get; set; } = new();
 
     /// <summary>

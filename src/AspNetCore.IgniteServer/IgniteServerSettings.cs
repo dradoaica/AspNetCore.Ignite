@@ -1,4 +1,3 @@
-using Apache.Ignite.Core.Configuration;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
@@ -42,9 +41,9 @@ internal sealed partial class IgniteServerSettings
     /// <summary>
     ///     A Spring XML file with &lt;property&gt; elements of the IgniteConfiguration bean, as the configuration
     ///     sections of the Ignite chart. Verified on a node: userAttributes, binaryConfiguration, cacheConfiguration,
-    ///     executorConfiguration, transactionConfiguration and the collision, deployment, failover and load balancing
-    ///     SPIs. The .NET configuration wins for the properties it sets: sqlConfiguration (use SQL_SCHEMAS),
-    ///     encryptionSpi (use -ConfigFile), the communication and discovery SPIs, data storage, the client connector.
+    ///     executorConfiguration, transactionConfiguration and the collision, deployment, failover and load balancing SPIs.
+    ///     The .NET configuration wins for the properties it sets: sqlConfiguration (use SQL_SCHEMAS), encryptionSpi (use
+    ///     -ConfigFile), the communication and discovery SPIs, data storage, the client connector.
     /// </summary>
     [ConfigurationKeyName("SPRING_EXTRA_PROPERTIES_FILE")]
     public string? SpringExtraPropertiesFile { get; set; }
@@ -57,9 +56,8 @@ internal sealed partial class IgniteServerSettings
     public List<string> SqlSchemas { get; set; } = [];
 
     /// <summary>
-    ///     SQL queries each node keeps in SYS.SQL_QUERIES_HISTORY (Ignite's default when not set; 0 keeps none). The
-    ///     node that applies a new IGNITE_USER_PASSWORD keeps its ALTER USER statement there, password included, until
-    ///     it restarts.
+    ///     SQL queries each node keeps in SYS.SQL_QUERIES_HISTORY (Ignite's default when not set; 0 keeps none). The node
+    ///     that applies a new IGNITE_USER_PASSWORD keeps its ALTER USER statement there, password included, until it restarts.
     /// </summary>
     [ConfigurationKeyName("SQL_QUERY_HISTORY_SIZE")]
     public int? SqlQueryHistorySize { get; set; }
@@ -96,9 +94,7 @@ internal sealed partial class IgniteServerSettings
     [ConfigurationKeyName("AUTO_RESET_LOST_PARTITIONS")]
     public bool AutoResetLostPartitions { get; set; } = true;
 
-    /// <summary>
-    ///     Binds the settings; CLUSTER_ENDPOINTS is a list (CLUSTER_ENDPOINTS__0, ...) or a comma-separated value.
-    /// </summary>
+    /// <summary>Binds the settings; CLUSTER_ENDPOINTS is a list (CLUSTER_ENDPOINTS__0, ...) or a comma-separated value.</summary>
     public static IgniteServerSettings Load(IConfiguration configuration)
     {
         var settings = configuration.Get<IgniteServerSettings>() ?? new IgniteServerSettings();
@@ -170,8 +166,7 @@ internal sealed partial class IgniteServerSettings
 
     /// <summary>
     ///     How long the baseline waits for a stable topology before following it; when not set, 5 minutes with
-    ///     persistence (a restarted node returns with its data, which is then not moved away and back) and 30 seconds
-    ///     without.
+    ///     persistence (a restarted node returns with its data, which is then not moved away and back) and 30 seconds without.
     /// </summary>
     public TimeSpan GetBaselineAutoAdjustTimeout(bool persistenceEnabled) =>
         TimeSpan.FromSeconds(BaselineAutoAdjustTimeoutInSeconds ?? (persistenceEnabled ? 300 : 30));
@@ -192,9 +187,7 @@ internal sealed partial class IgniteServerSettings
         ["SSL_CLIENT_AUTH"] = SslClientAuth ? "true" : "false",
     };
 
-    /// <summary>
-    ///     XML elements inserted verbatim (not escaped) at the placeholders of the Spring configuration templates.
-    /// </summary>
+    /// <summary>XML elements inserted verbatim (not escaped) at the placeholders of the Spring configuration templates.</summary>
     public IReadOnlyDictionary<string, string?> ToSpringConfigXmlPlaceholders() => new Dictionary<string, string?>
     {
         // Without a connector configuration, Ignite starts neither the REST API (Jetty) nor the TCP binary protocol.
@@ -214,9 +207,7 @@ internal sealed partial class IgniteServerSettings
 
     private static string ReadFile(string? path) => string.IsNullOrWhiteSpace(path) ? "" : File.ReadAllText(path);
 
-    /// <summary>
-    ///     The enum value of that name, in either naming style (LogOnly or LOG_ONLY); null when there is none.
-    /// </summary>
+    /// <summary>The enum value of that name, in either naming style (LogOnly or LOG_ONLY); null when there is none.</summary>
     internal static T? ParseEnum<T>(string value)
         where T : struct, Enum =>
         Enum.TryParse<T>(value.Replace("_", string.Empty, StringComparison.Ordinal), true, out var parsed) &&
