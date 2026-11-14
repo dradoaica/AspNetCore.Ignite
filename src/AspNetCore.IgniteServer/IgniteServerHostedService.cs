@@ -11,8 +11,8 @@ using System.Xml.Linq;
 namespace AspNetCore.IgniteServer;
 
 /// <summary>
-///     Runs the Ignite node for the lifetime of the host: renders its Spring configuration, starts it, restarts it when
-///     its SSL files change (<see cref="SslFileRestarter" />), stops it with the host, and sets the exit code.
+///     Runs the Ignite node for the lifetime of the host: renders its Spring configuration, starts it, restarts it
+///     when its SSL files change (<see cref="SslFileRestarter" />), stops it with the host, and sets the exit code.
 /// </summary>
 internal sealed class IgniteServerHostedService(
     IgniteServerSettings settings,
@@ -97,13 +97,7 @@ internal sealed class IgniteServerHostedService(
                 )
                 .ConfigureAwait(false);
             EnsureWellFormed(springConfigPath);
-            IgniteServerRunner created = new(
-                settings,
-                logger,
-                DnsUtils.GetLocalIpAddress,
-                springConfigPath,
-                launcher
-            );
+            IgniteServerRunner created = new(settings, logger, DnsUtils.GetLocalIpAddress, springConfigPath, launcher);
             lock (gate)
             {
                 if (stopping)

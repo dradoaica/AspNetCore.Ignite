@@ -12,9 +12,7 @@ using System.Security.Authentication;
 
 namespace AspNetCore.Ignite;
 
-/// <summary>
-///     Creates thin client configurations, connections (thin and thick) and caches with the defaults of this library.
-/// </summary>
+/// <summary>Creates thin client configurations, connections (thin and thick) and caches with the defaults of this library.</summary>
 public static class CacheFactory
 {
     /// <summary>The endpoint used when none is configured.</summary>

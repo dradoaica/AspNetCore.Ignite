@@ -17,6 +17,16 @@ internal sealed partial class IgniteServerSettings
     internal const string ExtraBeansPlaceholder = "<!-- EXTRA_BEANS -->";
     internal const string ExtraPropertiesPlaceholder = "<!-- EXTRA_PROPERTIES -->";
 
+    /// <summary>The list settings (e.g., CLUSTER_ENDPOINTS), with their keys.</summary>
+    internal static readonly IReadOnlyList<(PropertyInfo Property, string Key)> ListSettings =
+    [
+        .. typeof(IgniteServerSettings).GetProperties()
+            .Where(property => property.PropertyType == typeof(List<string>))
+            .Select(property => (property,
+                property.GetCustomAttribute<ConfigurationKeyNameAttribute>()?.Name ?? property.Name)
+            ),
+    ];
+
     [ConfigurationKeyName("CONFIG_FILE")]
     public string? ConfigFile { get; set; }
 
@@ -102,16 +112,6 @@ internal sealed partial class IgniteServerSettings
     internal bool UsesKubernetesDiscovery =>
         ClusterEndpoints.Count == 0 && !UseTcpDiscoveryStaticIpFinder && SpiPort is null;
 
-    /// <summary>The list settings (e.g., CLUSTER_ENDPOINTS), with their keys.</summary>
-    internal static readonly IReadOnlyList<(PropertyInfo Property, string Key)> ListSettings =
-    [
-        .. typeof(IgniteServerSettings).GetProperties()
-            .Where(property => property.PropertyType == typeof(List<string>))
-            .Select(property =>
-                (property, property.GetCustomAttribute<ConfigurationKeyNameAttribute>()?.Name ?? property.Name)
-            ),
-    ];
-
     /// <summary>
     ///     Binds the settings. The list settings (<see cref="ListSettings" />) are lists (CLUSTER_ENDPOINTS__0, ...) or
     ///     comma-separated values, taken from the source of the highest priority that sets them.
@@ -129,8 +129,8 @@ internal sealed partial class IgniteServerSettings
 
     /// <summary>
     ///     The list of the source of the highest priority that sets <paramref name="key" />. The configuration would
-    ///     merge the lists of several sources index by index: -Cluster a with CLUSTER_ENDPOINTS__0 and __1 in the
-    ///     environment would be a and the second endpoint of the environment.
+    ///     merge the lists of several sources index by index: -Cluster a with CLUSTER_ENDPOINTS__0 and __1 in the environment
+    ///     would be a and the second endpoint of the environment.
     /// </summary>
     private static List<string> GetList(IConfiguration configuration, string key)
     {

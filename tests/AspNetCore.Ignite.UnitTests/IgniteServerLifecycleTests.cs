@@ -1,4 +1,3 @@
-using Apache.Ignite.Core;
 using AspNetCore.IgniteServer;
 using Serilog.Core;
 using Xunit;

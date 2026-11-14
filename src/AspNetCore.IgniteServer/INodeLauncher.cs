@@ -7,9 +7,7 @@ internal interface INodeLauncher
 {
     IIgnite Start(IgniteConfiguration configuration);
 
-    /// <summary>
-    ///     Stops the node of that name, cancelling its jobs or waiting for them; it raises the node's Stopped event.
-    /// </summary>
+    /// <summary>Stops the node of that name, cancelling its jobs or waiting for them; it raises the node's Stopped event.</summary>
     bool Stop(string name, bool cancel);
 }
 

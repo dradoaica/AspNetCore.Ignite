@@ -17,6 +17,19 @@ namespace AspNetCore.IgniteServer;
 /// <summary>Starts, activates and stops one Ignite server node, configured by the settings.</summary>
 internal sealed class IgniteServerRunner : IDisposable
 {
+    /// <summary>The outcome of <see cref="Restart" />.</summary>
+    public enum RestartResult
+    {
+        /// <summary>The node stopped, and <see cref="Run" /> starts it again.</summary>
+        Restarting,
+
+        /// <summary>No node is running (it is starting or stopping): nothing was done.</summary>
+        NotRunning,
+
+        /// <summary>The node did not stop within the timeout; it still stops, but is not started again.</summary>
+        TimedOut,
+    }
+
     private static readonly TimeSpan ActivationPollInterval = TimeSpan.FromSeconds(5);
 
     private readonly INodeLauncher launcher;
@@ -30,12 +43,12 @@ internal sealed class IgniteServerRunner : IDisposable
     private volatile bool disposed;
     private IIgnite? ignite;
 
+    // The start in progress (Ignition.Start, until the node is the running node); completed when there is none.
+    private Task nodeStart = Task.CompletedTask;
+
     // The stop of the last node, which may still run after its timeout. Ignite stops a node once: a later stop can only
     // wait for this one.
     private Task<bool>? nodeStop;
-
-    // The start in progress (Ignition.Start, until the node is the running node); completed when there is none.
-    private Task nodeStart = Task.CompletedTask;
     private volatile bool ready;
 
     // What Restart() or Stop() asked for: a stop is final, a restart is taken by the next start.
@@ -102,8 +115,8 @@ internal sealed class IgniteServerRunner : IDisposable
     }
 
     /// <summary>
-    ///     Starts the node and activates its cluster, again after each <see cref="Restart" />; returns once the node
-    ///     has stopped otherwise (<see cref="Stop" />, or on its own).
+    ///     Starts the node and activates its cluster, again after each <see cref="Restart" />; returns once the node has
+    ///     stopped otherwise (<see cref="Stop" />, or on its own).
     /// </summary>
     public async Task Run()
     {
@@ -221,9 +234,9 @@ internal sealed class IgniteServerRunner : IDisposable
     }
 
     /// <summary>
-    ///     Stops the node gracefully; afterward, <see cref="Run" /> does not start it again. Returns false when the
-    ///     node did not stop within <paramref name="timeout" /> (see <see cref="StopNodeGracefully" />); it then stops
-    ///     with the process.
+    ///     Stops the node gracefully; afterward, <see cref="Run" /> does not start it again. Returns false when the node
+    ///     did not stop within <paramref name="timeout" /> (see <see cref="StopNodeGracefully" />); it then stops with the
+    ///     process.
     /// </summary>
     public bool Stop(TimeSpan timeout)
     {
@@ -298,10 +311,10 @@ internal sealed class IgniteServerRunner : IDisposable
 
     /// <summary>
     ///     Stops the node within <paramref name="timeout" />, or waits for a stop still in progress (e.g., of a restart
-    ///     that timed out). The GRACEFUL shutdown policy waits until the node's partitions have copies on other nodes,
-    ///     which can take long (e.g., while another node restarts too) and never happens for the cluster's last server
-    ///     node: that one deactivates the cluster first (<see cref="DeactivateIfLastServerNode" />), which the next run
-    ///     activates again when <paramref name="restarting" />.
+    ///     that timed out). The GRACEFUL shutdown policy waits until the node's partitions have copies on other nodes, which
+    ///     can take long (e.g., while another node restarts too) and never happens for the cluster's last server node: that
+    ///     one deactivates the cluster first (<see cref="DeactivateIfLastServerNode" />), which the next run activates again
+    ///     when <paramref name="restarting" />.
     /// </summary>
     private bool StopNodeGracefully(TimeSpan timeout, bool restarting)
     {
@@ -325,9 +338,8 @@ internal sealed class IgniteServerRunner : IDisposable
         timeout > elapsed.Elapsed ? timeout - elapsed.Elapsed : TimeSpan.Zero;
 
     /// <summary>
-    ///     The cluster's last server node deactivates the cluster before it stops, so that it stops at once (a
-    ///     persistent one checkpoints its data, and the next start activates it again). True when it deactivated the
-    ///     cluster.
+    ///     The cluster's last server node deactivates the cluster before it stops, so that it stops at once (a persistent
+    ///     one checkpoints its data, and the next start activates it again). True when it deactivated the cluster.
     /// </summary>
     private bool DeactivateIfLastServerNode(TimeSpan timeout)
     {
@@ -364,8 +376,8 @@ internal sealed class IgniteServerRunner : IDisposable
     }
 
     /// <summary>
-    ///     Begins to stop the running node, cancelling its jobs or waiting for them, and returns that stop; null when
-    ///     no node is running.
+    ///     Begins to stop the running node, cancelling its jobs or waiting for them, and returns that stop; null when no
+    ///     node is running.
     /// </summary>
     private Task<bool>? StopRunningNode(bool cancel)
     {
@@ -384,8 +396,8 @@ internal sealed class IgniteServerRunner : IDisposable
     }
 
     /// <summary>
-    ///     A persistent cluster records its baseline topology on activation, so wait for the configured number of
-    ///     server nodes before activating it (unless it is already active, e.g., when resuming).
+    ///     A persistent cluster records its baseline topology on activation, so wait for the configured number of server
+    ///     nodes before activating it (unless it is already active, e.g., when resuming).
     /// </summary>
     private async Task WaitForServerNodes(ICluster cluster, Task stopped)
     {
@@ -438,19 +450,6 @@ internal sealed class IgniteServerRunner : IDisposable
         {
             return null;
         }
-    }
-
-    /// <summary>The outcome of <see cref="Restart" />.</summary>
-    public enum RestartResult
-    {
-        /// <summary>The node stopped, and <see cref="Run" /> starts it again.</summary>
-        Restarting,
-
-        /// <summary>No node is running (it is starting or stopping): nothing was done.</summary>
-        NotRunning,
-
-        /// <summary>The node did not stop within the timeout; it still stops, but is not started again.</summary>
-        TimedOut,
     }
 
     private enum Request

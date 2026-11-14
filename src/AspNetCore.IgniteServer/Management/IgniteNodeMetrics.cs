@@ -212,8 +212,8 @@ internal sealed class IgniteNodeMetrics : IDisposable
     }
 
     /// <summary>
-    ///     The snapshot of the running node, taken at most once per <see cref="SnapshotMaxAge" />: a failure too, so
-    ///     that a scrape of a stopping node reads it (and logs) once rather than once per instrument.
+    ///     The snapshot of the running node, taken at most once per <see cref="SnapshotMaxAge" />: a failure too, so that
+    ///     a scrape of a stopping node reads it (and logs) once rather than once per instrument.
     /// </summary>
     private NodeSnapshot? GetSnapshot()
     {

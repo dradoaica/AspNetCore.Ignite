@@ -270,8 +270,8 @@ internal static class IgniteConfigurationFactory
     private static TimeSpan? Milliseconds(int? value) => value.HasValue ? TimeSpan.FromMilliseconds(value.Value) : null;
 
     /// <summary>
-    ///     Entries separated by ':' or ';' (only ';' on Windows, where ':' follows the drive letter); a directory
-    ///     stands for the *.jar files in it.
+    ///     Entries separated by ':' or ';' (only ';' on Windows, where ':' follows the drive letter); a directory stands
+    ///     for the *.jar files in it.
     /// </summary>
     internal static string ExpandClasspath(string classpath) => string.Join(
         Path.PathSeparator,
@@ -317,8 +317,8 @@ internal static class IgniteConfigurationFactory
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     /// <summary>
-    ///     Configures static discovery from .NET, unless <see cref="IgniteServerSettings.UsesKubernetesDiscovery" />.
-    ///     It then replaces the discovery of the Spring configuration (Kubernetes).
+    ///     Configures static discovery from .NET, unless <see cref="IgniteServerSettings.UsesKubernetesDiscovery" />. It
+    ///     then replaces the discovery of the Spring configuration (Kubernetes).
     /// </summary>
     private static void ApplyDiscovery(
         IgniteConfiguration igniteConfiguration,
@@ -333,7 +333,7 @@ internal static class IgniteConfigurationFactory
 
         // Without CLUSTER_ENDPOINTS, no other node is known, so the node is its own discovery endpoint (on its own
         // port). Other nodes join it by naming it in their CLUSTER_ENDPOINTS.
-        List<string> endpoints = settings.ClusterEndpoints.Count > 0 ? settings.ClusterEndpoints
+        var endpoints = settings.ClusterEndpoints.Count > 0 ? settings.ClusterEndpoints
             : settings.UseTcpDiscoveryStaticIpFinder
                 ? [$"{getLocalIpAddress()}:{settings.SpiPort ?? DefaultDiscoveryPort}",] : [];
 

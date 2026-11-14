@@ -48,8 +48,8 @@ public sealed class IgniteClientOptions
     public int ConnectRetryCount { get; set; } = 6;
 
     /// <summary>
-    ///     Retries (exponential backoff) of transient failures of <see cref="IgniteManager" /> operations once
-    ///     connected; a connection that failed after <see cref="ConnectRetryCount" /> attempts is not retried by them.
+    ///     Retries (exponential backoff) of transient failures of <see cref="IgniteManager" /> operations once connected;
+    ///     a connection that failed after <see cref="ConnectRetryCount" /> attempts is not retried by them.
     /// </summary>
     public int OperationRetryCount { get; set; } = 3;
 

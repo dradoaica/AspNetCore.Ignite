@@ -93,13 +93,13 @@ flowchart LR
 * Each source overrides the previous one. A list setting (`CLUSTER_ENDPOINTS`, `SQL_SCHEMAS`) comes from one source,
   the one of the highest priority: the configuration would otherwise merge the lists of several sources index by index.
 * The node is configured twice, and Ignite merges both:
-  * **.NET** (`IgniteConfigurationFactory`): the default configuration, then a `-ConfigFile` (the properties it sets),
-    then the settings: JVM options, memory, storage, timeouts, thread pools, static discovery, authentication, SSL
-    between nodes. The .NET configuration wins for the properties it sets.
-  * **Spring XML** (`config/spring-config*.xml`, rendered into a private file): what .NET cannot set, the GRACEFUL
-    shutdown policy, no environment variables as node attributes, the Kubernetes IP finder, thin client SSL, and the
-    `SPRING_EXTRA_*` fragments. Values are inserted at `{{NAME}}` tokens, XML-escaped; Spring expressions (`#{`) are
-    refused.
+    * **.NET** (`IgniteConfigurationFactory`): the default configuration, then a `-ConfigFile` (the properties it sets),
+      then the settings: JVM options, memory, storage, timeouts, thread pools, static discovery, authentication, SSL
+      between nodes. The .NET configuration wins for the properties it sets.
+    * **Spring XML** (`config/spring-config*.xml`, rendered into a private file): what .NET cannot set, the GRACEFUL
+      shutdown policy, no environment variables as node attributes, the Kubernetes IP finder, thin client SSL, and the
+      `SPRING_EXTRA_*` fragments. Values are inserted at `{{NAME}}` tokens, XML-escaped; Spring expressions (`#{`) are
+      refused.
 * Discovery is static (`CLUSTER_ENDPOINTS`, or the node itself) unless `USE_TCP_DISCOVERY_STATIC_IP_FINDER=false`
   without endpoints or `SPI_PORT`: the nodes then find each other through the Kubernetes API.
 
@@ -217,13 +217,13 @@ See [Development](development.md) for how to run them.
 
 ## Where to change what
 
-| To change                                     | Look at                                                         |
-|-----------------------------------------------|-----------------------------------------------------------------|
-| A setting (name, default, validation)         | `IgniteServerSettings*.cs`, then `docs/configuration.md`        |
-| How a setting configures the node             | `IgniteConfigurationFactory.cs`, or `config/spring-config*.xml` |
-| Start, activation, restart and stop           | `IgniteServerRunner.cs` (tests: `IgniteServerLifecycleTests`)   |
-| Host integration, exit codes                  | `IgniteServerHostedService.cs`, `ServerExit.cs`, `Program.cs`   |
-| Certificate rotation                          | `SslFileRestarter.cs`, `Utils/FileChangeWatcher.cs`             |
-| Health and metrics                            | `Management/`                                                   |
-| A log message the integration tests wait for  | the message, and `ServerLog.cs` of the integration tests        |
-| The client library                            | `src/AspNetCore.Ignite`, then `docs/client.md`                  |
+| To change                                    | Look at                                                         |
+|----------------------------------------------|-----------------------------------------------------------------|
+| A setting (name, default, validation)        | `IgniteServerSettings*.cs`, then `docs/configuration.md`        |
+| How a setting configures the node            | `IgniteConfigurationFactory.cs`, or `config/spring-config*.xml` |
+| Start, activation, restart and stop          | `IgniteServerRunner.cs` (tests: `IgniteServerLifecycleTests`)   |
+| Host integration, exit codes                 | `IgniteServerHostedService.cs`, `ServerExit.cs`, `Program.cs`   |
+| Certificate rotation                         | `SslFileRestarter.cs`, `Utils/FileChangeWatcher.cs`             |
+| Health and metrics                           | `Management/`                                                   |
+| A log message the integration tests wait for | the message, and `ServerLog.cs` of the integration tests        |
+| The client library                           | `src/AspNetCore.Ignite`, then `docs/client.md`                  |

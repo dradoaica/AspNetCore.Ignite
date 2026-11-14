@@ -53,9 +53,7 @@ internal sealed class SslFileRestarter : IDisposable
 
     public void Dispose() => watcher?.Dispose();
 
-    /// <summary>
-    ///     Watches the SSL files of the settings; null when there are none, or RESTART_ON_SSL_FILE_CHANGE is off.
-    /// </summary>
+    /// <summary>Watches the SSL files of the settings; null when there are none, or RESTART_ON_SSL_FILE_CHANGE is off.</summary>
     public static SslFileRestarter? Create(
         IgniteServerSettings settings,
         ILogger logger,

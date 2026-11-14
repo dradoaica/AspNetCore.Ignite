@@ -16,8 +16,8 @@ public sealed class IgniteServerHostedServiceTests
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
     private readonly ServerExit exit = new();
-    private readonly FakeLifetime lifetime = new();
     private readonly FakeNodeLauncher launcher = new();
+    private readonly FakeLifetime lifetime = new();
     private readonly IgniteNodeState nodeState = new();
 
     [Fact]
@@ -79,7 +79,7 @@ public sealed class IgniteServerHostedServiceTests
     [Fact]
     public async Task StopAsync_StopsWaitingForTheNode_AtTheHostsTimeout()
     {
-        using var service = await StartAsync(gracefulStopTimeoutInSeconds: 60);
+        using var service = await StartAsync(60);
         using ManualResetEventSlim release = new();
         launcher.BeforeStopped = () => release.Wait();
         using CancellationTokenSource hostTimeout = new(TimeSpan.FromMilliseconds(200));

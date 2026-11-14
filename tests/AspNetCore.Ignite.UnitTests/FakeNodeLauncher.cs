@@ -55,8 +55,8 @@ internal sealed class FakeNodeLauncher : INodeLauncher
                 nameof(ICluster.IsActive) => active,
                 nameof(ICluster.SetActive) => Done(() => active = (bool)args[0]!),
                 nameof(ICluster.ForServers) => servers,
-                nameof(ICluster.SetBaselineAutoAdjustEnabledFlag) or
-                    nameof(ICluster.SetBaselineAutoAdjustTimeout) => null,
+                nameof(ICluster.SetBaselineAutoAdjustEnabledFlag)
+                    or nameof(ICluster.SetBaselineAutoAdjustTimeout) => null,
                 _ => throw new NotSupportedException(member),
             }
         );

@@ -11,17 +11,15 @@ namespace AspNetCore.IgniteServer.Utils;
 
 internal static class SpringConfigRenderer
 {
-    /// <summary>
-    ///     The directory of this process in the temp directory, so that several servers on one machine do not share it.
-    /// </summary>
+    /// <summary>The directory of this process in the temp directory, so that several servers on one machine do not share it.</summary>
     internal static string DefaultOutputDirectory =>
         Path.Combine(Path.GetTempPath(), $"aspnetcore-ignite-server-{Environment.ProcessId}");
 
     /// <summary>
     ///     Replaces each <c>{{NAME}}</c> of <paramref name="placeholders" /> in <paramref name="template" /> with its
-    ///     XML-escaped value, and each of <paramref name="xmlPlaceholders" /> (as is, e.g., an XML comment) with its
-    ///     value as is (XML elements). One pass: the values and fragments inserted are not searched for placeholders (a
-    ///     fragment may contain e.g. <c>${SSL_KEY_STORE_PASSWORD}</c>).
+    ///     XML-escaped value, and each of <paramref name="xmlPlaceholders" /> (as is, e.g., an XML comment) with its value as
+    ///     is (XML elements). One pass: the values and fragments inserted are not searched for placeholders (a fragment may
+    ///     contain e.g. <c>${SSL_KEY_STORE_PASSWORD}</c>).
     /// </summary>
     internal static string Render(
         string template,
@@ -51,9 +49,9 @@ internal static class SpringConfigRenderer
     }
 
     /// <summary>
-    ///     Renders the template into a private file (by default under <see cref="DefaultOutputDirectory" />) and
-    ///     returns its path. The template itself is never modified, so every start re-applies the current configuration
-    ///     (and works on a read-only file system).
+    ///     Renders the template into a private file (by default under <see cref="DefaultOutputDirectory" />) and returns
+    ///     its path. The template itself is never modified, so every start re-applies the current configuration (and works on
+    ///     a read-only file system).
     /// </summary>
     internal static async Task<string> RenderToFileAsync(
         string templatePath,
@@ -73,8 +71,8 @@ internal static class SpringConfigRenderer
         {
             // The rendered file may contain keystore passwords. A directory left by an earlier process of the same id
             // is made private again; one of another user cannot be (this throws), so it is not written to.
-            const UnixFileMode privateDirectory = UnixFileMode.UserRead | UnixFileMode.UserWrite |
-                                                  UnixFileMode.UserExecute;
+            const UnixFileMode privateDirectory =
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
             Directory.CreateDirectory(outputDirectory, privateDirectory);
             File.SetUnixFileMode(outputDirectory, privateDirectory);
             if (File.Exists(outputPath))
