@@ -259,7 +259,7 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
     private void DropDepartedBaselineNodes(ICluster cluster)
     {
         var online = cluster.ForServers().GetNodes().Select(node => node.ConsistentId).ToHashSet();
-        if (IgniteServerRunner.GetBaselineTopology(cluster) is not { } baseline ||
+        if (ClusterActivator.GetBaselineTopology(cluster) is not { } baseline ||
             baseline.All(node => online.Contains(node.ConsistentId)))
         {
             return;

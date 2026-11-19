@@ -61,18 +61,17 @@ jobs:
 
       # With the layers cached (the scope the Release workflow uses too), the Java modules are downloaded from Maven
       # Central only when JavaLibs.props changes: a failed download (MSBuild does not retry a 404) fails fewer builds.
-      # A cache that cannot be written does not fail the build.
+      # mode=max, because the download is in the build stage, which mode=min does not cache; GitHub evicts the oldest
+      # caches beyond 10 GB per repository (about 4 GB in use with both platforms). A cache that cannot be written does
+      # not fail the build. The image is written straight to the tar file that the other jobs load.
       - name: Build Image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           tags: ghcr.io/dradoaica/aspnetcore.ignite-server:e2e
-          load: true
+          outputs: type=docker,dest=${{ runner.temp }}/image.tar
           cache-from: type=gha,scope=linux/amd64
           cache-to: type=gha,mode=max,scope=linux/amd64,ignore-error=true
-
-      - name: Save Image
-        run: docker save ghcr.io/dradoaica/aspnetcore.ignite-server:e2e -o "${RUNNER_TEMP}/image.tar"
 
       # the OS packages, the Java runtime and jars, and the .NET dependencies of the image: the vulnerabilities with a fix
       # (high and critical) are listed in the log and the summary, and a critical one fails the build (but those of
@@ -80,7 +79,7 @@ jobs:
       - name: Scan Image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ghcr.io/dradoaica/aspnetcore.ignite-server:e2e
+          input: ${{ runner.temp }}/image.tar
           scanners: vuln
           ignore-unfixed: true
           severity: HIGH,CRITICAL

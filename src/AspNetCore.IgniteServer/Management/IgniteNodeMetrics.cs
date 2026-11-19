@@ -287,7 +287,7 @@ internal sealed class IgniteNodeMetrics : IDisposable
             return new NodeSnapshot(
                 clusterActive,
                 cluster.ForServers().GetNodes().Count,
-                IgniteServerRunner.GetBaselineTopology(cluster)?.Count ?? 0,
+                ClusterActivator.GetBaselineTopology(cluster)?.Count ?? 0,
                 // Ignite.NET reads the metrics once into this object (one call for all node metrics)
                 cluster.GetLocalNode().GetMetrics(),
                 node.GetDataRegionMetrics().ToList(),

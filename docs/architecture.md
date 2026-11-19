@@ -29,7 +29,8 @@ flowchart TB
         end
 
         renderer["SpringConfigRenderer<br/>template to private file"]
-        runner["IgniteServerRunner<br/>start, activate, restart, stop"]
+        runner["IgniteServerRunner<br/>start, restart, stop"]
+        activator["ClusterActivator<br/>activation, baseline"]
         factory["IgniteConfigurationFactory"]
         launcher["INodeLauncher<br/>(Ignition, or a fake in tests)"]
         listeners["RebalanceTracker<br/>LostPartitionsListener<br/>DiscoveryEventListener"]
@@ -53,7 +54,8 @@ flowchart TB
     runner --> launcher
     launcher --> node
     runner --> listeners
-    runner --> password
+    runner --> activator
+    activator --> password
     password -->|"thin client over loopback"| node
     node -.->|"events"| listeners
     state --> runner
@@ -69,10 +71,13 @@ flowchart TB
   warnings, renders the Spring configuration and creates the runner, so an invalid configuration fails the host's
   start (exit code `1`). It then starts the SSL restarts, stops the node with the host, and turns a failure into exit
   code `1` (and a stop that was not graceful into `2`).
-* **`IgniteServerRunner`** starts the node, activates its cluster, applies `IGNITE_USER_PASSWORD`, registers the event
-  listeners, and restarts or stops the node on request; a stop that comes before the start means no node is started.
-  All of its lifecycle state is guarded by one lock, which is never held while Ignite is called. It starts and stops
-  nodes through `INodeLauncher`, so that its lifecycle can be tested without a JVM.
+* **`IgniteServerRunner`** starts the node, has its cluster activated, registers the event listeners, and restarts or
+  stops the node on request; a stop that comes before the start means no node is started. All of its lifecycle state
+  is guarded by one lock, which is never held while Ignite is called. It starts and stops nodes through
+  `INodeLauncher`, so that its lifecycle can be tested without a JVM.
+* **`ClusterActivator`** activates the cluster of a started node (once `ACTIVATION_MIN_SERVER_NODES` have joined, for a
+  persistent cluster that starts for the first time), turns on the baseline auto-adjust and applies
+  `IGNITE_USER_PASSWORD`. It has no state: the runner passes in what it remembers between runs.
 * **`IgniteNodeState`** is what health checks and metrics read: the running node, whether it is started and ready, and
   the caches it rebalances.
 
@@ -176,7 +181,7 @@ the first cause: a failure stops the server, and that stop is then not graceful 
 
 ## Cluster maintenance on the node
 
-* **Activation and baseline** (`IgniteServerRunner`): a persistent cluster records its baseline on its first
+* **Activation and baseline** (`ClusterActivator`): a persistent cluster records its baseline on its first
   activation, so it waits for `ACTIVATION_MIN_SERVER_NODES`. The baseline then follows the topology after
   `BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS` (5 minutes with persistence, so that a restarted node returns with its data;
   30 seconds without).
@@ -223,7 +228,8 @@ See [Development](development.md) for how to run them.
 |----------------------------------------------|-----------------------------------------------------------------|
 | A setting (name, default, validation)        | `IgniteServerSettings*.cs`, then `docs/configuration.md`        |
 | How a setting configures the node            | `IgniteConfigurationFactory.cs`, or `config/spring-config*.xml` |
-| Start, activation, restart and stop          | `IgniteServerRunner.cs` (tests: `IgniteServerLifecycleTests`)   |
+| Start, restart and stop                       | `IgniteServerRunner.cs` (tests: `IgniteServerLifecycleTests`)   |
+| Cluster activation and the baseline          | `ClusterActivator.cs`                                           |
 | Host integration, exit codes                 | `IgniteServerHostedService.cs`, `ServerExit.cs`, `Program.cs`   |
 | Certificate rotation                         | `SslFileRestarter.cs`, `Utils/FileChangeWatcher.cs`             |
 | Health and metrics                           | `Management/`                                                   |
