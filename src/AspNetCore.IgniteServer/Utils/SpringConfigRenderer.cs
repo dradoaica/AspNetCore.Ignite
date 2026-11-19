@@ -5,7 +5,6 @@ using System.Linq;
 using System.Security;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 namespace AspNetCore.IgniteServer.Utils;
 
@@ -53,14 +52,14 @@ internal static class SpringConfigRenderer
     ///     its path. The template itself is never modified, so every start re-applies the current configuration (and works on
     ///     a read-only file system).
     /// </summary>
-    internal static async Task<string> RenderToFileAsync(
+    internal static string RenderToFile(
         string templatePath,
         IReadOnlyDictionary<string, string?> placeholders,
         IReadOnlyDictionary<string, string?>? xmlPlaceholders = null,
         string? outputDirectory = null
     )
     {
-        var template = await File.ReadAllTextAsync(templatePath, Encoding.UTF8).ConfigureAwait(false);
+        var template = File.ReadAllText(templatePath, Encoding.UTF8);
         outputDirectory ??= DefaultOutputDirectory;
         var outputPath = Path.Combine(outputDirectory, Path.GetFileName(templatePath));
         if (OperatingSystem.IsWindows())
@@ -92,8 +91,8 @@ internal static class SpringConfigRenderer
             options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
         }
 
-        await using StreamWriter writer = new(outputPath, Encoding.UTF8, options);
-        await writer.WriteAsync(Render(template, placeholders, xmlPlaceholders)).ConfigureAwait(false);
+        using StreamWriter writer = new(outputPath, Encoding.UTF8, options);
+        writer.Write(Render(template, placeholders, xmlPlaceholders));
 
         return outputPath;
     }

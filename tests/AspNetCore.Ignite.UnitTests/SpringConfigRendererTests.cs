@@ -47,7 +47,7 @@ public sealed class SpringConfigRendererTests
     );
 
     [Fact]
-    public async Task RenderToFileAsync_LeavesTemplateUntouched()
+    public async Task RenderToFile_LeavesTemplateUntouched()
     {
         var directory = Path.Combine(Path.GetTempPath(), "spring-config-renderer-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -58,7 +58,7 @@ public sealed class SpringConfigRendererTests
             await File.WriteAllTextAsync(templatePath, template);
             var outputDirectory = Path.Combine(directory, "out");
 
-            var first = await SpringConfigRenderer.RenderToFileAsync(
+            var first = SpringConfigRenderer.RenderToFile(
                 templatePath,
                 new Dictionary<string, string?>
                 {
@@ -66,7 +66,7 @@ public sealed class SpringConfigRendererTests
                 },
                 outputDirectory: outputDirectory
             );
-            var second = await SpringConfigRenderer.RenderToFileAsync(
+            var second = SpringConfigRenderer.RenderToFile(
                 templatePath,
                 new Dictionary<string, string?>
                 {

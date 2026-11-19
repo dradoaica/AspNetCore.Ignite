@@ -77,6 +77,40 @@ public sealed class IgniteServerHostedServiceTests
     }
 
     [Fact]
+    public void BrokenSpringFragment_FailsTheConstruction_AndLeavesNoRenderedFile()
+    {
+        var fragment = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(fragment, "<property name=\"unclosed\">");
+
+            var ex = Assert.Throws<InvalidOperationException>(() => new IgniteServerHostedService(
+                    new IgniteServerSettings
+                    {
+                        EnableAuthentication = false,
+                        ClusterEndpoints = ["127.0.0.1:47500",],
+                        SpringExtraPropertiesFile = fragment,
+                    },
+                    Logger.None,
+                    lifetime,
+                    nodeState,
+                    launcher,
+                    exit
+                )
+            );
+
+            Assert.Contains("SPRING_EXTRA_PROPERTIES_FILE", ex.Message, StringComparison.Ordinal);
+            // it may contain keystore passwords
+            Assert.False(File.Exists(Path.Combine(SpringConfigRenderer.DefaultOutputDirectory, "spring-config.xml")));
+            Assert.Null(nodeState.Node);
+        }
+        finally
+        {
+            File.Delete(fragment);
+        }
+    }
+
+    [Fact]
     public async Task StopAsync_StopsWaitingForTheNode_AtTheHostsTimeout()
     {
         using var service = await StartAsync(60);

@@ -16,8 +16,9 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
   to the caches that `CacheFactory.GetOrCreateCache` creates through a thick client or a server node.
 * The client library targets .NET 10 (`net10.0`) instead of .NET Standard 2.1: applications on earlier .NET versions
   keep using 2.18.x.
-* `IIgniteManager` has new `Client` and `GetClientAsync` members (implementations outside this library must add them),
-  and the library no longer depends on `Apache.Ignite.Linq` (add it for LINQ queries).
+* `IIgniteManager` has new `Client`, `GetClientAsync` and `GetOrCreateCacheClientAsync` members (implementations
+  outside this library must add them), and the library no longer depends on `Apache.Ignite.Linq` (add it for LINQ
+  queries).
 * The client retries only transient failures, a lost connection or a cluster that is not active (yet): other errors of
   the server (e.g., an invalid cache configuration) surface at once instead of after the retries.
 * The server image no longer contains the Ignite binary distribution (`IGNITE_HOME`): the jars are in `/app/libs`.

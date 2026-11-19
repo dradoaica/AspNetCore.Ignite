@@ -65,12 +65,14 @@ flowchart TB
 * **`Program`** reads the configuration, validates the settings (exit code `1` with every error listed), builds the
   host and returns the exit code of `ServerExit`. It cancels the default SIGTERM handling, so that the host stops the
   node gracefully and the process returns its own exit code.
-* **`IgniteServerHostedService`** owns the node for the lifetime of the host: it logs the security warnings, renders the
-  Spring configuration, creates the runner, starts the SSL restarts, stops the node with the host, and turns a failure
-  into exit code `1` (and a stop that was not graceful into `2`).
+* **`IgniteServerHostedService`** owns the node for the lifetime of the host. When it is created, it logs the security
+  warnings, renders the Spring configuration and creates the runner, so an invalid configuration fails the host's
+  start (exit code `1`). It then starts the SSL restarts, stops the node with the host, and turns a failure into exit
+  code `1` (and a stop that was not graceful into `2`).
 * **`IgniteServerRunner`** starts the node, activates its cluster, applies `IGNITE_USER_PASSWORD`, registers the event
-  listeners, and restarts or stops the node on request. It starts and stops nodes through `INodeLauncher`, so that its
-  lifecycle can be tested without a JVM.
+  listeners, and restarts or stops the node on request; a stop that comes before the start means no node is started.
+  All of its lifecycle state is guarded by one lock, which is never held while Ignite is called. It starts and stops
+  nodes through `INodeLauncher`, so that its lifecycle can be tested without a JVM.
 * **`IgniteNodeState`** is what health checks and metrics read: the running node, whether it is started and ready, and
   the caches it rebalances.
 
@@ -132,9 +134,9 @@ stateDiagram-v2
   by the next start. `Restart` returns `Restarting`, `NotRunning` or `TimedOut`.
 * **The graceful stop** (Ignite's GRACEFUL shutdown policy) waits until the node's partitions have copies on other
   nodes, within `GRACEFUL_STOP_TIMEOUT_IN_SECONDS`; a node that is still starting is stopped once started, within the
-  same timeout. No other node can take over the partitions of the cluster's last
-  server node, so that node deactivates the cluster first and stops at once; after a restart, it activates the cluster
-  again without waiting for other nodes.
+  same timeout. No other node can take over the partitions of the cluster's last server node, so that node deactivates
+  the cluster first and stops at once; after a restart, it activates the cluster again without waiting for other
+  nodes.
 * **A node that stops on its own** (e.g., segmented from the cluster) stops the server with exit code `1`, and its
   container restarts.
 

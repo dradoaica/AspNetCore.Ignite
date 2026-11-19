@@ -34,6 +34,8 @@ updates:
         patterns:
           - "*"
 
+  # the workflows pin every action by commit SHA (with its version in a comment), as the base images are pinned by
+  # digest: a moved tag cannot run other code with the release secrets; Dependabot updates the SHA and the comment
   - package-ecosystem: github-actions
     directory: /
     schedule:

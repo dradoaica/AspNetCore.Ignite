@@ -257,6 +257,47 @@ public sealed class IgniteClientOptionsTests
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10), $"took {stopwatch.Elapsed}");
     }
 
+    [Fact]
+    public async Task IgniteManager_GetOrCreateCacheClientAsync_DoesNotRetryAFailedConnection()
+    {
+        using IgniteManager igniteManager = new(
+            new IgniteClientOptions
+            {
+                Endpoints = ["127.0.0.1:1",],
+                ConnectRetryCount = 0,
+                OperationRetryCount = 3,
+                SocketTimeout = TimeSpan.FromSeconds(1),
+            }
+        );
+        var stopwatch = Stopwatch.StartNew();
+
+        await Assert.ThrowsAnyAsync<Exception>(() => igniteManager.GetOrCreateCacheClientAsync<string, string>("c"));
+
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10), $"took {stopwatch.Elapsed}");
+    }
+
+    [Fact]
+    public async Task IgniteManager_GetOrCreateCacheClientAsync_StopsWaitingWhenCancelled()
+    {
+        // the connection retries would take 2 + 4 + 8 + ... s; cancelling ends the wait, not the shared attempt
+        using IgniteManager igniteManager = new(
+            new IgniteClientOptions
+            {
+                Endpoints = ["127.0.0.1:1",],
+                ConnectRetryCount = 6,
+                SocketTimeout = TimeSpan.FromSeconds(1),
+            }
+        );
+        using CancellationTokenSource cancellation = new(TimeSpan.FromMilliseconds(200));
+        var stopwatch = Stopwatch.StartNew();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            igniteManager.GetOrCreateCacheClientAsync<string, string>("c", cancellationToken: cancellation.Token)
+        );
+
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10), $"took {stopwatch.Elapsed}");
+    }
+
     private static HealthCheckContext Context(IHealthCheck healthCheck, HealthStatus failureStatus) => new()
     {
         Registration = new HealthCheckRegistration("ignite", healthCheck, failureStatus, null),
@@ -279,6 +320,12 @@ public sealed class IgniteClientOptionsTests
         public ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
             string cacheName,
             Action<CacheClientConfiguration>? extendConfigurationAction = null
+        ) => throw new NotSupportedException();
+
+        public Task<ICacheClient<TKey, TData>> GetOrCreateCacheClientAsync<TKey, TData>(
+            string cacheName,
+            Action<CacheClientConfiguration>? extendConfigurationAction = null,
+            CancellationToken cancellationToken = default
         ) => throw new NotSupportedException();
 
         public void DestroyCache(string cacheName) => throw new NotSupportedException();

@@ -32,7 +32,8 @@ internal sealed class IgniteNodeMetrics : IDisposable
     private readonly TimeProvider timeProvider;
     private NodeSnapshot? snapshot;
 
-    // The node of the last snapshot (null: none was taken yet, or no node ran), also when taking it failed.
+    // The node that the last snapshot was taken of, even if taking it failed. Null before the first snapshot, and when
+    // no node was running.
     private IIgnite? snapshotNode;
     private DateTimeOffset? snapshotTime;
 
@@ -212,8 +213,8 @@ internal sealed class IgniteNodeMetrics : IDisposable
     }
 
     /// <summary>
-    ///     The snapshot of the running node, taken at most once per <see cref="SnapshotMaxAge" />: a failure too, so that
-    ///     a scrape of a stopping node reads it (and logs) once rather than once per instrument.
+    ///     The snapshot of the running node, taken at most once per <see cref="SnapshotMaxAge" />. A failed attempt is
+    ///     cached too, so a scrape of a stopping node tries (and logs) once rather than once per instrument.
     /// </summary>
     private NodeSnapshot? GetSnapshot()
     {

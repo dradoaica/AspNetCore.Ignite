@@ -111,8 +111,8 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
         IEnumerable<string> hostNames
     )
     {
-        // Ignite raises one event per lost partition; only the first one of a cache in this batch is logged. That
-        // also holds on a node that still remembers an earlier loss of the cache which another node has reset.
+        // Ignite raises one event per lost partition, so only the first event of each cache in this batch is logged.
+        // That holds even when this node still remembers an earlier loss of the cache that another node has reset.
         lost.TryAdd(cacheName, 0);
         if (reported.TryAdd(cacheName, 0))
         {
@@ -208,7 +208,7 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
                 DropDepartedBaselineNodes(cluster);
             }
 
-            // Removed before the reset, so that a loss reported in the meantime stays recorded for the next one.
+            // Removed before the reset: a loss reported while the reset runs adds the cache again, for the next reset.
             foreach (var cacheName in partitions.Keys)
             {
                 lost.TryRemove(cacheName, out _);
@@ -253,8 +253,8 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
     }
 
     /// <summary>
-    ///     The baseline follows the topology now rather than after the auto-adjust timeout, which does not change it
-    ///     while partitions are lost: the departed in-memory nodes hold no data to come back with.
+    ///     Sets the baseline to the current topology now. The auto-adjust would not do it while partitions are lost, and
+    ///     waiting is pointless here: the departed in-memory nodes have no data to come back with.
     /// </summary>
     private void DropDepartedBaselineNodes(ICluster cluster)
     {

@@ -35,6 +35,21 @@ public interface IIgniteManager
         Action<CacheClientConfiguration>? extendConfigurationAction = null
     );
 
+    /// <summary>
+    ///     <see cref="GetOrCreateCacheClient{TKey,TData}" /> without blocking a thread while it connects or waits between
+    ///     retries: for asynchronous code, where the first use would otherwise block for the whole connection retry.
+    /// </summary>
+    /// <param name="cacheName">The cache name.</param>
+    /// <param name="extendConfigurationAction">Adjusts the configuration of a cache that is created.</param>
+    /// <param name="cancellationToken">Stops waiting (the shared connection attempt goes on).</param>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TData">The value type.</typeparam>
+    Task<ICacheClient<TKey, TData>> GetOrCreateCacheClientAsync<TKey, TData>(
+        string cacheName,
+        Action<CacheClientConfiguration>? extendConfigurationAction = null,
+        CancellationToken cancellationToken = default
+    );
+
     /// <summary>Destroys the cache; nothing happens when it does not exist.</summary>
     /// <param name="cacheName">The cache name.</param>
     void DestroyCache(string cacheName);

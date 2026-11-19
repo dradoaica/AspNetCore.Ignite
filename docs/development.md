@@ -35,8 +35,9 @@ The integration tests build the server image from the `Dockerfile` and run it wi
 authentication and password rotation, the client library and its health check, SSL with client certificates and
 certificate rotation, cluster activation, rebalancing and lost partitions (in-memory and persistent), the management
 endpoints, the control utility, REST, the shipped configuration files, and the exit codes. Two collections run in
-parallel: the tests of one shared node, and those that start clusters of their own. They are skipped when Docker is not
-available.
+parallel: the tests of one shared node, and those that start clusters of their own. Without Docker, they are skipped
+locally, and fail in CI (`CI=true`) or with a prebuilt image (`IGNITE_SERVER_IMAGE`), so that a broken Docker setup
+cannot pass as a green build.
 CI reports the unit test coverage and the image's vulnerabilities with a fix (Trivy; a critical one fails the build) in
 the job summary, and tests the image with its
 [Helm chart](https://github.com/dradoaica/helm-charts/tree/main/charts/aspnetcore-ignite-server): a two-node persistent

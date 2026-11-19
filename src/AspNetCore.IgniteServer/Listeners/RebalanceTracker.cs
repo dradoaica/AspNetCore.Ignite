@@ -16,8 +16,8 @@ internal sealed class RebalanceTracker(ILogger logger, TimeSpan maxWait, TimePro
     : IEventListener<CacheRebalancingEvent>
 {
     /// <summary>
-    ///     How long the running node, once in the baseline, must not rebalance for its catch-up after the start to be
-    ///     over.
+    ///     How long a running node in the baseline must go without rebalancing before its catch-up after the start
+    ///     counts as finished.
     /// </summary>
     internal static readonly TimeSpan CatchUpSettleTime = TimeSpan.FromSeconds(10);
 

@@ -42,11 +42,22 @@ public abstract class IgniteNodesFixture : IAsyncLifetime
         .WithEnvironment("DEFAULT_OFF_HEAP_MEMORY", "256")
         .WithEnvironment("IGNITE_USER_PASSWORD", IgniteServerFixture.Password);
 
-    /// <summary>The image, or null without Docker.</summary>
+    /// <summary>
+    ///     The image, or null without Docker. In CI (or with a prebuilt image), Docker is expected: without it, the tests
+    ///     fail instead of being skipped, so that a broken Docker setup cannot pass as a green build.
+    /// </summary>
     private static async Task<IImage?> LoadImageAsync()
     {
         if (!await DockerSupport.IsDockerAvailableAsync())
         {
+            if (DockerSupport.IsRequired)
+            {
+                throw new InvalidOperationException(
+                    "Docker is not available, but the integration tests must run here (CI or " +
+                    "IGNITE_SERVER_IMAGE is set)."
+                );
+            }
+
             return null;
         }
 

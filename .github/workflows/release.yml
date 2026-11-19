@@ -37,7 +37,7 @@ jobs:
           TAG: ${{ github.event.release.tag_name || inputs.version }}
 
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           sparse-checkout: Directory.Packages.props
           sparse-checkout-cone-mode: false
@@ -65,14 +65,14 @@ jobs:
       HAS_NUGET_API_KEY: ${{ secrets.NUGET_API_KEY != '' }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
       # nuget.org only: with a second package source, central package management wants a source mapping (NU1507,
       # an error in CI); the push names GitHub Packages and its key itself
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           global-json-file: global.json
 
@@ -120,14 +120,12 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
-
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Login to GHCR
         if: github.event_name == 'release'
-        uses: docker/login-action@v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -135,13 +133,13 @@ jobs:
 
       - name: Docker metadata (labels)
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ needs.version.outputs.image }}
 
       - name: Build and Push by Digest
         id: build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: ./Dockerfile
@@ -165,7 +163,7 @@ jobs:
 
       - name: Upload Digest
         if: github.event_name == 'release'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: digest-${{ strategy.job-index }}
           path: ${{ runner.temp }}/digests/*
@@ -180,17 +178,16 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Download Digests
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: ${{ runner.temp }}/digests
           pattern: digest-*
           merge-multiple: true
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Login to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -198,7 +195,7 @@ jobs:
 
       - name: Docker metadata (tags)
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ needs.version.outputs.image }}
           tags: |
@@ -234,8 +231,7 @@ jobs:
 
       - name: Checkout Code
         if: env.HAS_HELM_CHARTS_TOKEN == 'true'
-        uses: actions/checkout@v6
-
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Resolve Helm Chart Branch
         id: chart-ref
         if: env.HAS_HELM_CHARTS_TOKEN == 'true'
@@ -245,7 +241,7 @@ jobs:
 
       - name: Checkout Helm Chart
         if: env.HAS_HELM_CHARTS_TOKEN == 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           repository: dradoaica/helm-charts
           ref: ${{ steps.chart-ref.outputs.ref }}

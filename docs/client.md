@@ -19,7 +19,8 @@ services.AddHealthChecks().AddIgnite();                       // healthy when th
 
 `IIgniteManager` connects on first use (with retries), not when the service is resolved; concurrent callers share one
 connection attempt (`GetClientAsync` waits for it without blocking a thread, which the health check relies on). It
-creates and destroys caches and exposes the thin client (`IIgniteManager.Client`) for SQL, compute, transactions, etc.
+creates and destroys caches (`GetOrCreateCacheClientAsync` in asynchronous code, which does not block a thread while
+it connects) and exposes the thin client (`IIgniteManager.Client`) for SQL, compute, transactions, etc.
 The client logs through `Microsoft.Extensions.Logging` (category `Apache.Ignite`). For LINQ queries, add the
 `Apache.Ignite.Linq` package.
 

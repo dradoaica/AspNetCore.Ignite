@@ -20,6 +20,7 @@ namespace AspNetCore.Ignite;
 /// <summary>The thin client connection (connected on first use, with retries) and its caches.</summary>
 public class IgniteManager : IIgniteManager, IDisposable
 {
+    private readonly AsyncRetryPolicy asyncOperationRetryPolicy;
     private readonly RetryPolicy connectRetryPolicy;
     private readonly IgniteClientConfiguration igniteClientConfiguration;
     private readonly RetryPolicy operationRetryPolicy;
@@ -55,6 +56,8 @@ public class IgniteManager : IIgniteManager, IDisposable
         );
         connectRetryPolicy = CreateRetryPolicy(options.ConnectRetryCount);
         operationRetryPolicy = CreateRetryPolicy(options.OperationRetryCount);
+        asyncOperationRetryPolicy = Policy.Handle<Exception>(IsTransient)
+            .WaitAndRetryAsync(Math.Max(0, options.OperationRetryCount), RetryDelay);
     }
 
     /// <summary>Closes the connection.</summary>
@@ -81,13 +84,26 @@ public class IgniteManager : IIgniteManager, IDisposable
         // Connected first, outside the operation retries: a connection that failed after its own retries is not
         // retried again by each of them.
         var client = GetIgniteClient();
-        return operationRetryPolicy.Execute(() => CacheFactory.GetOrCreateCacheClient<TKey, TData>(
-                client,
-                cacheName,
-                extendConfigurationAction,
-                options.Cache
-            )
+        return operationRetryPolicy.Execute(() =>
+            CreateCacheClient<TKey, TData>(client, cacheName, extendConfigurationAction)
         );
+    }
+
+    /// <inheritdoc />
+    public async Task<ICacheClient<TKey, TData>> GetOrCreateCacheClientAsync<TKey, TData>(
+        string cacheName,
+        Action<CacheClientConfiguration>? extendConfigurationAction = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var client = await GetClientAsync(cancellationToken).ConfigureAwait(false);
+        // The thin client creates a cache with one short synchronous request; the waits between retries are the
+        // part that must not block a thread.
+        return await asyncOperationRetryPolicy.ExecuteAsync(
+                _ => Task.FromResult(CreateCacheClient<TKey, TData>(client, cacheName, extendConfigurationAction)),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -176,8 +192,17 @@ public class IgniteManager : IIgniteManager, IDisposable
         return options;
     }
 
+    private ICacheClient<TKey, TData> CreateCacheClient<TKey, TData>(
+        IIgniteClient client,
+        string cacheName,
+        Action<CacheClientConfiguration>? extendConfigurationAction
+    ) => CacheFactory.GetOrCreateCacheClient<TKey, TData>(client, cacheName, extendConfigurationAction, options.Cache);
+
     private static RetryPolicy CreateRetryPolicy(int retryCount) => Policy.Handle<Exception>(IsTransient)
-        .WaitAndRetry(Math.Max(0, retryCount), retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+        .WaitAndRetry(Math.Max(0, retryCount), RetryDelay);
+
+    // exponential backoff: 2, 4, 8, ... seconds
+    private static TimeSpan RetryDelay(int retryAttempt) => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt));
 
     internal static bool IsTransient(Exception ex) => ex switch
     {

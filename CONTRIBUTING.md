@@ -22,7 +22,7 @@ documentation fixes, new features and version upgrades.
 ## Prerequisites
 
 - [.NET SDK 10](https://dotnet.microsoft.com/download) (see `global.json`)
-- Docker, for the integration tests and for building the server image (they are skipped without it)
+- Docker, for the integration tests and for building the server image (locally, the tests are skipped without it)
 - Java 17 with `JAVA_HOME` set, only to run the server outside Docker: Apache Ignite runs on the JVM, even when hosted
   from .NET
 

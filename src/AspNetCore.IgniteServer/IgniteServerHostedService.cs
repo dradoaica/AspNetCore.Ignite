@@ -13,22 +13,65 @@ namespace AspNetCore.IgniteServer;
 /// <summary>
 ///     Runs the Ignite node for the lifetime of the host: renders its Spring configuration, starts it, restarts it
 ///     when its SSL files change (<see cref="SslFileRestarter" />), stops it with the host, and sets the exit code.
+///     <para>
+///         The runner is created with the service, so it always exists: a stop that comes before the node starts is
+///         handled by the runner itself (<see cref="IgniteServerRunner.Run" /> then starts no node). An invalid
+///         configuration fails the host's start, with exit code 1.
+///     </para>
 /// </summary>
-internal sealed class IgniteServerHostedService(
-    IgniteServerSettings settings,
-    ILogger logger,
-    IHostApplicationLifetime lifetime,
-    IgniteNodeState nodeState,
-    INodeLauncher launcher,
-    ServerExit exit
-) : BackgroundService
+internal sealed class IgniteServerHostedService : BackgroundService
 {
-    // Guards stopping and runner together: StopAsync either finds the runner and stops it, or sets stopping before
-    // the runner exists, and RunAsync then does not start the node.
-    private readonly Lock gate = new();
-    private readonly ILogger logger = logger.ForContext<IgniteServerHostedService>();
-    private IgniteServerRunner? runner;
+    private readonly ServerExit exit;
+    private readonly IHostApplicationLifetime lifetime;
+    private readonly ILogger logger;
+    private readonly IgniteNodeState nodeState;
+    private readonly IgniteServerRunner runner;
+    private readonly IgniteServerSettings settings;
+
+    // The rendered Spring configuration. Every (re)start of the node reads it, so it is deleted only once the node has
+    // stopped for good. It may contain keystore passwords.
+    private readonly string springConfigPath;
+
+    // Set before the node is stopped, so that RunAsync does not report that stop as a failure.
     private volatile bool stopping;
+
+    public IgniteServerHostedService(
+        IgniteServerSettings settings,
+        ILogger logger,
+        IHostApplicationLifetime lifetime,
+        IgniteNodeState nodeState,
+        INodeLauncher launcher,
+        ServerExit exit
+    )
+    {
+        this.settings = settings;
+        this.logger = logger.ForContext<IgniteServerHostedService>();
+        this.lifetime = lifetime;
+        this.nodeState = nodeState;
+        this.exit = exit;
+        LogSecurityWarnings();
+        springConfigPath = SpringConfigRenderer.RenderToFile(
+            Path.Combine(
+                AppContext.BaseDirectory,
+                "config",
+                settings.UseClientSsl ? "spring-config-client-with-ssl.xml" : "spring-config.xml"
+            ),
+            settings.ToSpringConfigPlaceholders(),
+            settings.ToSpringConfigXmlPlaceholders()
+        );
+        try
+        {
+            EnsureWellFormed(springConfigPath);
+            runner = new IgniteServerRunner(settings, logger, DnsUtils.GetLocalIpAddress, springConfigPath, launcher);
+        }
+        catch
+        {
+            SpringConfigRenderer.DeleteRendered(springConfigPath);
+            throw;
+        }
+
+        nodeState.SetRunner(runner);
+    }
 
     private bool IsStopping => stopping || lifetime.ApplicationStopping.IsCancellationRequested;
 
@@ -38,36 +81,27 @@ internal sealed class IgniteServerHostedService(
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        IgniteServerRunner? current;
-        lock (gate)
+        stopping = true;
+        try
         {
-            // Set before the node stops: RunAsync would otherwise report the stopped node as a failure.
-            stopping = true;
-            current = runner;
-        }
-
-        if (current != null)
-        {
-            try
+            // Off the host's thread, so that the host can stop waiting at its own timeout. Validation keeps
+            // GRACEFUL_STOP_TIMEOUT_IN_SECONDS below that timeout, so it runs out first only when the host is stopped
+            // some other way.
+            var graceful = await Task.Run(
+                    () => runner.Stop(TimeSpan.FromSeconds(settings.GracefulStopTimeoutInSeconds)),
+                    CancellationToken.None
+                )
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+            if (!graceful)
             {
-                // Off the host's thread, so that the host can stop waiting at its own timeout. Validation keeps
-                // GRACEFUL_STOP_TIMEOUT_IN_SECONDS below it, so this happens only when the host is stopped otherwise.
-                var graceful = await Task.Run(
-                        () => current.Stop(TimeSpan.FromSeconds(settings.GracefulStopTimeoutInSeconds)),
-                        CancellationToken.None
-                    )
-                    .WaitAsync(cancellationToken)
-                    .ConfigureAwait(false);
-                if (!graceful)
-                {
-                    exit.SetIfUnset(ServerExit.NotGraceful);
-                }
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                logger.Warning("The host stopped waiting for the Ignite node to stop; it stops with the process.");
                 exit.SetIfUnset(ServerExit.NotGraceful);
             }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            logger.Warning("The host stopped waiting for the Ignite node to stop; it stops with the process.");
+            exit.SetIfUnset(ServerExit.NotGraceful);
         }
 
         await base.StopAsync(cancellationToken).ConfigureAwait(false);
@@ -76,45 +110,19 @@ internal sealed class IgniteServerHostedService(
     public override void Dispose()
     {
         nodeState.SetRunner(null);
-        runner?.Dispose();
+        runner.Dispose();
+        // RunAsync deletes it too; this covers a host that never ran the service.
+        SpringConfigRenderer.DeleteRendered(springConfigPath);
         base.Dispose();
     }
 
     private async Task RunAsync(CancellationToken stoppingToken)
     {
-        string? springConfigPath = null;
-        SslFileRestarter? sslFileRestarter = null;
+        var sslFileRestarter = SslFileRestarter.Create(settings, logger, runner, () => IsStopping, Fail);
         try
         {
-            LogSecurityWarnings();
-            springConfigPath = await SpringConfigRenderer.RenderToFileAsync(
-                    Path.Combine(
-                        AppContext.BaseDirectory,
-                        "config",
-                        settings.UseClientSsl ? "spring-config-client-with-ssl.xml" : "spring-config.xml"
-                    ),
-                    settings.ToSpringConfigPlaceholders(),
-                    settings.ToSpringConfigXmlPlaceholders()
-                )
-                .ConfigureAwait(false);
-            EnsureWellFormed(springConfigPath);
-            IgniteServerRunner created = new(settings, logger, DnsUtils.GetLocalIpAddress, springConfigPath, launcher);
-            lock (gate)
-            {
-                if (stopping)
-                {
-                    // The host is already stopping, so the node is not started at all.
-                    created.Dispose();
-                    return;
-                }
-
-                runner = created;
-            }
-
-            nodeState.SetRunner(created);
-            sslFileRestarter = SslFileRestarter.Create(settings, logger, created, () => IsStopping, Fail);
             // WaitAsync lets the host stop even when the node itself cannot.
-            await created.Run().WaitAsync(stoppingToken).ConfigureAwait(false);
+            await runner.Run().WaitAsync(stoppingToken).ConfigureAwait(false);
 
             if (!stopping && !stoppingToken.IsCancellationRequested)
             {
@@ -134,11 +142,7 @@ internal sealed class IgniteServerHostedService(
         finally
         {
             sslFileRestarter?.Dispose();
-            if (springConfigPath != null)
-            {
-                // Read by every (re)start of the node, so it is removed only now. It may contain keystore passwords.
-                SpringConfigRenderer.DeleteRendered(springConfigPath);
-            }
+            SpringConfigRenderer.DeleteRendered(springConfigPath);
         }
     }
 
