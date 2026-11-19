@@ -6,78 +6,102 @@ Apache Ignite 2.19.0 and is built on Apache Ignite 2.18.0 until 2.19.0 is releas
 
 The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do not start: their JVM options include
 `-server`, which the JVM embedded in the server rejects (`Unrecognized option: -server`, `JNI_CreateJavaVM failed`).
-2.19.0 is the first image that runs; the steps below concern clusters of images built otherwise.
+2.19.0 is the first image that runs; the notes below concern clusters of images built otherwise.
+
+## Server
+
+### Security and defaults
 
 * SSL (`USE_SSL`, `USE_CLIENT_SSL`) is off by default, there are no default passwords or consistent id, and the image
   no longer contains the sample keystores: set these explicitly.
-* The client validates the server certificate by default (`ASPNETCORE_IGNITE_SSL_SKIP_SERVER_CERTIFICATE_VALIDATION`
-  to opt out). `Cache.EnablePlatformCache` is off by default, and `IIgniteManager` (a thin client, which cannot
-  configure a platform cache) refuses to create a cache with it: it used to be dropped without a word. It still applies
-  to the caches that `CacheFactory.GetOrCreateCache` creates through a thick client or a server node.
-* The client library targets .NET 10 (`net10.0`) instead of .NET Standard 2.1: applications on earlier .NET versions
-  keep using 2.18.x.
-* `IIgniteManager` has new `Client`, `GetClientAsync` and `GetOrCreateCacheClientAsync` members (implementations
-  outside this library must add them), and the library no longer depends on `Apache.Ignite.Linq` (add it for LINQ
-  queries).
-* The client retries only transient failures, a lost connection or a cluster that is not active (yet): other errors of
-  the server (e.g., an invalid cache configuration) surface at once instead of after the retries.
-* The server image no longer contains the Ignite binary distribution (`IGNITE_HOME`): the jars are in `/app/libs`.
 * REST (8080) and the TCP binary protocol (11211) are off (`REST_ENABLED`), peer assembly loading is off
   (`PEER_ASSEMBLY_LOADING`), and OpenCensus metrics are replaced by `/metrics` on port 9464 (`MANAGEMENT_PORT`).
-* Logs go to the console only (JSON in the image); the file sink is opt-in.
-* SSL restarts are graceful and jittered; the process exits with `1` on failures and with `2` when the node did not
-  stop gracefully (it always exited with `0`).
+* Node attributes no longer contain the environment variables and Java system properties (they showed secrets such as
+  `IGNITE_USER_PASSWORD` to every node and client): code that reads them, e.g., a node filter, uses `userAttributes`.
 * The settings inserted into the Spring configuration (`K8S_*` and, with `USE_CLIENT_SSL`, `SSL_*`) must not contain
   `#{`, which Spring would evaluate as an expression: the server refuses to start with one.
+
+### Settings and behavior
+
 * A list setting (`CLUSTER_ENDPOINTS`, `SQL_SCHEMAS`) comes from one source, the one of the highest priority: `-Cluster`
   replaces the endpoints of the environment instead of overwriting them index by index.
 * Kubernetes discovery (`USE_TCP_DISCOVERY_STATIC_IP_FINDER=false` without `CLUSTER_ENDPOINTS`, `SPI_PORT` or
   `CONFIG_FILE`) needs `K8S_NAMESPACE` and `K8S_SERVICE_NAME`: the server refuses to start without them (the chart sets
   both).
-* Node attributes no longer contain the environment variables and Java system properties (they showed secrets such as
-  `IGNITE_USER_PASSWORD` to every node and client): code that reads them, e.g., a node filter, uses `userAttributes`.
 * Baseline auto-adjust waits 5 minutes with persistence (it waited 30 seconds, as in-memory clusters still do), so that
   restarted nodes keep their data: set `BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS` for another delay.
 * Lost partitions (`AUTO_RESET_LOST_PARTITIONS`) are reset once a node that owns them is back (persistence), or after
   the departed nodes are dropped from the baseline (in-memory); the reset used to fail while their nodes were away.
+* SSL restarts are graceful and jittered; the process exits with `1` on failures and with `2` when the node did not
+  stop gracefully (it always exited with `0`).
+* Logs go to the console only (JSON in the image); the file sink is opt-in.
+
+### Image
+
+* The server image no longer contains the Ignite binary distribution (`IGNITE_HOME`): the jars are in `/app/libs`.
+
+## Client library
+
+* The library targets .NET 10 (`net10.0`) instead of .NET Standard 2.1: applications on earlier .NET versions keep
+  using 2.18.x.
+* `IIgniteManager` has new `Client`, `GetClientAsync` and `GetOrCreateCacheClientAsync` members (implementations
+  outside this library must add them), and the library no longer depends on `Apache.Ignite.Linq` (add it for LINQ
+  queries).
+* The client validates the server certificate by default (`ASPNETCORE_IGNITE_SSL_SKIP_SERVER_CERTIFICATE_VALIDATION`
+  to opt out).
+* `Cache.EnablePlatformCache` is off by default, and `IIgniteManager` (a thin client, which cannot configure a platform
+  cache) refuses to create a cache with it: it used to be dropped without a word. It still applies to the caches that
+  `CacheFactory.GetOrCreateCache` creates through a thick client or a server node.
+* The client retries only transient failures, a lost connection or a cluster that is not active (yet): other errors of
+  the server (e.g., an invalid cache configuration) surface at once instead of after the retries.
 * `GroupByValueType` names the cache groups of generic value types with several type arguments without assembly
   versions: new caches of such types may join another group than the existing ones, which keep theirs.
-* With the Helm chart, the StatefulSet has to be recreated (its pod management policy and volume claims change). Stop
-  the cluster cleanly (so the WAL is checkpointed), delete the StatefulSet, and upgrade with
-  `persistence.storageVolume.claimName=persistence`, so the existing data volumes are reused, and
-  `persistence.walVolume.enabled=false`, so that their WAL stays in them (a node whose data volume is mounted without
-  its WAL does not recover, even after a clean stop):
 
-  ```
-  kubectl scale statefulset <fullname>-cluster --replicas=0
-  kubectl delete statefulset <fullname>-cluster --cascade=orphan
-  helm upgrade <release> <chart> --set persistence.storageVolume.claimName=persistence \
-    --set persistence.walVolume.enabled=false ...
-  ```
+## Helm chart
 
-  The `chart-upgrade` job of the Tests workflow (`upgrade-test` input) runs these steps with data. The chart's values
-  also change:
-    * The probes use `/health/startup`, `/health/liveness` and `/health/readiness` on the management port (9464).
-    * `container.ports`/`service.ports`: `thinClients` (10800) replaces `sql`, `management` is new, `rest` and `restTcp`
-      (11211, was `jdbc`) exist only with `rest.enabled`, and `jmx` and 10900 are gone.
-    * The values follow the ignite chart: `persistence.storageVolume` (`/app/work`) and `persistence.walVolume`
-      (`/wal`), `memory.*`, `authentication.*`, `timeouts.*`, `threadPools.*`, `dataStorage.*` and `ssl.*` (Secrets
-      `<fullname>-auth` and `<fullname>-ssl`); `secrets.*` and most `env` keys are gone.
-    * `authentication.igniteUserPassword` is empty by default: set it. A new password applies to the whole cluster as
-      soon as the first restarted node sets it, so change the clients' password together with the rollout.
-    * The client Service has the thin client and management ports (and REST); the discovery and communication ports are
-      on the headless Service only.
-    * The root file system is read-only, a PodDisruptionBudget is created for more than one replica, the termination
-      grace period is 300 seconds, a node is ready only once it holds its data after starting, and the pods spread
-      across Kubernetes nodes (`topologySpreadConstraints`).
-    * The nodes keep no SQL query history (`sqlQueryHistorySize: 0`): a node that applies a new password would keep it
-      there, readable by every SQL user. Set it empty for Ignite's default.
-    * The default `networkPolicy.egress` allows the Kubernetes API server on port 16443 too (MicroK8s, where the nodes
-      did not find each other).
-    * The autoscaler (`autoscaling.create`) only scales up, on CPU only (`autoscaling.targetMemoryUtilizationPercentage`
-      is refused), with `autoscaling.minReplicas` not below `replicaCount`.
-    * Upgrade with `--reset-then-reuse-values`, not `--reuse-values`, which keeps the old defaults and misses the new
-      settings (the chart then fails with a message).
+### Steps
+
+The StatefulSet has to be recreated, because its pod management policy and volume claims change. The `chart-upgrade`
+job of the Tests workflow (`upgrade-test` input) runs these steps with data.
+
+1. Set `authentication.igniteUserPassword`, which is empty by default. A new password applies to the whole cluster as
+   soon as the first restarted node sets it, so change the clients' password together with the rollout.
+2. Stop the cluster cleanly, so that the WAL is checkpointed, and delete the StatefulSet (its pods are already gone):
+
+   ```
+   kubectl scale statefulset <fullname>-cluster --replicas=0
+   kubectl delete statefulset <fullname>-cluster --cascade=orphan
+   ```
+
+3. Upgrade with `persistence.storageVolume.claimName=persistence`, so that the existing data volumes are reused, and
+   `persistence.walVolume.enabled=false`, so that their WAL stays in them (a node whose data volume is mounted without
+   its WAL does not recover, even after a clean stop). Use `--reset-then-reuse-values`, not `--reuse-values`, which
+   keeps the old defaults and misses the new settings (the chart then fails with a message):
+
+   ```
+   helm upgrade <release> <chart> --reset-then-reuse-values \
+     --set persistence.storageVolume.claimName=persistence --set persistence.walVolume.enabled=false ...
+   ```
+
+### Changed values
+
+* The values follow the ignite chart: `persistence.storageVolume` (`/app/work`) and `persistence.walVolume` (`/wal`),
+  `memory.*`, `authentication.*`, `timeouts.*`, `threadPools.*`, `dataStorage.*` and `ssl.*` (Secrets
+  `<fullname>-auth` and `<fullname>-ssl`); `secrets.*` and most `env` keys are gone.
+* The probes use `/health/startup`, `/health/liveness` and `/health/readiness` on the management port (9464).
+* `container.ports`/`service.ports`: `thinClients` (10800) replaces `sql`, `management` is new, `rest` and `restTcp`
+  (11211, was `jdbc`) exist only with `rest.enabled`, and `jmx` and 10900 are gone.
+* The client Service has the thin client and management ports (and REST); the discovery and communication ports are on
+  the headless Service only.
+* The root file system is read-only, a PodDisruptionBudget is created for more than one replica, the termination grace
+  period is 300 seconds, a node is ready only once it holds its data after starting, and the pods spread across
+  Kubernetes nodes (`topologySpreadConstraints`).
+* The nodes keep no SQL query history (`sqlQueryHistorySize: 0`): a node that applies a new password would keep it
+  there, readable by every SQL user. Set it empty for Ignite's default.
+* The default `networkPolicy.egress` allows the Kubernetes API server on port 16443 too (MicroK8s, where the nodes did
+  not find each other).
+* The autoscaler (`autoscaling.create`) only scales up, on CPU only (`autoscaling.targetMemoryUtilizationPercentage` is
+  refused), with `autoscaling.minReplicas` not below `replicaCount`.
 
 ## Moving to Apache Ignite 2.19.0
 

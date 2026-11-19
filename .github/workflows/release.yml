@@ -30,17 +30,40 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       image: ${{ steps.image.outputs.image }}
       ignite: ${{ steps.ignite.outputs.ignite }}
+      latest-tag: ${{ steps.tags.outputs.latest }}
+      major-tag: ${{ steps.tags.outputs.major }}
+      minor-tag: ${{ steps.tags.outputs.minor }}
     steps:
+      # The tag (or the input) becomes the version of the package and the image. It must be a version: a tag name may
+      # contain e.g. $(...), and the version reaches the commands of jobs that hold the publishing tokens.
       - id: version
-        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          version="${TAG#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::The release tag is not a version (e.g., 2.19.0 or 2.19.0-rc.1)."
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
         env:
           TAG: ${{ github.event.release.tag_name || inputs.version }}
 
       - name: Checkout Code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
-          sparse-checkout: Directory.Packages.props
+          sparse-checkout: |
+            Directory.Packages.props
+            scripts/ci
           sparse-checkout-cone-mode: false
+
+      # latest, <major> and <major>.<minor> move only to the highest release of their line: a patch of an older line
+      # (e.g., 2.18.3 after 2.19.0) leaves them where they are
+      - id: tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: >-
+          gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases --limit 1000
+          --json tagName --jq '.[].tagName' | scripts/ci/release-tags.sh "$VERSION" | tee -a "$GITHUB_OUTPUT"
 
       # the Apache Ignite version of the image, which the chart records
       - id: ignite
@@ -77,9 +100,9 @@ jobs:
           global-json-file: global.json
 
       - name: Pack NuGet Packages
-        run: >-
-          dotnet pack "${{ env.PACK_PROJECT }}" -c Release -o artifacts/package/release
-          -p:Version="${{ needs.version.outputs.version }}"
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: dotnet pack "$PACK_PROJECT" -c Release -o artifacts/package/release -p:Version="$VERSION"
 
       # the .nupkg, whose assembly embeds its PDB
       - name: Push to GitHub Packages
@@ -198,21 +221,29 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ needs.version.outputs.image }}
+          # no automatic latest: the version job decides which floating tags this release moves
+          flavor: |
+            latest=false
           tags: |
             type=raw,value=${{ needs.version.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ needs.version.outputs.version }}
-            type=semver,pattern={{major}},value=${{ needs.version.outputs.version }}
-            type=raw,value=latest
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.version.outputs.version }},enable=${{ needs.version.outputs.minor-tag == 'true' }}
+            type=semver,pattern={{major}},value=${{ needs.version.outputs.version }},enable=${{ needs.version.outputs.major-tag == 'true' }}
+            type=raw,value=latest,enable=${{ needs.version.outputs.latest-tag == 'true' }}
 
       - name: Create and Push the Multi-Platform Image
         working-directory: ${{ runner.temp }}/digests
+        env:
+          IMAGE: ${{ needs.version.outputs.image }}
         run: |
           docker buildx imagetools create \
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ needs.version.outputs.image }}@sha256:%s ' *)
+            $(printf "${IMAGE}@sha256:%s " *)
 
       - name: Inspect
-        run: docker buildx imagetools inspect "${{ needs.version.outputs.image }}:${{ needs.version.outputs.version }}"
+        env:
+          IMAGE: ${{ needs.version.outputs.image }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: docker buildx imagetools inspect "${IMAGE}:${VERSION}"
 
   # opens a pull request on dradoaica/helm-charts that moves the chart to the released image (a patch release): on the
   # chart branch released with the image (release/<version>) if there is one, otherwise main; a chart of another minor
