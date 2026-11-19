@@ -22,15 +22,14 @@ internal sealed class ClusterActivator(IgniteServerSettings settings, ILogger lo
 
     /// <summary>
     ///     Activates the cluster (a persistent one once enough server nodes have joined), lets its baseline follow the
-    ///     topology and applies IGNITE_USER_PASSWORD. Returns false when the node stopped before its cluster was
-    ///     activated.
+    ///     topology and applies IGNITE_USER_PASSWORD. Returns false when the node stopped before its cluster was activated.
     /// </summary>
     /// <param name="node">The node that has started.</param>
     /// <param name="persistent">Whether its default data region is persistent.</param>
     /// <param name="authenticationEnabled">Whether the node has authentication (and so users with passwords).</param>
     /// <param name="reactivate">
-    ///     The node was the cluster's only server node before its restart, and deactivated the cluster to restart: it
-    ///     does not wait for ACTIVATION_MIN_SERVER_NODES, as a cluster that starts for the first time does.
+    ///     The node was the cluster's only server node before its restart, and deactivated the cluster to
+    ///     restart: it does not wait for ACTIVATION_MIN_SERVER_NODES, as a cluster that starts for the first time does.
     /// </param>
     /// <param name="stopped">Completes when the node stops.</param>
     public async Task<bool> ActivateAsync(

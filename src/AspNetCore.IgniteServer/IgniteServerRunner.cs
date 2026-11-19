@@ -14,10 +14,10 @@ namespace AspNetCore.IgniteServer;
 /// <summary>
 ///     Starts, activates and stops one Ignite server node, configured by the settings.
 ///     <para>
-///         Concurrency: <see cref="Run" /> runs on one thread, while <see cref="Restart" />, <see cref="Stop" /> and
-///         the node's Stopped event come from others. All lifecycle state is guarded by one lock, <c>gate</c>. Ignite
-///         itself is never called under that lock, because starting, stopping and reading the cluster can take long,
-///         and Ignite's threads call back into this class.
+///         Concurrency: <see cref="Run" /> runs on one thread, while <see cref="Restart" />, <see cref="Stop" /> and the
+///         node's Stopped event come from others. All lifecycle state is guarded by one lock, <c>gate</c>. Ignite itself
+///         is never called under that lock, because starting, stopping and reading the cluster can take long, and Ignite's
+///         threads call back into this class.
 ///     </para>
 /// </summary>
 internal sealed class IgniteServerRunner : IDisposable
@@ -377,12 +377,12 @@ internal sealed class IgniteServerRunner : IDisposable
     }
 
     /// <summary>
-    ///     Stops the node within <paramref name="timeout" />, or waits for a stop already in progress (e.g., of a restart
-    ///     that timed out).
+    ///     Stops the node within <paramref name="timeout" />, or waits for a stop already in progress (e.g., of a restart that
+    ///     timed out).
     ///     <para>
-    ///         The GRACEFUL shutdown policy waits until the node's partitions have copies on other nodes. That can take
-    ///         long (e.g., while another node restarts too), and never happens for the cluster's last server node. So the
-    ///         last server node deactivates the cluster first (<see cref="DeactivateIfLastServerNode" />), and when
+    ///         The GRACEFUL shutdown policy waits until the node's partitions have copies on other nodes. That can take long
+    ///         (e.g., while another node restarts too), and never happens for the cluster's last server node. So the last
+    ///         server node deactivates the cluster first (<see cref="DeactivateIfLastServerNode" />), and when
     ///         <paramref name="restarting" />, the next run activates it again.
     ///     </para>
     /// </summary>
@@ -418,8 +418,8 @@ internal sealed class IgniteServerRunner : IDisposable
 
     /// <summary>
     ///     The cluster's last server node deactivates the cluster before it stops, so that it can stop at once (a
-    ///     persistent one checkpoints its data, and the next start activates it again). Returns true when it deactivated
-    ///     the cluster.
+    ///     persistent one checkpoints its data, and the next start activates it again). Returns true when it deactivated the
+    ///     cluster.
     /// </summary>
     private bool DeactivateIfLastServerNode(TimeSpan timeout)
     {

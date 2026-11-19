@@ -11,8 +11,8 @@ using System.Xml.Linq;
 namespace AspNetCore.IgniteServer;
 
 /// <summary>
-///     Runs the Ignite node for the lifetime of the host: renders its Spring configuration, starts it, restarts it
-///     when its SSL files change (<see cref="SslFileRestarter" />), stops it with the host, and sets the exit code.
+///     Runs the Ignite node for the lifetime of the host: renders its Spring configuration, starts it, restarts it when
+///     its SSL files change (<see cref="SslFileRestarter" />), stops it with the host, and sets the exit code.
 ///     <para>
 ///         The runner is created with the service, so it always exists: a stop that comes before the node starts is
 ///         handled by the runner itself (<see cref="IgniteServerRunner.Run" /> then starts no node). An invalid

@@ -228,7 +228,7 @@ See [Development](development.md) for how to run them.
 |----------------------------------------------|-----------------------------------------------------------------|
 | A setting (name, default, validation)        | `IgniteServerSettings*.cs`, then `docs/configuration.md`        |
 | How a setting configures the node            | `IgniteConfigurationFactory.cs`, or `config/spring-config*.xml` |
-| Start, restart and stop                       | `IgniteServerRunner.cs` (tests: `IgniteServerLifecycleTests`)   |
+| Start, restart and stop                      | `IgniteServerRunner.cs` (tests: `IgniteServerLifecycleTests`)   |
 | Cluster activation and the baseline          | `ClusterActivator.cs`                                           |
 | Host integration, exit codes                 | `IgniteServerHostedService.cs`, `ServerExit.cs`, `Program.cs`   |
 | Certificate rotation                         | `SslFileRestarter.cs`, `Utils/FileChangeWatcher.cs`             |

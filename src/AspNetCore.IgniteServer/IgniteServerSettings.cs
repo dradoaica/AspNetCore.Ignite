@@ -128,9 +128,9 @@ internal sealed partial class IgniteServerSettings
     }
 
     /// <summary>
-    ///     The list from the highest-priority source that sets <paramref name="key" />, and from that source only.
-    ///     Plain binding would merge the sources index by index instead: with CLUSTER_ENDPOINTS__0=x and
-    ///     CLUSTER_ENDPOINTS__1=y in the environment, <c>-Cluster a</c> would give [a, y] rather than [a].
+    ///     The list from the highest-priority source that sets <paramref name="key" />, and from that source only. Plain
+    ///     binding would merge the sources index by index instead: with CLUSTER_ENDPOINTS__0=x and CLUSTER_ENDPOINTS__1=y in
+    ///     the environment, <c>-Cluster a</c> would give [a, y] rather than [a].
     /// </summary>
     private static List<string> GetList(IConfiguration configuration, string key)
     {

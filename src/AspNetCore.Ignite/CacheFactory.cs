@@ -157,7 +157,8 @@ public static class CacheFactory
     /// <typeparam name="TKey">The key type.</typeparam>
     /// <typeparam name="TData">The value type.</typeparam>
     /// <exception cref="NotSupportedException">
-    ///     <see cref="IgniteCacheOptions.EnablePlatformCache" /> is set: a thin client cannot configure a platform cache.
+    ///     <see cref="IgniteCacheOptions.EnablePlatformCache" /> is set: a thin client
+    ///     cannot configure a platform cache.
     /// </exception>
     public static ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
         IIgniteClient ignite,
