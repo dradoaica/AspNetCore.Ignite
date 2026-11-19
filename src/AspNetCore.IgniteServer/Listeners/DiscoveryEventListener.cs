@@ -20,6 +20,8 @@ internal sealed class DiscoveryEventListener(ILogger logger) : IEventListener<Di
         [EventType.NodeSegmented] = LogEventLevel.Error,
     };
 
+    private readonly ILogger logger = logger.ForContext<DiscoveryEventListener>();
+
     public bool Invoke(DiscoveryEvent evt)
     {
         if (Levels.TryGetValue(evt.Type, out var level))

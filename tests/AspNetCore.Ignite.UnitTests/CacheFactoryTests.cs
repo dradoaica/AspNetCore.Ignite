@@ -140,6 +140,24 @@ public sealed class CacheFactoryTests
     }
 
     [Fact]
+    public void GetOrCreateCacheClient_WithPlatformCache_IsRefused()
+    {
+        // a thin client cannot configure a platform cache: the setting must not be dropped silently
+        var client = Fake.Of<IIgniteClient>((member, _) => throw new NotSupportedException(member));
+
+        var exception = Assert.Throws<NotSupportedException>(() => CacheFactory.GetOrCreateCacheClient<int, string>(
+                client,
+                "c",
+                cacheOptions: new IgniteCacheOptions
+                {
+                    EnablePlatformCache = true,
+                }
+            )
+        );
+        Assert.Contains("EnablePlatformCache", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CacheDefaults_GroupByValueType()
     {
         Assert.Equal("System.String", CacheFactory.GetGroupName<string>(new IgniteCacheOptions()));

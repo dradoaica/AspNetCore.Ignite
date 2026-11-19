@@ -156,6 +156,9 @@ public static class CacheFactory
     /// <param name="cacheOptions">The cache defaults (<see cref="IgniteCacheOptions" /> when null).</param>
     /// <typeparam name="TKey">The key type.</typeparam>
     /// <typeparam name="TData">The value type.</typeparam>
+    /// <exception cref="NotSupportedException">
+    ///     <see cref="IgniteCacheOptions.EnablePlatformCache" /> is set: a thin client cannot configure a platform cache.
+    /// </exception>
     public static ICacheClient<TKey, TData> GetOrCreateCacheClient<TKey, TData>(
         IIgniteClient ignite,
         string cacheName,
@@ -164,13 +167,16 @@ public static class CacheFactory
     )
     {
         cacheOptions ??= new IgniteCacheOptions();
-        CacheClientConfiguration cacheCfg = new(
-            new CacheConfiguration
-            {
-                PlatformCacheConfiguration = GetPlatformCacheConfiguration<TKey, TData>(cacheOptions),
-            },
-            true
-        )
+        if (cacheOptions.EnablePlatformCache)
+        {
+            // The thin client protocol has no platform cache configuration, so it would be dropped silently.
+            throw new NotSupportedException(
+                "EnablePlatformCache applies only to caches created through a thick client or a server node " +
+                "(CacheFactory.GetOrCreateCache); a thin client cannot configure a platform cache."
+            );
+        }
+
+        CacheClientConfiguration cacheCfg = new()
         {
             Name = cacheName,
             CacheMode = CacheMode.Partitioned,

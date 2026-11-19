@@ -8,7 +8,9 @@ public sealed class IgniteCacheOptions
 
     /// <summary>
     ///     Keeps a deserialized copy of every entry in the .NET memory of the (thick, .NET) server nodes, which speeds up
-    ///     reads on those nodes but roughly doubles the memory each entry takes. Off by default.
+    ///     reads on those nodes but roughly doubles the memory each entry takes. Off by default. Only for caches created
+    ///     through a thick client or a server node (<see cref="CacheFactory.GetOrCreateCache{TKey,TData}" />): a thin
+    ///     client (<c>IIgniteManager</c>) cannot configure a platform cache, and refuses to create a cache with it.
     /// </summary>
     public bool EnablePlatformCache { get; set; }
 

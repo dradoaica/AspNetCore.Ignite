@@ -109,6 +109,47 @@ public sealed class IgniteClientOptionsTests
     }
 
     [Fact]
+    public void AddIgnite_SectionEndpoints_ReplaceTheFlatKey()
+    {
+        var configuration = Configuration(
+            new Dictionary<string, string?>
+            {
+                ["ASPNETCORE_IGNITE_ENDPOINT"] = "env:10800",
+                ["Ignite:Endpoints:0"] = "section:10800",
+            }
+        );
+        ServiceCollection services = new();
+        services.AddSingleton(configuration);
+        services.AddIgnite(configuration.GetSection("Ignite"));
+        using var provider = services.BuildServiceProvider();
+
+        var options = provider.GetRequiredService<IOptions<IgniteClientOptions>>().Value;
+
+        Assert.Equal(["section:10800",], options.Endpoints);
+    }
+
+    [Fact]
+    public void AddIgnite_SectionWithoutEndpoints_KeepsTheFlatKey()
+    {
+        var configuration = Configuration(
+            new Dictionary<string, string?>
+            {
+                ["ASPNETCORE_IGNITE_ENDPOINT"] = "env:10800",
+                ["Ignite:UserName"] = "user",
+            }
+        );
+        ServiceCollection services = new();
+        services.AddSingleton(configuration);
+        services.AddIgnite(configuration.GetSection("Ignite"));
+        using var provider = services.BuildServiceProvider();
+
+        var options = provider.GetRequiredService<IOptions<IgniteClientOptions>>().Value;
+
+        Assert.Equal(["env:10800",], options.Endpoints);
+        Assert.Equal("user", options.UserName);
+    }
+
+    [Fact]
     public async Task HealthCheck_UnreachableCluster_ReportsFailureStatus()
     {
         IgniteHealthCheck healthCheck = new(

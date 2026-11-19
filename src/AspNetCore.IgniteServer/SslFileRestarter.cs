@@ -36,7 +36,7 @@ internal sealed class SslFileRestarter : IDisposable
     )
     {
         this.settings = settings;
-        this.logger = logger;
+        this.logger = logger.ForContext<SslFileRestarter>();
         this.runner = runner;
         this.isStopping = isStopping;
         this.fail = fail;

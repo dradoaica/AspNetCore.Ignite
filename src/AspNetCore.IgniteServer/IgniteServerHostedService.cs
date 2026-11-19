@@ -26,6 +26,7 @@ internal sealed class IgniteServerHostedService(
     // Guards stopping and runner together: StopAsync either finds the runner and stops it, or sets stopping before
     // the runner exists, and RunAsync then does not start the node.
     private readonly Lock gate = new();
+    private readonly ILogger logger = logger.ForContext<IgniteServerHostedService>();
     private IgniteServerRunner? runner;
     private volatile bool stopping;
 

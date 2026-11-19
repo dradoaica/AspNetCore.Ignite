@@ -22,6 +22,7 @@ internal sealed class RebalanceTracker(ILogger logger, TimeSpan maxWait, TimePro
     internal static readonly TimeSpan CatchUpSettleTime = TimeSpan.FromSeconds(10);
 
     private readonly Lock catchUpLock = new();
+    private readonly ILogger logger = logger.ForContext<RebalanceTracker>();
     private readonly ConcurrentDictionary<string, DateTimeOffset> rebalancing = new(StringComparer.Ordinal);
     private readonly TimeProvider timeProvider = timeProvider ?? TimeProvider.System;
     private volatile bool caughtUp;

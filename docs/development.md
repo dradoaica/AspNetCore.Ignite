@@ -83,17 +83,25 @@ docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/dradoaica/aspn
 
 Releases publish the image to GHCR (the Release workflow); to push one by hand:
 
+```
 docker push ghcr.io/dradoaica/aspnetcore.ignite-server:2.19.0
+```
 
 ## Run aspnetcore.ignite-server container
 
-docker run -p 0.0.0.0:10800:10800/tcp --name aspnetcore.ignite-server -d ghcr.io/dradoaica/aspnetcore.ignite-server:
-2.19.0
+```
+docker run -d --name aspnetcore.ignite-server -p 10800:10800 -p 9464:9464 \
+  -e IGNITE_USER_PASSWORD='<password>' ghcr.io/dradoaica/aspnetcore.ignite-server:2.19.0
+```
 
 ## Remove aspnetcore.ignite-server container
 
+```
 docker rm -f aspnetcore.ignite-server
+```
 
 ## Remove aspnetcore.ignite-server image
 
+```
 docker rmi ghcr.io/dradoaica/aspnetcore.ignite-server:2.19.0
+```

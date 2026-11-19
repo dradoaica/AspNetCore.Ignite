@@ -44,7 +44,7 @@ internal sealed class IgniteNodeMetrics : IDisposable
     )
     {
         this.nodeState = nodeState;
-        this.logger = logger;
+        this.logger = logger?.ForContext<IgniteNodeMetrics>();
         this.perCache = perCache;
         this.timeProvider = timeProvider ?? TimeProvider.System;
         meter.CreateObservableGauge(

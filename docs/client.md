@@ -27,6 +27,7 @@ The options (`IgniteClientOptions`), each with the flat setting (e.g., an enviro
 there is one:
 
 - `Endpoints` (setting `ASPNETCORE_IGNITE_ENDPOINT`, default `127.0.0.1`): Thin client endpoints (comma-separated).
+  The endpoints of a configuration section replace those of the setting rather than being added to them.
 - `UserName` / `Password` (setting `ASPNETCORE_IGNITE_USER_NAME` / `ASPNETCORE_IGNITE_PASSWORD`, default _(empty)_):
   Credentials.
 - `UseSsl` (setting `ASPNETCORE_IGNITE_USE_SSL`, default `false`): Enables SSL (the OS chooses the protocol, TLS 1.3
@@ -45,6 +46,8 @@ there is one:
   fails the operation at once.
 - `Cache.Backups` (default `1`): Backups of created caches.
 - `Cache.EnablePlatformCache` (default `false`): Keeps a deserialized copy of every entry in the .NET memory of the
-  (.NET) server nodes: faster reads there, but roughly double the memory per entry.
+  (.NET) server nodes: faster reads there, but roughly double the memory per entry. Only for caches created through a
+  thick client or a server node (`CacheFactory.GetOrCreateCache`): a thin client cannot configure a platform cache, so
+  `IIgniteManager` refuses to create a cache with it (`NotSupportedException`).
 - `Cache.GroupByValueType` (default `true`): Puts the caches of the same value type into one cache group (shared
   partitions and storage).

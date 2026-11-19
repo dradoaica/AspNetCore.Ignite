@@ -11,7 +11,9 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
 * SSL (`USE_SSL`, `USE_CLIENT_SSL`) is off by default, there are no default passwords or consistent id, and the image
   no longer contains the sample keystores: set these explicitly.
 * The client validates the server certificate by default (`ASPNETCORE_IGNITE_SSL_SKIP_SERVER_CERTIFICATE_VALIDATION`
-  to opt out), and platform cache is off by default (`Cache.EnablePlatformCache` to opt in).
+  to opt out). `Cache.EnablePlatformCache` is off by default, and `IIgniteManager` (a thin client, which cannot
+  configure a platform cache) refuses to create a cache with it: it used to be dropped without a word. It still applies
+  to the caches that `CacheFactory.GetOrCreateCache` creates through a thick client or a server node.
 * The client library targets .NET 10 (`net10.0`) instead of .NET Standard 2.1: applications on earlier .NET versions
   keep using 2.18.x.
 * `IIgniteManager` has new `Client` and `GetClientAsync` members (implementations outside this library must add them),
@@ -58,26 +60,21 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
     * `container.ports`/`service.ports`: `thinClients` (10800) replaces `sql`, `management` is new, `rest` and `restTcp`
       (11211, was `jdbc`) exist only with `rest.enabled`, and `jmx` and 10900 are gone.
     * The values follow the ignite chart: `persistence.storageVolume` (`/app/work`) and `persistence.walVolume`
-      (`/wal`),
-      `memory.*`, `authentication.*`, `timeouts.*`, `threadPools.*`, `dataStorage.*` and `ssl.*` (Secrets
-      `<fullname>-auth`
-      and `<fullname>-ssl`); `secrets.*` and most `env` keys are gone.
+      (`/wal`), `memory.*`, `authentication.*`, `timeouts.*`, `threadPools.*`, `dataStorage.*` and `ssl.*` (Secrets
+      `<fullname>-auth` and `<fullname>-ssl`); `secrets.*` and most `env` keys are gone.
     * `authentication.igniteUserPassword` is empty by default: set it. A new password applies to the whole cluster as
-      soon
-      as the first restarted node sets it, so change the clients' password together with the rollout.
+      soon as the first restarted node sets it, so change the clients' password together with the rollout.
     * The client Service has the thin client and management ports (and REST); the discovery and communication ports are
       on the headless Service only.
     * The root file system is read-only, a PodDisruptionBudget is created for more than one replica, the termination
-      grace
-      period is 300 seconds, a node is ready only once it holds its data after starting, and the pods spread across
-      Kubernetes nodes (`topologySpreadConstraints`).
+      grace period is 300 seconds, a node is ready only once it holds its data after starting, and the pods spread
+      across Kubernetes nodes (`topologySpreadConstraints`).
     * The nodes keep no SQL query history (`sqlQueryHistorySize: 0`): a node that applies a new password would keep it
       there, readable by every SQL user. Set it empty for Ignite's default.
     * The default `networkPolicy.egress` allows the Kubernetes API server on port 16443 too (MicroK8s, where the nodes
       did not find each other).
     * The autoscaler (`autoscaling.create`) only scales up, on CPU only (`autoscaling.targetMemoryUtilizationPercentage`
-      is refused), with `autoscaling.minReplicas` not below
-      `replicaCount`.
+      is refused), with `autoscaling.minReplicas` not below `replicaCount`.
     * Upgrade with `--reset-then-reuse-values`, not `--reuse-values`, which keeps the old defaults and misses the new
       settings (the chart then fails with a message).
 

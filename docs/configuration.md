@@ -308,7 +308,8 @@ memory calculation: ON_HEAP_MEMORY (JVM Heap max size)
     + ~512MB (other overheads; e.g., thread stacks, GC, symbols, etc.)
 ```
 
-Caches created with `Cache.EnablePlatformCache` also keep their entries in the .NET heap of each server node.
+Caches with a platform cache (`Cache.EnablePlatformCache`, created through a thick client or a server node) also keep
+their entries in the .NET heap of each server node.
 
 The JVM starts with its whole heap (`-Xms` = `-Xmx`, pre-touched) and the options of the Ignite chart: G1
 (`MaxGCPauseMillis=200`, string deduplication), `ExitOnOutOfMemoryError` (an out-of-memory JVM ends the process, so the

@@ -11,7 +11,7 @@ internal static class DnsUtils
 
     private static string GetLocalIpAddress(string hostName)
     {
-        var host = Dns.GetHostEntryAsync(hostName).GetAwaiter().GetResult();
+        var host = Dns.GetHostEntry(hostName);
         foreach (var ip in host.AddressList.OrderBy(ip => ip.ToString()))
         {
             if (ip.AddressFamily == AddressFamily.InterNetwork)

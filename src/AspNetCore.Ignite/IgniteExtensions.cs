@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace AspNetCore.Ignite;
 
@@ -50,6 +51,16 @@ public static class IgniteExtensions
     public static IServiceCollection AddIgnite(this IServiceCollection services, IConfiguration section)
     {
         services.AddIgnite();
+        // The binder adds to a list that is already set: the endpoints of the section replace those of
+        // ASPNETCORE_IGNITE_ENDPOINT instead of being appended to them.
+        services.Configure<IgniteClientOptions>(options =>
+            {
+                if (section.GetSection(nameof(IgniteClientOptions.Endpoints)).GetChildren().Any())
+                {
+                    options.Endpoints = [];
+                }
+            }
+        );
         services.Configure<IgniteClientOptions>(section);
 
         return services;

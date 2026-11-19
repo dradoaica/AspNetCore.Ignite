@@ -28,6 +28,8 @@ internal sealed class IgniteUserPasswordManager(IgniteServerSettings settings, I
         GroupByValueType = false,
     };
 
+    private readonly ILogger logger = logger.ForContext<IgniteUserPasswordManager>();
+
     /// <summary>
     ///     Nothing to do when <paramref name="password" /> is already accepted; otherwise it replaces the previous
     ///     password (rotation) or the default one (first start). Nodes that start together apply it at the same time: a

@@ -104,6 +104,21 @@ public sealed class IgniteServerLifecycleTests
     }
 
     [Fact]
+    public async Task Dispose_WaitsForTheStopOfARunningNode_AtMostTheGracefulStopTimeout()
+    {
+        FakeNodeLauncher launcher = new();
+        var runner = CreateRunner(launcher, 1);
+        _ = runner.Run();
+        await FakeNodeLauncher.Eventually(() => runner.Node != null);
+        using ManualResetEventSlim release = new();
+        launcher.BeforeStopped = () => release.Wait();
+
+        await Task.Run(runner.Dispose).WaitAsync(Timeout);
+        Assert.Equal(1, launcher.Stops);
+        release.Set();
+    }
+
+    [Fact]
     public async Task Stop_WhileTheNodeStarts_WaitsForTheStart_AndStopsTheNode()
     {
         FakeNodeLauncher launcher = new();
@@ -162,11 +177,12 @@ public sealed class IgniteServerLifecycleTests
         Assert.Equal(0, launcher.Started);
     }
 
-    private static IgniteServerRunner CreateRunner(FakeNodeLauncher launcher) => new(
+    private static IgniteServerRunner CreateRunner(FakeNodeLauncher launcher, int stopTimeoutInSeconds = 20) => new(
         new IgniteServerSettings
         {
             // in memory, so that the cluster is activated at once
             EnableAuthentication = false,
+            GracefulStopTimeoutInSeconds = stopTimeoutInSeconds,
         },
         Logger.None,
         () => "127.0.0.1",

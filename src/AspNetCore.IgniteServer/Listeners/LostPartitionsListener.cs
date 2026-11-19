@@ -64,7 +64,7 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
     )
     {
         this.ignite = ignite;
-        this.logger = logger;
+        this.logger = logger.ForContext<LostPartitionsListener>();
         this.autoReset = autoReset;
         this.persistent = persistent;
         timer = (timeProvider ?? TimeProvider.System).CreateTimer(
