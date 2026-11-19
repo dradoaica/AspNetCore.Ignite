@@ -55,10 +55,24 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # With the layers cached (the scope the Release workflow uses too), the Java modules are downloaded from Maven
+      # Central only when JavaLibs.props changes: a failed download (MSBuild does not retry a 404) fails fewer builds.
+      # A cache that cannot be written does not fail the build.
       - name: Build Image
-        run: |
-          docker build -t ghcr.io/dradoaica/aspnetcore.ignite-server:e2e .
-          docker save ghcr.io/dradoaica/aspnetcore.ignite-server:e2e -o "${RUNNER_TEMP}/image.tar"
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          tags: ghcr.io/dradoaica/aspnetcore.ignite-server:e2e
+          load: true
+          cache-from: type=gha,scope=linux/amd64
+          cache-to: type=gha,mode=max,scope=linux/amd64,ignore-error=true
+
+      - name: Save Image
+        run: docker save ghcr.io/dradoaica/aspnetcore.ignite-server:e2e -o "${RUNNER_TEMP}/image.tar"
 
       # the OS packages, the Java runtime and jars, and the .NET dependencies of the image: the vulnerabilities with a fix
       # (high and critical) are listed in the log and the summary, and a critical one fails the build (but those of
@@ -97,8 +111,19 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # cached as the amd64 image is (see the image job)
       - name: Build Image
-        run: docker build -t aspnetcore.ignite-server:arm64 .
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          tags: aspnetcore.ignite-server:arm64
+          load: true
+          cache-from: type=gha,scope=linux/arm64
+          cache-to: type=gha,mode=max,scope=linux/arm64,ignore-error=true
 
       - name: Smoke Test
         run: |

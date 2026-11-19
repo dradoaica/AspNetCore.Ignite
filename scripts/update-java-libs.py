@@ -1,19 +1,18 @@
-#!/usr/bin/env bash
-# Updates the Java modules of src/AspNetCore.IgniteServer/JavaLibs.props after a version change (e.g., IgniteVersion in
-# Directory.Packages.props): the Ignite modules listed there are kept, and the other entries are derived again from
-# their Maven POMs (which list every compile and runtime dependency, with its version), without what the Apache.Ignite
-# NuGet package already contains (ignite-core, ignite-spring, ignite-indexing and their dependencies). An entry with an
-# Override attribute (its reason) keeps its version instead of the one the POMs declare (e.g., a fixed vulnerability),
-# as long as that is older: the override is dropped once Ignite declares the same version or a newer one.
-# Every jar is downloaded from Maven Central and its SHA-256 written back. Review the diff before committing: a hash
-# change without a version change means the artifact changed upstream. Needs python3.
-set -euo pipefail
+#!/usr/bin/env -S python3 -I
+"""
+Updates the Java modules of src/AspNetCore.IgniteServer/JavaLibs.props after a version change (e.g., IgniteVersion in
+Directory.Packages.props): the Ignite modules listed there are kept, and the other entries are derived again from
+their Maven POMs (which list every compile and runtime dependency, with its version), without what the Apache.Ignite
+NuGet package already contains (ignite-core, ignite-spring, ignite-indexing and their dependencies). An entry with an
+Override attribute (its reason) keeps its version instead of the one the POMs declare (e.g., a fixed vulnerability),
+as long as that is older: the override is dropped once Ignite declares the same version or a newer one.
+Every jar is downloaded from Maven Central and its SHA-256 written back. Review the diff before committing: a hash
+change without a version change means the artifact changed upstream. Run it with python3 (isolated mode: -I).
+"""
+import hashlib, re, urllib.request, xml.etree.ElementTree as ET
+from pathlib import Path
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-python3 -I - "$root" <<'PY'
-import hashlib, re, sys, urllib.request, xml.etree.ElementTree as ET
-
-root = sys.argv[1]
+root = Path(__file__).resolve().parent.parent
 props_path = f"{root}/src/AspNetCore.IgniteServer/JavaLibs.props"
 packages = open(f"{root}/Directory.Packages.props").read()
 ignite_version = re.search(r"<IgniteVersion>([^<]+)</IgniteVersion>", packages).group(1)
@@ -104,4 +103,3 @@ for group, artifact in sorted(set(previous) - set(libs)):
 first = entry.search(props)
 block = re.compile(r"(?:" + entry.pattern.lstrip("^") + r")+", re.M).search(props, first.start())
 open(props_path, "w").write(props[:block.start()] + "".join(lines) + props[block.end():])
-PY

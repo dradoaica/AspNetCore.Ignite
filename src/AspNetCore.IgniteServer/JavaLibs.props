@@ -4,7 +4,7 @@
       Java modules loaded next to the Ignite core jars of the Apache.Ignite package: Kubernetes discovery, REST API, JSON
       and the control utility (control.sh), with their runtime dependencies, as their Maven POMs declare. They are
       downloaded from Maven Central on build and verified against these SHA-256 hashes, then copied to libs/ of the build
-      and publish output. When IgniteVersion changes, run scripts/update-java-libs.sh: it derives the dependencies of the
+      and publish output. When IgniteVersion changes, run scripts/update-java-libs.py: it derives the dependencies of the
       Ignite modules listed here again, and updates the hashes.
     -->
     <PropertyGroup>

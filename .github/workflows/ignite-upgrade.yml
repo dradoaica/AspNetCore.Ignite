@@ -25,7 +25,7 @@ jobs:
           token: ${{ secrets.DEPENDABOT_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Update Java Modules
-        run: ./scripts/update-java-libs.sh
+        run: ./scripts/update-java-libs.py
 
       - name: Push
         run: |

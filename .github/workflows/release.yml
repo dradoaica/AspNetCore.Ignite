@@ -56,11 +56,13 @@ jobs:
           sparse-checkout-cone-mode: false
 
       # latest, <major> and <major>.<minor> move only to the highest release of their line: a patch of an older line
-      # (e.g., 2.18.3 after 2.19.0) leaves them where they are
+      # (e.g., 2.18.3 after 2.19.0) leaves them where they are, and a pre-release moves none
       - id: tags
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
+          # a release published as a pre-release moves no floating tag, whatever its version
+          PRERELEASE: ${{ github.event.release.prerelease == true }}
         run: >-
           gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases --limit 1000
           --json tagName --jq '.[].tagName' | scripts/ci/release-tags.sh "$VERSION" | tee -a "$GITHUB_OUTPUT"

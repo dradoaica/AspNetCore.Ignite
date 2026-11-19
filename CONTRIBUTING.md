@@ -83,7 +83,7 @@ please open an issue to discuss the approach before starting work.
 - **Upgrading Apache Ignite.** The project version follows the Apache Ignite version. An upgrade must keep these in
   sync:
     - `IgniteVersion` in `Directory.Packages.props` (the `Apache.Ignite` package and the Java modules)
-    - the Java modules in `src/AspNetCore.IgniteServer/JavaLibs.props`: run `scripts/update-java-libs.sh`
+    - the Java modules in `src/AspNetCore.IgniteServer/JavaLibs.props`: run `scripts/update-java-libs.py`
     - `<Version>` in `src/Directory.Build.props` (the package and the image are released together)
     - the version numbers in `README.md`, `SECURITY.md` and `docs/upgrading.md`
     - the Ignite version recorded by the Helm chart (see [Development](docs/development.md#java-modules))

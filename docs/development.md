@@ -6,7 +6,7 @@ The Ignite core jars come with the `Apache.Ignite` package. The optional modules
 REST API, JSON and the control utility, with the runtime dependencies their Maven POMs declare) are listed in
 `src/AspNetCore.IgniteServer/JavaLibs.props`: the build downloads them from Maven Central, verifies their SHA-256 and
 copies them to `libs/` (not in IDE design-time builds). When upgrading Ignite (`IgniteVersion` in
-`Directory.Packages.props`), run `scripts/update-java-libs.sh`: it derives the dependencies of the Ignite modules listed
+`Directory.Packages.props`), run `scripts/update-java-libs.py`: it derives the dependencies of the Ignite modules listed
 there from their POMs again (without what the package contains) and updates the hashes. An entry with an `Override`
 attribute keeps its version (e.g., Jackson 2.21.7 instead of the 2.19.0 Ignite declares, for its fixed vulnerabilities).
 The chart records the Ignite version of its image (the `ignite.apache.org/version` annotation of its `Chart.yaml`) and

@@ -105,7 +105,7 @@ job of the Tests workflow (`upgrade-test` input) runs these steps with data.
 
 ## Moving to Apache Ignite 2.19.0
 
-Once Apache Ignite 2.19.0 is released, `IgniteVersion` moves to it (with `scripts/update-java-libs.sh`), and its upgrade
+Once Apache Ignite 2.19.0 is released, `IgniteVersion` moves to it (with `scripts/update-java-libs.py`), and its upgrade
 notes apply. From its `ignite-2.19` branch:
 
 * Ignite 2.19 nodes cannot join a cluster of 2.18 nodes: the discovery protocol header changes (IGNITE-28601), so 2.18
