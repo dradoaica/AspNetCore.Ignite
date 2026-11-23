@@ -148,7 +148,7 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
             .Build();
         await node.StartAsync();
 
-        using var igniteClient = CacheFactory.ConnectAsClient(
+        using var igniteClient = IgniteClientFactory.ConnectAsClient(
             IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(node))
         );
         var attributes = igniteClient.GetCluster().ForServers().GetNodes().Single().Attributes;
@@ -245,7 +245,7 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
     public void PeerClassLoading_IsOffByDefault()
     {
         Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
-        using var igniteClient = CacheFactory.ConnectAsClient(
+        using var igniteClient = IgniteClientFactory.ConnectAsClient(
             IgniteServerFixture.ClientConfiguration(
                 fixture.Endpoint,
                 IgniteServerFixture.UserName,
@@ -291,7 +291,7 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
             .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ServerLog.Running))
             .Build();
         await node.StartAsync();
-        using (var igniteClient = CacheFactory.ConnectAsClient(
+        using (var igniteClient = IgniteClientFactory.ConnectAsClient(
                    IgniteServerFixture.ClientConfiguration(
                        IgniteServerFixture.GetEndpoint(node),
                        IgniteServerFixture.UserName,

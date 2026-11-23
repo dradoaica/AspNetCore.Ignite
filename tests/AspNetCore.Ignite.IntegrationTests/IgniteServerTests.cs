@@ -21,7 +21,7 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
     {
         Skip.IfNot(fixture.IsDockerAvailable, DockerUnavailable);
 
-        using (var igniteClient = CacheFactory.ConnectAsClient(
+        using (var igniteClient = IgniteClientFactory.ConnectAsClient(
                    IgniteServerFixture.ClientConfiguration(
                        fixture.Endpoint,
                        IgniteServerFixture.UserName,
@@ -32,7 +32,7 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
             Assert.NotNull(igniteClient.GetCacheNames());
         }
 
-        var ex = Assert.Throws<IgniteClientException>(() => CacheFactory.ConnectAsClient(
+        var ex = Assert.Throws<IgniteClientException>(() => IgniteClientFactory.ConnectAsClient(
                 IgniteServerFixture.ClientConfiguration(
                     fixture.Endpoint,
                     IgniteServerFixture.UserName,
@@ -167,7 +167,7 @@ public sealed class IgniteServerTests(IgniteServerFixture fixture)
         Assert.Empty(history);
     }
 
-    private static IIgniteClient Connect(string endpoint, string password) => CacheFactory.ConnectAsClient(
+    private static IIgniteClient Connect(string endpoint, string password) => IgniteClientFactory.ConnectAsClient(
         IgniteServerFixture.ClientConfiguration(endpoint, IgniteServerFixture.UserName, password)
     );
 

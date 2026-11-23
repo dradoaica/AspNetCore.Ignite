@@ -72,15 +72,16 @@ flowchart TB
   start (exit code `1`). It then starts the SSL restarts, stops the node with the host, and turns a failure into exit
   code `1` (and a stop that was not graceful into `2`).
 * **`IgniteServerRunner`** starts the node, has its cluster activated, registers the event listeners, and restarts or
-  stops the node on request; a stop that comes before the start means no node is started. All of its lifecycle state
-  is guarded by one lock, which is never held while Ignite is called. It starts and stops nodes through
-  `INodeLauncher`, so that its lifecycle can be tested without a JVM.
+  stops the node on request; a stop that comes before the start means no node is started. Each run moves through the
+  phases of its `Phase` enum, which the [Node lifecycle](#node-lifecycle) diagram shows. The phase and the rest of the
+  lifecycle state are guarded by one lock, which is never held while Ignite is called. It starts and stops nodes
+  through `INodeLauncher`, so that its lifecycle can be tested without a JVM.
 * **`ClusterActivator`** activates the cluster of a started node (once `ACTIVATION_MIN_SERVER_NODES` have joined, for a
   persistent cluster that starts for the first time), turns on the baseline auto-adjust and applies
   `IGNITE_USER_PASSWORD`. It also deactivates the cluster before the cluster's last server node stops. Activation and
-  deactivation take turns, and no activation begins once a stop or restart of the node has begun, so an activation
-  never undoes the deactivation of a stopping node. It keeps nothing between runs: the runner passes in what it
-  remembers.
+  deactivation take turns under a lock of its own, and no activation begins once a stop or restart of the node has
+  begun, so an activation never undoes the deactivation of a stopping node. It keeps nothing between runs: the runner
+  passes in what it remembers.
 * **`IgniteNodeState`** is what health checks and metrics read: the running node, whether it is started and ready, and
   the caches it rebalances.
 
@@ -112,27 +113,40 @@ flowchart LR
       `SPRING_EXTRA_*` fragments. Values are inserted at `{{NAME}}` tokens, XML-escaped; Spring expressions (`#{`) are
       refused.
 * Discovery is static (`CLUSTER_ENDPOINTS`, or the node itself) unless `USE_TCP_DISCOVERY_STATIC_IP_FINDER=false`
-  without endpoints or `SPI_PORT`: the nodes then find each other through the Kubernetes API. With
-  `USE_TCP_DISCOVERY_STATIC_IP_FINDER=false` and no endpoints, validation refuses `SPI_PORT`: a discovery configured
-  from .NET without endpoints has no IP finder, and Ignite would fall back to multicast.
+  without endpoints or `SPI_PORT`: the nodes then find each other through the Kubernetes API.
 
 ## Node lifecycle
 
 ```mermaid
 stateDiagram-v2
     [*] --> Starting: Run
-    Starting --> WaitingForServerNodes: persistent, first activation
-    Starting --> Activating: in memory, or reactivation
-    WaitingForServerNodes --> Activating: ACTIVATION_MIN_SERVER_NODES joined
-    Activating --> CatchingUp: cluster active, password applied
-    CatchingUp --> Ready: caught up, or REBALANCE_READINESS_MAX_WAIT_IN_SECONDS passed
-    Ready --> Stopping: Restart (SSL files changed)
-    CatchingUp --> Stopping: Restart
-    Ready --> Stopping: Stop (SIGTERM)
+    Starting --> Activating: started
+    state Activating {
+        [*] --> WaitingForServerNodes: persistent, first activation
+        [*] --> Activation: in memory, or reactivation
+        WaitingForServerNodes --> Activation: ACTIVATION_MIN_SERVER_NODES joined
+    }
+    Activating --> Running: cluster active, password applied
+    state Running {
+        [*] --> CatchingUp
+        CatchingUp --> Ready: caught up, or REBALANCE_READINESS_MAX_WAIT_IN_SECONDS passed
+    }
+    Activating --> Restarting: Restart (no activation)
+    Running --> Restarting: Restart (SSL files changed)
+    Restarting --> Starting: the node stopped
     Starting --> Stopping: Stop, once started
-    Stopping --> Starting: restart requested
-    Stopping --> [*]: stop requested, or stopped on its own
+    Activating --> Stopping: Stop (no activation)
+    Running --> Stopping: Stop (SIGTERM)
+    Restarting --> Stopping: Stop, or the restart timed out
+    Stopping --> Stopped: the node stopped
+    Activating --> Stopped: the node stopped on its own
+    Running --> Stopped: the node stopped on its own
+    Stopped --> [*]
 ```
+
+The states are the values of `IgniteServerRunner.Phase` (`Idle` comes before the first start, and between the stop and
+the start of a restart); the states inside `Activating` and `Running` are those of `ClusterActivator` and
+`RebalanceTracker`.
 
 * **Started** (`/health/startup`) once the node has joined the topology, also while its cluster waits for
   `ACTIVATION_MIN_SERVER_NODES`, so that a startup probe does not restart nodes waiting for each other.
@@ -141,8 +155,9 @@ stateDiagram-v2
   (`RebalanceTracker`). A rolling restart therefore moves on only once the restarted node holds its data again. So that
   a node is never unready for good, it is ready anyway `REBALANCE_READINESS_MAX_WAIT_IN_SECONDS` (600 by default) after
   it runs when it is still not in the baseline, and a rebalance that started longer ago than that is ignored.
-* **Restart and stop requests** are one field of the runner: a stop always wins over a restart, and a restart is taken
-  by the next start. `Restart` returns `Restarting`, `NotRunning` or `TimedOut`.
+* **Restart and stop requests** move the run to `Restarting` or `Stopping`: a stop always wins over a restart, and a
+  restart is taken by the next start. A request that comes during the activation means the cluster is not activated.
+  `Restart` returns `Restarting`, `NotRunning` or `TimedOut`.
 * **The graceful stop** (Ignite's GRACEFUL shutdown policy) waits until the node's partitions have copies on other
   nodes, within `GRACEFUL_STOP_TIMEOUT_IN_SECONDS`; a node that is still starting is stopped once started, within the
   same timeout. No other node can take over the partitions of the cluster's last server node, so that node deactivates

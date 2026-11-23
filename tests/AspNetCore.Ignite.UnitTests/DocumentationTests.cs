@@ -7,32 +7,21 @@ namespace AspNetCore.Ignite.UnitTests;
 
 public sealed class DocumentationTests
 {
-    private static readonly Lazy<string> ConfigurationDocs = new(() =>
-        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "docs", "configuration.md"))
-    );
-
-    public static TheoryData<string> ServerSettings
-    {
-        get
-        {
-            TheoryData<string> data = [];
-            foreach (var property in typeof(IgniteServerSettings).GetProperties())
-            {
-                if (property.GetCustomAttribute<ConfigurationKeyNameAttribute>() is { } key)
-                {
-                    data.Add(key.Name);
-                }
-            }
-
-            return data;
-        }
-    }
-
     /// <summary>Every setting of the server is named in docs/configuration.md, so that a new one cannot go undocumented.</summary>
-    [Theory]
-    [MemberData(nameof(ServerSettings))]
-    public void ServerSetting_IsInTheConfigurationDocs(string key) => Assert.True(
-        ConfigurationDocs.Value.Contains($"`{key}`", StringComparison.Ordinal),
-        $"{key} is not in docs/configuration.md: add it to the Settings section."
-    );
+    [Fact]
+    public void ServerSettings_AreInTheConfigurationDocs()
+    {
+        var docs = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "docs", "configuration.md"));
+
+        var undocumented = typeof(IgniteServerSettings).GetProperties()
+            .Select(property => property.GetCustomAttribute<ConfigurationKeyNameAttribute>()?.Name)
+            .OfType<string>()
+            .Where(key => !docs.Contains($"`{key}`", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(
+            undocumented.Count == 0,
+            $"Not in docs/configuration.md (add them to its Settings section): {string.Join(", ", undocumented)}"
+        );
+    }
 }

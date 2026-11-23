@@ -50,7 +50,7 @@ public class IgniteManager : IIgniteManager, IDisposable
     public IgniteManager(IgniteClientOptions options, ILoggerFactory? loggerFactory = null)
     {
         this.options = options;
-        igniteClientConfiguration = CacheFactory.GetIgniteClientConfiguration(
+        igniteClientConfiguration = IgniteClientFactory.GetIgniteClientConfiguration(
             options,
             loggerFactory == null ? null : new IgniteLoggerAdapter(loggerFactory)
         );
@@ -170,7 +170,7 @@ public class IgniteManager : IIgniteManager, IDisposable
 
     private IIgniteClient Connect()
     {
-        var client = connectRetryPolicy.Execute(() => CacheFactory.ConnectAsClient(igniteClientConfiguration));
+        var client = connectRetryPolicy.Execute(() => IgniteClientFactory.ConnectAsClient(igniteClientConfiguration));
         lock (syncRoot)
         {
             if (disposed)

@@ -42,7 +42,7 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
         await node2.StartAsync();
         await TestContainerLogs.WaitForMessageAsync(node1, ServerLog.Running, 1, TimeSpan.FromSeconds(60));
 
-        using var igniteClient = CacheFactory.ConnectAsClient(
+        using var igniteClient = IgniteClientFactory.ConnectAsClient(
             IgniteServerFixture.ClientConfiguration(
                 IgniteServerFixture.GetEndpoint(node1),
                 IgniteServerFixture.UserName,
@@ -63,7 +63,7 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
         const string clusterEndpoints = "ignite-a:47500,ignite-b:47500";
         await using var nodeA = InMemoryNode(network, "ignite-a", clusterEndpoints);
         await nodeA.StartAsync();
-        using (var igniteClient = CacheFactory.ConnectAsClient(
+        using (var igniteClient = IgniteClientFactory.ConnectAsClient(
                    IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeA))
                ))
         {
@@ -111,7 +111,7 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
                   HttpStatusCode.OK,
             TimeSpan.FromSeconds(90)
         );
-        using var igniteClient = CacheFactory.ConnectAsClient(
+        using var igniteClient = IgniteClientFactory.ConnectAsClient(
             IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeX))
         );
         // without backups, the partitions of a node that leaves are lost; the safe policy blocks them until reset
@@ -158,7 +158,7 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
         {
             await nodeQ.StartAsync();
             await TestContainerLogs.WaitForMessageAsync(nodeP, ServerLog.Running, 1, TimeSpan.FromSeconds(60));
-            using var igniteClient = CacheFactory.ConnectAsClient(
+            using var igniteClient = IgniteClientFactory.ConnectAsClient(
                 IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeP))
             );
             igniteClient.GetOrCreateCache<int, int>(
@@ -192,7 +192,7 @@ public sealed class ClusterActivationTests(IgniteClusterFixture fixture)
             1,
             TimeSpan.FromSeconds(60)
         );
-        using var client = CacheFactory.ConnectAsClient(
+        using var client = IgniteClientFactory.ConnectAsClient(
             IgniteServerFixture.ClientConfiguration(IgniteServerFixture.GetEndpoint(nodeP))
         );
         var cache = client.GetCache<int, int>("durable");

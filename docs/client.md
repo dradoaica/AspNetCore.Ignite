@@ -24,6 +24,10 @@ it connects) and exposes the thin client (`IIgniteManager.Client`) for SQL, comp
 The client logs through `Microsoft.Extensions.Logging` (category `Apache.Ignite`). For LINQ queries, add the
 `Apache.Ignite.Linq` package.
 
+Without dependency injection, `IgniteClientFactory` builds the thin client configuration from the same options
+(`GetIgniteClientConfiguration`) and connects (`ConnectAsClient`, thin or thick), and `CacheFactory` creates caches
+with the defaults below.
+
 The options (`IgniteClientOptions`), each with the flat setting (e.g., an environment variable) that also sets it, where
 there is one:
 

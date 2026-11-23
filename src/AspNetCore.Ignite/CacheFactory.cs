@@ -7,19 +7,22 @@ using Apache.Ignite.Core.Log;
 using AspNetCore.Ignite.Options;
 using AspNetCore.Ignite.Utils;
 using System;
-using System.Linq;
-using System.Security.Authentication;
 
 namespace AspNetCore.Ignite;
 
-/// <summary>Creates thin client configurations, connections (thin and thick) and caches with the defaults of this library.</summary>
+/// <summary>
+///     Creates caches (partitioned, with the defaults of this library) through thin clients, thick clients and server
+///     nodes. Its client configuration and connection methods moved to <see cref="IgniteClientFactory" />: the ones
+///     here are obsolete and forward to it.
+/// </summary>
 public static class CacheFactory
 {
     /// <summary>The endpoint used when none is configured.</summary>
-    public const string DefaultEndpoint = "127.0.0.1";
+    [Obsolete("Use IgniteClientFactory.DefaultEndpoint.")]
+    public const string DefaultEndpoint = IgniteClientFactory.DefaultEndpoint;
 
     /// <summary>A thin client configuration for one endpoint.</summary>
-    /// <param name="endpoint">The endpoint (host or host:port); <see cref="DefaultEndpoint" /> when empty.</param>
+    /// <param name="endpoint">The endpoint (host or host:port); the default endpoint when empty.</param>
     /// <param name="userName">The user name (authentication).</param>
     /// <param name="password">The password (authentication).</param>
     /// <param name="useSsl">Connects with SSL.</param>
@@ -28,8 +31,9 @@ public static class CacheFactory
     /// <param name="skipServerCertificateValidation">Skips the server certificate validation: insecure, for testing only.</param>
     /// <param name="checkCertificateRevocation">Checks the revocation of the server certificate.</param>
     /// <param name="logger">The Ignite logger of the client (none when null).</param>
+    [Obsolete("Use IgniteClientFactory.GetIgniteClientConfiguration.")]
     public static IgniteClientConfiguration GetIgniteClientConfiguration(
-        string? endpoint = DefaultEndpoint,
+        string? endpoint = IgniteClientFactory.DefaultEndpoint,
         string? userName = null,
         string? password = null,
         bool useSsl = false,
@@ -38,80 +42,38 @@ public static class CacheFactory
         bool skipServerCertificateValidation = false,
         bool checkCertificateRevocation = true,
         ILogger? logger = null
-    ) => GetIgniteClientConfiguration(
-        new IgniteClientOptions
-        {
-            Endpoints = string.IsNullOrWhiteSpace(endpoint) ? [] : [endpoint!,],
-            UserName = userName,
-            Password = password,
-            UseSsl = useSsl,
-            SslCertificatePath = certificatePath,
-            SslCertificatePassword = certificatePassword,
-            SslSkipServerCertificateValidation = skipServerCertificateValidation,
-            SslCheckCertificateRevocation = checkCertificateRevocation,
-        },
+    ) => IgniteClientFactory.GetIgniteClientConfiguration(
+        endpoint,
+        userName,
+        password,
+        useSsl,
+        certificatePath,
+        certificatePassword,
+        skipServerCertificateValidation,
+        checkCertificateRevocation,
         logger
     );
 
     /// <summary>A thin client configuration from <paramref name="options" />.</summary>
     /// <param name="options">The options.</param>
     /// <param name="logger">The Ignite logger of the client (none when null).</param>
+    [Obsolete("Use IgniteClientFactory.GetIgniteClientConfiguration.")]
     public static IgniteClientConfiguration GetIgniteClientConfiguration(
         IgniteClientOptions options,
         ILogger? logger = null
-    )
-    {
-        var endpoints = options.Endpoints.Where(endpoint => !string.IsNullOrWhiteSpace(endpoint)).ToList();
-        IgniteClientConfiguration igniteClientConfiguration = new()
-        {
-            Endpoints = endpoints.Count > 0 ? endpoints : [DefaultEndpoint,],
-            RetryPolicy = new ClientRetryReadPolicy(),
-            RetryLimit = options.RetryLimit,
-            SocketTimeout = options.SocketTimeout,
-            EnablePartitionAwareness = true,
-            EnableClusterDiscovery = options.EnableClusterDiscovery,
-            EnableHeartbeats = true,
-            Logger = logger,
-        };
-        if (!string.IsNullOrWhiteSpace(options.UserName))
-        {
-            igniteClientConfiguration.UserName = options.UserName;
-        }
-
-        if (!string.IsNullOrWhiteSpace(options.Password))
-        {
-            igniteClientConfiguration.Password = options.Password;
-        }
-
-        if (options.UseSsl)
-        {
-            igniteClientConfiguration.SslStreamFactory = new SslStreamFactory
-            {
-                CertificatePath = options.SslCertificatePath,
-                CertificatePassword = options.SslCertificatePassword,
-                CheckCertificateRevocation = options.SslCheckCertificateRevocation,
-                SkipServerCertificateValidation = options.SslSkipServerCertificateValidation,
-                // None lets the OS choose the best protocol it supports (TLS 1.3 included), as Microsoft recommends
-                SslProtocols = SslProtocols.None,
-            };
-        }
-
-        return igniteClientConfiguration;
-    }
+    ) => IgniteClientFactory.GetIgniteClientConfiguration(options, logger);
 
     /// <summary>Starts a thick client node (in this process) with <paramref name="igniteConfiguration" />.</summary>
     /// <param name="igniteConfiguration">The node configuration; its <c>ClientMode</c> is set to true.</param>
-    public static IIgnite ConnectAsClient(IgniteConfiguration igniteConfiguration)
-    {
-        igniteConfiguration.ClientMode = true;
-
-        return Ignition.Start(igniteConfiguration);
-    }
+    [Obsolete("Use IgniteClientFactory.ConnectAsClient.")]
+    public static IIgnite ConnectAsClient(IgniteConfiguration igniteConfiguration) =>
+        IgniteClientFactory.ConnectAsClient(igniteConfiguration);
 
     /// <summary>Connects a thin client.</summary>
     /// <param name="igniteClientConfiguration">The thin client configuration.</param>
+    [Obsolete("Use IgniteClientFactory.ConnectAsClient.")]
     public static IIgniteClient ConnectAsClient(IgniteClientConfiguration igniteClientConfiguration) =>
-        Ignition.StartClient(igniteClientConfiguration);
+        IgniteClientFactory.ConnectAsClient(igniteClientConfiguration);
 
     /// <summary>Gets or creates a partitioned cache through a thick client or server node.</summary>
     /// <param name="ignite">The node.</param>

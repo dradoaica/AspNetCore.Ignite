@@ -8,7 +8,7 @@ namespace AspNetCore.Ignite.Options;
 /// <summary>Options of the thin client connection made by <see cref="IgniteManager" />.</summary>
 public sealed class IgniteClientOptions
 {
-    /// <summary>Thin client endpoints (host or host:port); <see cref="CacheFactory.DefaultEndpoint" /> when empty.</summary>
+    /// <summary>Thin client endpoints (host or host:port); <see cref="IgniteClientFactory.DefaultEndpoint" /> when empty.</summary>
     public List<string> Endpoints { get; set; } = [];
 
     /// <summary>The user name (authentication).</summary>

@@ -371,11 +371,4 @@ public sealed class IgniteConfigurationFactoryTests
 
         Assert.Equal(expected, configuration.DataStorageConfiguration.DefaultDataRegionConfiguration.PageEvictionMode);
     }
-
-    private sealed class CollectingSink : ILogEventSink
-    {
-        public List<LogEvent> Events { get; } = [];
-
-        public void Emit(LogEvent logEvent) => Events.Add(logEvent);
-    }
 }

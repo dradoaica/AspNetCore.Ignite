@@ -173,14 +173,14 @@ internal sealed class IgniteUserPasswordManager(IgniteServerSettings settings, I
     }
 
     private IIgniteClient Connect(string endpoint, string password) =>
-        CacheFactory.ConnectAsClient(GetClientConfiguration(endpoint, password));
+        IgniteClientFactory.ConnectAsClient(GetClientConfiguration(endpoint, password));
 
     /// <summary>
     ///     A connection to this very node only: without cluster discovery, the client would also connect (and send the
     ///     password) to every other server node, whose certificates it does not validate either.
     /// </summary>
     internal IgniteClientConfiguration GetClientConfiguration(string endpoint, string password) =>
-        CacheFactory.GetIgniteClientConfiguration(
+        IgniteClientFactory.GetIgniteClientConfiguration(
             new IgniteClientOptions
             {
                 Endpoints = [endpoint,],

@@ -1,6 +1,8 @@
 using AspNetCore.IgniteServer;
+using Serilog;
 using Serilog.Core;
 using Xunit;
+using Phase = AspNetCore.IgniteServer.IgniteServerRunner.Phase;
 using RestartResult = AspNetCore.IgniteServer.IgniteServerRunner.RestartResult;
 
 namespace AspNetCore.Ignite.UnitTests;
@@ -11,6 +13,10 @@ namespace AspNetCore.Ignite.UnitTests;
 /// </summary>
 public sealed class IgniteServerLifecycleTests
 {
+    // what ClusterActivator logs when it skips an activation, or when a stop waits for one
+    private const string ActivationSkipped = "The cluster is not activated: the node is being stopped.";
+    private const string StopWaitsForTheActivation = "waiting for the activation to end";
+
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
     [Fact]
@@ -178,10 +184,47 @@ public sealed class IgniteServerLifecycleTests
     }
 
     [Fact]
-    public async Task Stop_DuringTheActivation_LeavesTheClusterInactive()
+    public async Task Phases_FollowTheStateDiagram()
     {
         FakeNodeLauncher launcher = new();
         using var runner = CreateRunner(launcher);
+        Assert.Equal(Phase.Idle, runner.CurrentPhase);
+        // in memory, the run gets as far as Running before it returns its task
+        var run = runner.Run();
+        Assert.Equal(Phase.Running, runner.CurrentPhase);
+
+        using (ManualResetEventSlim stopping = new(), releaseStop = new())
+        {
+            HoldTheStops(launcher, stopping, releaseStop);
+            var restart = Task.Run(() => runner.Restart(Timeout));
+            Assert.True(stopping.Wait(Timeout));
+            Assert.Equal(Phase.Restarting, runner.CurrentPhase);
+            releaseStop.Set();
+            Assert.Equal(RestartResult.Restarting, await restart.WaitAsync(Timeout));
+        }
+
+        await FakeNodeLauncher.Eventually(() => launcher.Started == 2 && runner.CurrentPhase == Phase.Running);
+        using (ManualResetEventSlim stopping = new(), releaseStop = new())
+        {
+            HoldTheStops(launcher, stopping, releaseStop);
+            var stop = Task.Run(() => runner.Stop(Timeout));
+            Assert.True(stopping.Wait(Timeout));
+            Assert.Equal(Phase.Stopping, runner.CurrentPhase);
+            releaseStop.Set();
+            Assert.True(await stop.WaitAsync(Timeout));
+        }
+
+        await run.WaitAsync(Timeout);
+        Assert.Equal(Phase.Stopped, runner.CurrentPhase);
+    }
+
+    [Fact]
+    public async Task Stop_DuringTheActivation_LeavesTheClusterInactive()
+    {
+        FakeNodeLauncher launcher = new();
+        CollectingSink logs = new();
+        using var logger = logs.CreateLogger();
+        using var runner = CreateRunner(launcher, logger: logger);
         using ManualResetEventSlim activating = new(), releaseActivation = new(), stopping = new(), releaseStop = new();
         HoldTheActivation(launcher, activating, releaseActivation);
         HoldTheStops(launcher, stopping, releaseStop);
@@ -192,8 +235,9 @@ public sealed class IgniteServerLifecycleTests
         var stop = Task.Run(() => runner.Stop(Timeout));
         Assert.True(stopping.Wait(Timeout));
         releaseActivation.Set();
-        // time for the activation to activate the cluster, were it not skipped
-        await Task.Delay(200);
+        await FakeNodeLauncher.Eventually(() =>
+            logs.Logged(ActivationSkipped) || launcher.ActivatedNodes.Count > 0
+        );
         releaseStop.Set();
 
         Assert.True(await stop.WaitAsync(Timeout));
@@ -255,7 +299,9 @@ public sealed class IgniteServerLifecycleTests
         {
             ServerNodes = 1,
         };
-        using var runner = CreateRunner(launcher);
+        CollectingSink logs = new();
+        using var logger = logs.CreateLogger();
+        using var runner = CreateRunner(launcher, logger: logger);
         using ManualResetEventSlim activating = new(), releaseActivation = new();
         launcher.BeforeActivated = () =>
         {
@@ -266,8 +312,8 @@ public sealed class IgniteServerLifecycleTests
         Assert.True(activating.Wait(Timeout));
 
         var stop = Task.Run(() => runner.Stop(Timeout));
-        await Task.Delay(200);
         // its deactivation waits for the activation, so that the activation does not undo it
+        await FakeNodeLauncher.Eventually(() => logs.Logged(StopWaitsForTheActivation));
         Assert.False(stop.IsCompleted);
         releaseActivation.Set();
 
@@ -306,14 +352,18 @@ public sealed class IgniteServerLifecycleTests
             release.Wait();
         };
 
-    private static IgniteServerRunner CreateRunner(FakeNodeLauncher launcher, int stopTimeoutInSeconds = 20) => new(
+    private static IgniteServerRunner CreateRunner(
+        FakeNodeLauncher launcher,
+        int stopTimeoutInSeconds = 20,
+        ILogger? logger = null
+    ) => new(
         new IgniteServerSettings
         {
             // in memory, so that the cluster is activated at once
             EnableAuthentication = false,
             GracefulStopTimeoutInSeconds = stopTimeoutInSeconds,
         },
-        Logger.None,
+        logger ?? Logger.None,
         () => "127.0.0.1",
         null,
         launcher

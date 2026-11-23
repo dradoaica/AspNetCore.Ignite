@@ -57,6 +57,9 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
   the server (e.g., an invalid cache configuration) surface at once instead of after the retries.
 * `GroupByValueType` names the cache groups of generic value types with several type arguments without assembly
   versions: new caches of such types may join another group than the existing ones, which keep theirs.
+* `CacheFactory.GetIgniteClientConfiguration`, `CacheFactory.ConnectAsClient` and `CacheFactory.DefaultEndpoint` move
+  to `IgniteClientFactory`, with the same parameters; the old members still work, but are obsolete (warning `CS0618`)
+  and will be removed in the next major version. `CacheFactory` keeps the methods that create caches.
 
 ## Helm chart
 

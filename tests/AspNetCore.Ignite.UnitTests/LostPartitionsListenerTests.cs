@@ -247,13 +247,6 @@ public sealed class LostPartitionsListenerTests
     private static void Lose(LostPartitionsListener listener, string cacheName) =>
         listener.OnPartitionLost(cacheName, "NODE_LEFT", ["10.0.0.2",], ["ignite-1",]);
 
-    private sealed class CollectingSink : ILogEventSink
-    {
-        public List<LogEvent> Events { get; } = [];
-
-        public void Emit(LogEvent logEvent) => Events.Add(logEvent);
-    }
-
     /// <summary>The cluster of the listener's node (n1), recording the changes made to it.</summary>
     private sealed class FakeCluster
     {

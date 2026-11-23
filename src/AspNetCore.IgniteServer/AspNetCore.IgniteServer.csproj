@@ -4,6 +4,7 @@
         <OutputType>Exe</OutputType>
         <TargetFramework>net10.0</TargetFramework>
         <IsPackable>false</IsPackable>
+        <!-- for an IDE's Docker run configuration: the Dockerfile builds from the repository root -->
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
         <DockerfileContext>..\..</DockerfileContext>
         <!-- Ignite is throughput-oriented; dynamic adaptation (DATAS, the .NET 9+ default) keeps the heap small -->
@@ -18,7 +19,6 @@
         <PackageReference Include="OpenTelemetry.Extensions.Hosting"/>
         <PackageReference Include="prometheus-net.AspNetCore"/>
         <PackageReference Include="prometheus-net.AspNetCore.HealthChecks"/>
-        <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets"/>
         <PackageReference Include="Serilog"/>
         <PackageReference Include="Serilog.Enrichers.Environment"/>
         <PackageReference Include="Serilog.Enrichers.Thread"/>

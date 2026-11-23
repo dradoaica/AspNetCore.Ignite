@@ -48,13 +48,6 @@ public sealed class LoggerAdapterTests
         Assert.False(igniteLogger.IsEnabled(IgniteLogLevel.Trace));
     }
 
-    private sealed class CollectingSink : ILogEventSink
-    {
-        public List<LogEvent> Events { get; } = [];
-
-        public void Emit(LogEvent logEvent) => Events.Add(logEvent);
-    }
-
     private sealed class CollectingLogger : ILogger
     {
         public List<(LogLevel Level, string Message)> Entries { get; } = [];

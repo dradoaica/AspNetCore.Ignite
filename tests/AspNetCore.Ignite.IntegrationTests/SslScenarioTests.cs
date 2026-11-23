@@ -68,7 +68,7 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
             IgniteServerFixture.UserName,
             IgniteServerFixture.Password
         );
-        using (var igniteClient = CacheFactory.ConnectAsClient(clientConfiguration))
+        using (var igniteClient = IgniteClientFactory.ConnectAsClient(clientConfiguration))
         {
             // alone, the node would wait forever for the backups of this cache before it stops gracefully
             igniteClient.GetOrCreateCache<int, int>(
@@ -93,7 +93,7 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
 
         // restarted in the process (which still runs), active again and with its (persistent) data
         Assert.False(node.State == TestcontainersStates.Exited);
-        using (var igniteClient = CacheFactory.ConnectAsClient(clientConfiguration))
+        using (var igniteClient = IgniteClientFactory.ConnectAsClient(clientConfiguration))
         {
             Assert.True(igniteClient.GetCluster().IsActive());
             Assert.Equal(1, igniteClient.GetCache<int, int>("backed-up").Get(1));
@@ -134,7 +134,7 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
             IgniteServerFixture.UserName,
             IgniteServerFixture.Password
         );
-        using (var igniteClient = CacheFactory.ConnectAsClient(clientConfiguration))
+        using (var igniteClient = IgniteClientFactory.ConnectAsClient(clientConfiguration))
         {
             igniteClient.GetOrCreateCache<int, int>(
                     new CacheClientConfiguration("backed-up")
@@ -157,7 +157,7 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
             TimeSpan.FromSeconds(120)
         );
         await TestContainerLogs.WaitForMessageAsync(node1, ServerLog.Running, 2, TimeSpan.FromSeconds(60));
-        using (var igniteClient = CacheFactory.ConnectAsClient(clientConfiguration))
+        using (var igniteClient = IgniteClientFactory.ConnectAsClient(clientConfiguration))
         {
             Assert.True(igniteClient.GetCluster().IsActive());
             Assert.Equal(1, igniteClient.GetCache<int, int>("backed-up").Get(1));
@@ -202,7 +202,7 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
         bool skipServerCertificateValidation
     )
     {
-        var configuration = CacheFactory.GetIgniteClientConfiguration(
+        var configuration = IgniteClientFactory.GetIgniteClientConfiguration(
             endpoint,
             IgniteServerFixture.UserName,
             IgniteServerFixture.Password,
@@ -215,7 +215,7 @@ public sealed class SslScenarioTests(IgniteClusterFixture fixture)
         );
         // only the given endpoint (see IgniteServerFixture.ClientConfiguration)
         configuration.EnableClusterDiscovery = false;
-        return CacheFactory.ConnectAsClient(configuration);
+        return IgniteClientFactory.ConnectAsClient(configuration);
     }
 
     private static async Task<(long ExitCode, string Stdout, string Stderr)> ExecAsync(

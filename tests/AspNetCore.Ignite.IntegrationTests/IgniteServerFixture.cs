@@ -141,7 +141,7 @@ public sealed class IgniteServerFixture : IgniteNodesFixture
         string endpoint,
         string? userName = null,
         string? password = null
-    ) => CacheFactory.GetIgniteClientConfiguration(
+    ) => IgniteClientFactory.GetIgniteClientConfiguration(
         new IgniteClientOptions
         {
             Endpoints = [endpoint,],

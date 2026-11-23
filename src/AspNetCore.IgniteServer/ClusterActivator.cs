@@ -17,15 +17,24 @@ namespace AspNetCore.IgniteServer;
 ///     (<see cref="DeactivateIfLastServerNode" />). It also reads the baseline topology.
 ///     <para>
 ///         The activation and the deactivation take turns (<c>stateLock</c>), and no activation begins once the node is
-///         being stopped. So a stop either comes first, and the cluster is not activated, or it waits for the activation in
-///         progress and then deactivates the cluster: an activation never undoes the deactivation of a stopping node.
+///         being stopped. So either the stop comes first and the cluster is not activated, or the stop waits for the
+///         activation and then deactivates the cluster. An activation never undoes the deactivation of a stopping node.
 ///     </para>
 ///     <para>
 ///         It keeps nothing between runs: what the runner remembers (e.g., that the node deactivated the cluster to
 ///         restart) comes in as arguments.
 ///     </para>
 /// </summary>
-internal sealed class ClusterActivator(IgniteServerSettings settings, ILogger logger)
+/// <param name="settings">The server settings.</param>
+/// <param name="logger">Where the activation logs.</param>
+/// <param name="persistent">Whether the default data region of the nodes is persistent.</param>
+/// <param name="authenticationEnabled">Whether the nodes have authentication (and so users with passwords).</param>
+internal sealed class ClusterActivator(
+    IgniteServerSettings settings,
+    ILogger logger,
+    bool persistent,
+    bool authenticationEnabled
+)
 {
     private static readonly TimeSpan ActivationPollInterval = TimeSpan.FromSeconds(5);
 
@@ -41,44 +50,33 @@ internal sealed class ClusterActivator(IgniteServerSettings settings, ILogger lo
     ///     activated.
     /// </summary>
     /// <param name="node">The node that has started.</param>
-    /// <param name="persistent">Whether its default data region is persistent.</param>
-    /// <param name="authenticationEnabled">Whether the node has authentication (and so users with passwords).</param>
     /// <param name="reactivate">
     ///     The node was the cluster's only server node before its restart, and deactivated the cluster to
     ///     restart: it does not wait for ACTIVATION_MIN_SERVER_NODES, as a cluster that starts for the first time does.
     /// </param>
-    /// <param name="stopped">Completes when the node stops.</param>
-    /// <param name="isStopping">Whether the node is being stopped or restarted, or has stopped.</param>
-    public async Task<bool> ActivateAsync(
-        IIgnite node,
-        bool persistent,
-        bool authenticationEnabled,
-        bool reactivate,
-        Task stopped,
-        Func<bool> isStopping
-    )
+    /// <param name="stopping">Completes when the node begins to stop or restart, or stops on its own.</param>
+    public async Task<bool> ActivateAsync(IIgnite node, bool reactivate, Task stopping)
     {
         var cluster = node.GetCluster();
         if (persistent && !reactivate)
         {
-            await WaitForServerNodes(cluster, stopped, isStopping).ConfigureAwait(false);
+            await WaitForServerNodes(cluster, stopping).ConfigureAwait(false);
         }
 
-        if (isStopping())
-        {
-            return false;
-        }
-
-        // A persistent cluster without a baseline was never activated, so its users still have their default passwords.
-        var newCluster = persistent && GetBaselineTopology(cluster) == null;
+        bool newCluster;
         lock (stateLock)
         {
-            // Checked again under the lock: a stop that began since then may have deactivated the cluster already.
-            if (isStopping())
+            // Checked under the lock: a stop that began before has the cluster left as it is, and one that begins now
+            // waits for this activation (DeactivateIfLastServerNode).
+            if (stopping.IsCompleted)
             {
+                logger.Information("The cluster is not activated: the node is being stopped.");
                 return false;
             }
 
+            // A persistent cluster without a baseline was never activated, so its users still have their default
+            // passwords.
+            newCluster = persistent && GetBaselineTopology(cluster) == null;
             if (!cluster.IsActive())
             {
                 cluster.SetActive(true);
@@ -94,7 +92,7 @@ internal sealed class ClusterActivator(IgniteServerSettings settings, ILogger lo
         cluster.SetBaselineAutoAdjustTimeout((long)settings.GetBaselineAutoAdjustTimeout(persistent).TotalMilliseconds);
         // Users exist only with authentication. Without it, there is no password to set. A node that is being stopped
         // leaves the password to its next start.
-        if (authenticationEnabled && !string.IsNullOrWhiteSpace(settings.IgniteUserPassword) && !isStopping())
+        if (authenticationEnabled && !string.IsNullOrWhiteSpace(settings.IgniteUserPassword) && !stopping.IsCompleted)
         {
             try
             {
@@ -120,10 +118,14 @@ internal sealed class ClusterActivator(IgniteServerSettings settings, ILogger lo
     public bool DeactivateIfLastServerNode(IIgnite node, TimeSpan timeout)
     {
         var elapsed = Stopwatch.StartNew();
-        if (!stateLock.TryEnter(timeout))
+        if (!stateLock.TryEnter())
         {
-            logger.Warning("The cluster was not deactivated: its activation did not end within {Timeout}.", timeout);
-            return false;
+            logger.Information("The node stops while its cluster is activated: waiting for the activation to end.");
+            if (!stateLock.TryEnter(timeout))
+            {
+                logger.Warning("The cluster was not deactivated: its activation did not end within {Timeout}.", timeout);
+                return false;
+            }
         }
 
         try
@@ -194,9 +196,9 @@ internal sealed class ClusterActivator(IgniteServerSettings settings, ILogger lo
     ///     A persistent cluster records its baseline topology on activation, so wait for the configured number of server
     ///     nodes before activating it (unless it is already active, e.g., when resuming).
     /// </summary>
-    private async Task WaitForServerNodes(ICluster cluster, Task stopped, Func<bool> isStopping)
+    private async Task WaitForServerNodes(ICluster cluster, Task stopping)
     {
-        while (!isStopping() && !cluster.IsActive())
+        while (!stopping.IsCompleted && !cluster.IsActive())
         {
             var serverNodes = cluster.ForServers().GetNodes();
             if (serverNodes.Count >= settings.ActivationMinServerNodes)
@@ -211,7 +213,7 @@ internal sealed class ClusterActivator(IgniteServerSettings settings, ILogger lo
                 serverNodes.Count,
                 string.Join(", ", serverNodes.Select(serverNode => serverNode.ConsistentId))
             );
-            await Task.WhenAny(stopped, Task.Delay(ActivationPollInterval)).ConfigureAwait(false);
+            await Task.WhenAny(stopping, Task.Delay(ActivationPollInterval)).ConfigureAwait(false);
         }
     }
 }
