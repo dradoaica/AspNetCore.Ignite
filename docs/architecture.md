@@ -77,7 +77,10 @@ flowchart TB
   `INodeLauncher`, so that its lifecycle can be tested without a JVM.
 * **`ClusterActivator`** activates the cluster of a started node (once `ACTIVATION_MIN_SERVER_NODES` have joined, for a
   persistent cluster that starts for the first time), turns on the baseline auto-adjust and applies
-  `IGNITE_USER_PASSWORD`. It has no state: the runner passes in what it remembers between runs.
+  `IGNITE_USER_PASSWORD`. It also deactivates the cluster before the cluster's last server node stops. Activation and
+  deactivation take turns, and no activation begins once a stop or restart of the node has begun, so an activation
+  never undoes the deactivation of a stopping node. It keeps nothing between runs: the runner passes in what it
+  remembers.
 * **`IgniteNodeState`** is what health checks and metrics read: the running node, whether it is started and ready, and
   the caches it rebalances.
 
@@ -102,13 +105,16 @@ flowchart LR
 * The node is configured twice, and Ignite merges both:
     * **.NET** (`IgniteConfigurationFactory`): the default configuration, then a `-ConfigFile` (the properties it sets),
       then the settings: JVM options, memory, storage, timeouts, thread pools, static discovery, authentication, SSL
-      between nodes. The .NET configuration wins for the properties it sets.
+      between nodes. The .NET configuration wins for the properties it sets. The JVM options and event types the server
+      needs are added back after the file (`RequiredEventTypes`, the `--add-opens` options, `-Xrs`).
     * **Spring XML** (`config/spring-config*.xml`, rendered into a private file): what .NET cannot set, the GRACEFUL
       shutdown policy, no environment variables as node attributes, the Kubernetes IP finder, thin client SSL, and the
       `SPRING_EXTRA_*` fragments. Values are inserted at `{{NAME}}` tokens, XML-escaped; Spring expressions (`#{`) are
       refused.
 * Discovery is static (`CLUSTER_ENDPOINTS`, or the node itself) unless `USE_TCP_DISCOVERY_STATIC_IP_FINDER=false`
-  without endpoints or `SPI_PORT`: the nodes then find each other through the Kubernetes API.
+  without endpoints or `SPI_PORT`: the nodes then find each other through the Kubernetes API. With
+  `USE_TCP_DISCOVERY_STATIC_IP_FINDER=false` and no endpoints, validation refuses `SPI_PORT`: a discovery configured
+  from .NET without endpoints has no IP finder, and Ignite would fall back to multicast.
 
 ## Node lifecycle
 
@@ -215,7 +221,8 @@ flowchart LR
 
 * **Unit tests** (no Docker, no JVM): settings and validation, configuration and Spring rendering, listeners, metrics,
   and the node lifecycle on the fake nodes of `FakeNodeLauncher`, whose stops a test can hold back.
-  `ServerLogTests` checks that the log messages the integration tests wait for still exist.
+  `ServerLogTests` checks that the log messages the integration tests wait for still exist, and `DocumentationTests`
+  that every setting is in [Configuration](configuration.md).
 * **Integration tests** (Docker, Testcontainers): the image itself, with real clusters: authentication, SSL and
   rotation, activation, rebalancing, lost partitions, the management endpoints, the control utility and the exit codes.
 * **Chart tests** (CI): the image with its Helm chart in kind.

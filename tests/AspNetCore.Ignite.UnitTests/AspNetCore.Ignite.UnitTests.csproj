@@ -27,6 +27,8 @@
     <ItemGroup>
         <!-- the log texts the integration tests wait for, checked against the server's code by ServerLogTests -->
         <Compile Include="..\AspNetCore.Ignite.IntegrationTests\ServerLog.cs" Link="ServerLog.cs"/>
+        <!-- the settings reference, checked against the server's settings by DocumentationTests -->
+        <None Include="..\..\docs\configuration.md" Link="docs\configuration.md" CopyToOutputDirectory="PreserveNewest"/>
     </ItemGroup>
 
     <ItemGroup>

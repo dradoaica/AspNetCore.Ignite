@@ -29,6 +29,17 @@ internal static class IgniteConfigurationFactory
     private const int DefaultDiscoveryPort = 47500;
     private const int WalSegmentSize = 256 * 1024 * 1024;
 
+    /// <summary>
+    ///     The events the server listens to: discovery (<c>DiscoveryEventListener</c>, <c>LostPartitionsListener</c>) and
+    ///     rebalancing (<c>RebalanceTracker</c>, <c>LostPartitionsListener</c>). Ignite raises only the event types it
+    ///     includes, so these stay included when a -ConfigFile sets includedEventTypes.
+    /// </summary>
+    internal static readonly IReadOnlyList<int> RequiredEventTypes =
+    [
+        EventType.NodeJoined, EventType.NodeLeft, EventType.NodeFailed, EventType.NodeSegmented,
+        EventType.CacheRebalancePartDataLost, EventType.CacheRebalanceStarted, EventType.CacheRebalanceStopped,
+    ];
+
     /// <param name="settings">The server settings.</param>
     /// <param name="logger">Where the node logs.</param>
     /// <param name="getLocalIpAddress">
@@ -48,6 +59,9 @@ internal static class IgniteConfigurationFactory
         if (!string.IsNullOrWhiteSpace(settings.ConfigFile))
         {
             ApplyConfigurationFile(igniteConfiguration, File.ReadAllText(settings.ConfigFile), logger);
+            // whatever event types the file includes (ApplyJvmOptions does the same for the JVM options)
+            igniteConfiguration.IncludedEventTypes =
+                [.. (igniteConfiguration.IncludedEventTypes ?? []).Union(RequiredEventTypes),];
         }
 
         if (!string.IsNullOrWhiteSpace(springConfigPath))
@@ -117,8 +131,7 @@ internal static class IgniteConfigurationFactory
             // half-dead in the process. It leaves a heap dump in /tmp.
             "-XX:+ExitOnOutOfMemoryError", "-XX:+HeapDumpOnOutOfMemoryError",
             "-XX:HeapDumpPath=/tmp/heapdump.hprof",
-            .. File.ReadLines(Path.Combine(AppContext.BaseDirectory, "config", "jvm-add-opens.args"))
-                .Where(line => line.StartsWith("--", StringComparison.Ordinal)),
+            .. ReadAddOpensJvmOptions(),
         ],
         DataStorageConfiguration = new DataStorageConfiguration
         {
@@ -138,18 +151,15 @@ internal static class IgniteConfigurationFactory
         FailureDetectionTimeout = TimeSpan.FromSeconds(30),
         ClientFailureDetectionTimeout = TimeSpan.FromSeconds(60),
         NetworkTimeout = TimeSpan.FromSeconds(10),
-        IncludedEventTypes =
-        [
-            EventType.NodeJoined, EventType.NodeLeft, EventType.NodeFailed, EventType.NodeSegmented,
-            EventType.CacheRebalancePartDataLost, EventType.CacheRebalanceStarted, EventType.CacheRebalanceStopped,
-        ],
+        IncludedEventTypes = [.. RequiredEventTypes,],
     };
 
     /// <summary>
     ///     Applies the properties the file sets (attributes and elements of its root) over
     ///     <paramref name="igniteConfiguration" />. The server's defaults (JVM options, timeouts, event types, ...) stay
     ///     unless the file overrides them. Nested configurations are replaced as a whole (e.g., a dataStorageConfiguration
-    ///     element replaces the default one).
+    ///     element replaces the default one). <see cref="Create" /> then adds back the JVM options and event types the
+    ///     server needs.
     /// </summary>
     internal static void ApplyConfigurationFile(IgniteConfiguration igniteConfiguration, string xml, ILogger logger)
     {
@@ -216,9 +226,13 @@ internal static class IgniteConfigurationFactory
             settings.ExtraJvmOpts?.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ??
             []
         );
-        if (!jvmOptions.Contains(ReduceSignalUsageJvmOption))
+        // Also when a -ConfigFile replaced the JVM options: without the add-opens, Ignite fails to start on Java 17.
+        foreach (var option in ReadAddOpensJvmOptions().Append(ReduceSignalUsageJvmOption))
         {
-            jvmOptions.Add(ReduceSignalUsageJvmOption);
+            if (!jvmOptions.Contains(option))
+            {
+                jvmOptions.Add(option);
+            }
         }
 
         igniteConfiguration.JvmOptions = jvmOptions;
@@ -229,6 +243,11 @@ internal static class IgniteConfigurationFactory
                 : $"{igniteConfiguration.JvmClasspath}{Path.PathSeparator}{classpath}";
         }
     }
+
+    /// <summary>The JDK internals Ignite needs on Java 17, from config/jvm-add-opens.args (which control.sh reads too).</summary>
+    private static IEnumerable<string> ReadAddOpensJvmOptions() =>
+        File.ReadLines(Path.Combine(AppContext.BaseDirectory, "config", "jvm-add-opens.args"))
+            .Where(line => line.StartsWith("--", StringComparison.Ordinal));
 
     private static void SetJvmOption(List<string> jvmOptions, string prefix, int? megabytes)
     {

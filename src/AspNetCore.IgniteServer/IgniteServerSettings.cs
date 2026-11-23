@@ -207,6 +207,19 @@ internal sealed partial class IgniteServerSettings
                 "and with USE_TCP_DISCOVERY_STATIC_IP_FINDER=false)."
             );
         }
+
+        // The discovery port is set from .NET, which replaces the discovery of the Spring configuration (Kubernetes)
+        // with one that has no IP finder: Ignite would then fall back to multicast, which finds no other pods.
+        if (SpiPort is not null &&
+            ClusterEndpoints.Count == 0 &&
+            !UseTcpDiscoveryStaticIpFinder &&
+            string.IsNullOrWhiteSpace(ConfigFile))
+        {
+            errors.Add(
+                "SPI_PORT (-SpiPort) needs CLUSTER_ENDPOINTS or USE_TCP_DISCOVERY_STATIC_IP_FINDER=true: Kubernetes " +
+                "discovery uses the default discovery port."
+            );
+        }
     }
 
     private void ValidateSpringConfig(List<string> errors)

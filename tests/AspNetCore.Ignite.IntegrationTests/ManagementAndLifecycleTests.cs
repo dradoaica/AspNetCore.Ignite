@@ -139,7 +139,11 @@ public sealed class ManagementAndLifecycleTests(IgniteServerFixture fixture)
             .WithEnvironment("SPRING_EXTRA_PROPERTIES_FILE", "/app/work/spring-extra-properties.xml")
             .WithEnvironment("SQL_SCHEMAS", "MY_SCHEMA, OTHER_SCHEMA")
             .WithEnvironment("PEER_CLASS_LOADING_ENABLED", "true")
-            .WithResourceMapping(Encoding.UTF8.GetBytes(properties), "/app/work/spring-extra-properties.xml", 1001)
+            .WithResourceMapping(
+                Encoding.UTF8.GetBytes(properties),
+                FilePath.Of("/app/work/spring-extra-properties.xml"),
+                1001
+            )
             .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ServerLog.Running))
             .Build();
         await node.StartAsync();

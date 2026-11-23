@@ -25,7 +25,10 @@ The default configuration uses the default parameters of the Ignite environment.
 Ignite.NET XML) is applied over it: the properties the file sets override the defaults, the others (JVM options,
 timeouts, event types, ...) stay; a nested element (e.g., `dataStorageConfiguration`) replaces the default
 one as a whole. Use it for caches, binary, SQL or transaction configuration, etc. `PEER_ASSEMBLY_LOADING` always decides
-peer assembly loading. There are two predefined configuration files available in `config` folder:
+peer assembly loading. The JVM options and event types the server needs stay even when the file sets `jvmOptions` or
+`includedEventTypes`: the `--add-opens` options of Java 17, `-Xrs`, and the discovery and rebalancing events, which
+readiness and the reset of lost partitions depend on. There are two predefined configuration files available in `config`
+folder:
 
 * `default-config.xml` - this is minimal configuration for running memory only Ignite server.
 * `persistent-config.xml` - this is minimal configuration for running persistent Ignite server.
@@ -61,7 +64,8 @@ same name, and by the command line options.
   others (e.g., `-Cluster` the whole list of the environment), as for `SQL_SCHEMAS`.
 - `USE_TCP_DISCOVERY_STATIC_IP_FINDER` (default `true`): Use the local address (and `SPI_PORT`) as the static discovery
   endpoint when no cluster endpoints are given. Set it to `false` for Kubernetes discovery (with neither
-  `CLUSTER_ENDPOINTS` nor `SPI_PORT`), which needs `K8S_NAMESPACE` and `K8S_SERVICE_NAME`.
+  `CLUSTER_ENDPOINTS` nor `SPI_PORT`), which needs `K8S_NAMESPACE` and `K8S_SERVICE_NAME`. With `false`, the server
+  refuses `SPI_PORT` without `CLUSTER_ENDPOINTS`: the discovery would fall back to multicast and find no other node.
 - `DEFAULT_CONSISTENT_ID` (option `-ConsistentId`, default _(empty)_): Consistent id of the node. Must be **unique per
   node**; leave empty to let Ignite derive one.
 - `K8S_NAMESPACE` / `K8S_SERVICE_NAME` (default _(empty)_): Kubernetes IP finder settings.
@@ -110,9 +114,17 @@ same name, and by the command line options.
 - `IGNITE_USER_PASSWORD` (default _(empty)_): Password of the default `ignite` user (see
   [Authentication](#authentication)).
 - `IGNITE_USER_PREVIOUS_PASSWORD` (default _(empty)_): The current password, when rotating it to `IGNITE_USER_PASSWORD`.
-- `USE_SSL` (default `false`): Enables SSL between nodes; requires `SSL_KEY_STORE_*` and `SSL_TRUST_STORE_*`.
-- `USE_CLIENT_SSL` (default `false`): Enables SSL (with client certificates) for thin clients; requires the key/trust
-  stores and `SSL_CLIENT_CERTIFICATE_*`.
+- `USE_SSL` (default `false`): Enables SSL between nodes; requires `SSL_KEY_STORE_FILE_PATH` and
+  `SSL_TRUST_STORE_FILE_PATH`.
+- `USE_CLIENT_SSL` (default `false`): Enables SSL (with client certificates) for thin clients; requires the key and
+  trust stores and, with `SSL_CLIENT_AUTH`, `SSL_CLIENT_CERTIFICATE_PATH`.
+- `SSL_KEY_STORE_FILE_PATH` / `SSL_KEY_STORE_PASSWORD` (default _(empty)_): The node's key store (its certificate and
+  private key) and its password (empty when not set).
+- `SSL_TRUST_STORE_FILE_PATH` / `SSL_TRUST_STORE_PASSWORD` (default _(empty)_): The trust store (the certificates the
+  node trusts, e.g., the CA of the other nodes and of the thin clients) and its password (empty when not set).
+- `SSL_CLIENT_CERTIFICATE_PATH` / `SSL_CLIENT_CERTIFICATE_PASSWORD` (default _(empty)_): A client certificate (PKCS12)
+  that the trust store trusts, and its password: the server connects to its own node as a thin client to apply
+  `IGNITE_USER_PASSWORD`.
 - `SSL_PROTOCOL` (default `TLS`): Java SSL protocol; `TLS` negotiates the highest version both sides support (TLS 1.3 on
   Java 17).
 - `RESTART_ON_SSL_FILE_CHANGE` (default `true`): Restart the node when its SSL files change (see [Certificate
@@ -121,7 +133,7 @@ same name, and by the command line options.
 - `SSL_KEY_STORE_TYPE` / `SSL_TRUST_STORE_TYPE` (default `JKS`): Store types, e.g., `PKCS12` (as cert-manager creates).
 - `SSL_KEY_ALGORITHM` (default `SunX509`): Key manager algorithm.
 - `SSL_CLIENT_AUTH` (default `true`): Thin clients must present a trusted certificate (`USE_CLIENT_SSL`); without it,
-  `SSL_CLIENT_CERTIFICATE_*` is optional.
+  `SSL_CLIENT_CERTIFICATE_PATH` is optional.
 
 ### Shutdown, health and metrics
 

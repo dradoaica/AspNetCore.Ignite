@@ -27,7 +27,8 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
   replaces the endpoints of the environment instead of overwriting them index by index.
 * Kubernetes discovery (`USE_TCP_DISCOVERY_STATIC_IP_FINDER=false` without `CLUSTER_ENDPOINTS`, `SPI_PORT` or
   `CONFIG_FILE`) needs `K8S_NAMESPACE` and `K8S_SERVICE_NAME`: the server refuses to start without them (the chart sets
-  both).
+  both). It also refuses `SPI_PORT` with `USE_TCP_DISCOVERY_STATIC_IP_FINDER=false` and no `CLUSTER_ENDPOINTS` (or
+  `CONFIG_FILE`), which fell back to multicast discovery instead of the Kubernetes one.
 * Baseline auto-adjust waits 5 minutes with persistence (it waited 30 seconds, as in-memory clusters still do), so that
   restarted nodes keep their data: set `BASELINE_AUTO_ADJUST_TIMEOUT_IN_SECONDS` for another delay.
 * Lost partitions (`AUTO_RESET_LOST_PARTITIONS`) are reset once a node that owns them is back (persistence), or after

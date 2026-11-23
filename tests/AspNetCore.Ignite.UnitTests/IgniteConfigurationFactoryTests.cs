@@ -1,6 +1,8 @@
 using Apache.Ignite.Core;
 using Apache.Ignite.Core.Configuration;
 using Apache.Ignite.Core.Deployment;
+using Apache.Ignite.Core.Discovery.Tcp;
+using Apache.Ignite.Core.Discovery.Tcp.Static;
 using Apache.Ignite.Core.Events;
 using AspNetCore.IgniteServer;
 using Serilog;
@@ -66,6 +68,49 @@ public sealed class IgniteConfigurationFactoryTests
             logEvent => logEvent.Level == LogEventLevel.Warning &&
                         logEvent.RenderMessage().Contains("PEER_ASSEMBLY_LOADING")
         );
+    }
+
+    [Fact]
+    public void ConfigurationFile_KeepsTheJvmOptionsAndEventTypesTheServerNeeds()
+    {
+        var file = Path.GetTempFileName();
+        try
+        {
+            // a file that replaces both lists
+            File.WriteAllText(
+                file,
+                $"<igniteConfiguration><jvmOptions><string>-Dx=1</string></jvmOptions><includedEventTypes><int>{EventType.CacheObjectPut}</int></includedEventTypes></igniteConfiguration>"
+            );
+
+            var configuration = IgniteConfigurationFactory.Create(
+                new IgniteServerSettings
+                {
+                    EnableAuthentication = false,
+                    ConfigFile = file,
+                },
+                Logger.None,
+                LocalAddress.Resolve
+            );
+
+            Assert.Contains("-Dx=1", configuration.JvmOptions);
+            // without the add-opens, Ignite fails to start on Java 17
+            Assert.All(
+                File.ReadLines(Path.Combine(ConfigDirectory, "jvm-add-opens.args"))
+                    .Where(line => line.StartsWith("--", StringComparison.Ordinal)),
+                option => Assert.Contains(option, configuration.JvmOptions)
+            );
+            Assert.Contains(IgniteConfigurationFactory.ReduceSignalUsageJvmOption, configuration.JvmOptions);
+            Assert.Contains(EventType.CacheObjectPut, configuration.IncludedEventTypes);
+            // without these, readiness stops waiting for rebalancing and lost partitions are never reset
+            Assert.All(
+                IgniteConfigurationFactory.RequiredEventTypes,
+                eventType => Assert.Contains(eventType, configuration.IncludedEventTypes)
+            );
+        }
+        finally
+        {
+            File.Delete(file);
+        }
     }
 
     [Fact]
@@ -175,6 +220,157 @@ public sealed class IgniteConfigurationFactoryTests
         EventType.NodeSegmented,
         IgniteConfigurationFactory.CreateDefault().IncludedEventTypes
     );
+
+    [Fact]
+    public void Authentication_EnablesPersistence()
+    {
+        var configuration = IgniteConfigurationFactory.Create(
+            new IgniteServerSettings(),
+            Logger.None,
+            LocalAddress.Resolve
+        );
+
+        Assert.True(configuration.AuthenticationEnabled);
+        Assert.True(configuration.DataStorageConfiguration.DefaultDataRegionConfiguration.PersistenceEnabled);
+    }
+
+    [Fact]
+    public void Memory_ConfiguresTheDefaultRegionAndTheJvm()
+    {
+        var configuration = IgniteConfigurationFactory.Create(
+            new IgniteServerSettings
+            {
+                EnableAuthentication = false,
+                OffHeapMemory = 4096,
+                OnHeapMemory = 512,
+                PersistenceEnabled = true,
+            },
+            Logger.None,
+            LocalAddress.Resolve
+        );
+
+        var region = configuration.DataStorageConfiguration.DefaultDataRegionConfiguration;
+        Assert.Equal(4096L * 1024 * 1024, region.MaxSize);
+        Assert.True(region.MetricsEnabled);
+        Assert.True(region.PersistenceEnabled);
+        Assert.Equal(512, configuration.JvmInitialMemoryMb);
+        Assert.Equal(512, configuration.JvmMaxMemoryMb);
+    }
+
+    [Fact]
+    public void SpiPortAndClusterEndpoints_ConfigureDiscovery()
+    {
+        var configuration = IgniteConfigurationFactory.Create(
+            new IgniteServerSettings
+            {
+                SpiPort = 47600,
+                ClusterEndpoints = ["10.0.0.1:47500", "10.0.0.2:47500",],
+                ConsistentId = "node-1",
+            },
+            Logger.None,
+            LocalAddress.Resolve
+        );
+
+        var spi = Assert.IsType<TcpDiscoverySpi>(configuration.DiscoverySpi);
+        Assert.Equal(47600, spi.LocalPort);
+        Assert.Equal(
+            ["10.0.0.1:47500", "10.0.0.2:47500",],
+            Assert.IsType<TcpDiscoveryStaticIpFinder>(spi.IpFinder).Endpoints
+        );
+        Assert.Equal("node-1", configuration.ConsistentId);
+    }
+
+    [Theory]
+    [InlineData(null, 47500)]
+    [InlineData(47600, 47600)]
+    public void WithoutClusterEndpoints_TheNodeIsItsOwnStaticDiscoveryEndpoint(int? spiPort, int endpointPort)
+    {
+        var configuration = IgniteConfigurationFactory.Create(
+            new IgniteServerSettings
+            {
+                SpiPort = spiPort,
+            },
+            Logger.None,
+            LocalAddress.Resolve
+        );
+
+        var spi = Assert.IsType<TcpDiscoverySpi>(configuration.DiscoverySpi);
+        Assert.Equal(
+            [$"{LocalAddress.Value}:{endpointPort}",],
+            Assert.IsType<TcpDiscoveryStaticIpFinder>(spi.IpFinder).Endpoints
+        );
+    }
+
+    [Fact]
+    public void LocalAddress_IsResolvedOnlyWhenNeeded()
+    {
+        // a failing DNS lookup must not break the nodes that do not use the local address
+        static string Fail()
+        {
+            throw new InvalidOperationException("Local IP Address Not Found!");
+        }
+
+        IgniteConfigurationFactory.Create(
+            new IgniteServerSettings
+            {
+                ClusterEndpoints = ["a:47500",],
+            },
+            Logger.None,
+            Fail
+        );
+        var withoutStaticIpFinder = IgniteConfigurationFactory.Create(
+            new IgniteServerSettings
+            {
+                UseTcpDiscoveryStaticIpFinder = false,
+            },
+            Logger.None,
+            Fail
+        );
+
+        // the discovery of the Spring configuration (Kubernetes) stays
+        Assert.Null(withoutStaticIpFinder.DiscoverySpi);
+    }
+
+    [Fact]
+    public void PeerAssemblyLoading_IsOptIn()
+    {
+        var byDefault = IgniteConfigurationFactory.Create(
+            new IgniteServerSettings(),
+            Logger.None,
+            LocalAddress.Resolve
+        );
+        var optedIn = IgniteConfigurationFactory.Create(
+            new IgniteServerSettings
+            {
+                PeerAssemblyLoading = true,
+            },
+            Logger.None,
+            LocalAddress.Resolve
+        );
+
+        Assert.Equal(PeerAssemblyLoadingMode.Disabled, byDefault.PeerAssemblyLoadingMode);
+        Assert.Equal(PeerAssemblyLoadingMode.CurrentAppDomain, optedIn.PeerAssemblyLoadingMode);
+    }
+
+    [Theory]
+    [InlineData(false, null, DataPageEvictionMode.Random2Lru)]
+    [InlineData(false, "RANDOM_LRU", DataPageEvictionMode.RandomLru)]
+    [InlineData(true, "RANDOM_LRU", DataPageEvictionMode.Disabled)]
+    public void PageEviction_OnlyForInMemoryRegions(bool persistent, string? mode, DataPageEvictionMode expected)
+    {
+        var configuration = IgniteConfigurationFactory.Create(
+            new IgniteServerSettings
+            {
+                EnableAuthentication = false,
+                PersistenceEnabled = persistent,
+                PageEvictionMode = mode,
+            },
+            Logger.None,
+            LocalAddress.Resolve
+        );
+
+        Assert.Equal(expected, configuration.DataStorageConfiguration.DefaultDataRegionConfiguration.PageEvictionMode);
+    }
 
     private sealed class CollectingSink : ILogEventSink
     {

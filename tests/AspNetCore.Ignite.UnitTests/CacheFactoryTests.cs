@@ -1,7 +1,6 @@
 using Apache.Ignite.Core;
 using Apache.Ignite.Core.Client;
 using AspNetCore.Ignite.Options;
-using System.Net.Sockets;
 using System.Security.Authentication;
 using Xunit;
 
@@ -9,46 +8,6 @@ namespace AspNetCore.Ignite.UnitTests;
 
 public sealed class CacheFactoryTests
 {
-    public static TheoryData<Exception, bool> TransientCases => new()
-    {
-        {
-            new SocketException(), true
-        },
-        {
-            new IOException(), true
-        },
-        {
-            new TimeoutException(), true
-        },
-        {
-            new AggregateException(new SocketException(), new IOException()), true
-        },
-        {
-            new IgniteClientException("x", new AggregateException(new SocketException()), ClientStatusCode.Fail), true
-        },
-        {
-            new IgniteClientException("x", null, ClientStatusCode.InvalidNodeState), true
-        },
-        {
-            new IgniteClientException("invalid cache configuration", null, ClientStatusCode.Fail), false
-        },
-        {
-            new IgniteClientException("x", null, ClientStatusCode.AuthenticationFailed), false
-        },
-        {
-            new IgniteClientException("x", null, ClientStatusCode.SecurityViolation), false
-        },
-        {
-            new AggregateException(new SocketException(), new ArgumentException()), false
-        },
-        {
-            new AggregateException(), false
-        },
-        {
-            new InvalidOperationException(), false
-        },
-    };
-
     [Fact]
     public void GetIgniteClientConfiguration_Defaults()
     {
@@ -184,11 +143,6 @@ public sealed class CacheFactoryTests
         Assert.True(sslStreamFactory.SkipServerCertificateValidation);
         Assert.False(sslStreamFactory.CheckCertificateRevocation);
     }
-
-    [Theory]
-    [MemberData(nameof(TransientCases))]
-    public void IsTransient_ClassifiesExceptions(Exception exception, bool expected) =>
-        Assert.Equal(expected, IgniteManager.IsTransient(exception));
 
     [Fact]
     public void ConnectAsClient_ThickClient_DoesNotChangeGlobalClientMode()

@@ -218,13 +218,18 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-      # the chart branch released together with this branch: the same name in dradoaica/helm-charts if it exists
+      # the chart branch released together with this branch: the same name in dradoaica/helm-charts if it exists; for a
+      # release (whose ref is its tag), the branch of its version, e.g., release/2.19.0, as in the Release workflow
       - name: Resolve Helm Chart Ref
         id: chart-ref
         env:
           INPUT_REF: ${{ inputs.helm-charts-ref }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
+          if [[ -n "$RELEASE_TAG" ]]; then
+            BRANCH="release/${RELEASE_TAG#v}"
+          fi
           ref="$(scripts/ci/resolve-chart-ref.sh "$INPUT_REF" "$BRANCH")"
           echo "Testing the chart of dradoaica/helm-charts@${ref}"
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"
@@ -288,13 +293,18 @@ jobs:
           ref: aspnetcore-ignite-server-2.18.2
           path: helm-charts-old
 
-      # the chart branch released together with this branch: the same name in dradoaica/helm-charts if it exists
+      # the chart branch released together with this branch: the same name in dradoaica/helm-charts if it exists; for a
+      # release (whose ref is its tag), the branch of its version, e.g., release/2.19.0, as in the Release workflow
       - name: Resolve Helm Chart Ref
         id: chart-ref
         env:
           INPUT_REF: ${{ inputs.helm-charts-ref }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
+          if [[ -n "$RELEASE_TAG" ]]; then
+            BRANCH="release/${RELEASE_TAG#v}"
+          fi
           ref="$(scripts/ci/resolve-chart-ref.sh "$INPUT_REF" "$BRANCH")"
           echo "Testing the chart of dradoaica/helm-charts@${ref}"
           echo "ref=${ref}" >> "$GITHUB_OUTPUT"

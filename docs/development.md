@@ -41,7 +41,9 @@ cannot pass as a green build.
 CI reports the unit test coverage and the image's vulnerabilities with a fix (Trivy; a critical one fails the build) in
 the job summary, and tests the image with its
 [Helm chart](https://github.com/dradoaica/helm-charts/tree/main/charts/aspnetcore-ignite-server): a two-node persistent
-cluster in kind, checked by the chart's probes and `helm test` (the `helm-charts-ref` input selects the chart revision).
+cluster in kind, checked by the chart's probes and `helm test`. The chart is that of the branch of the same name in the
+chart repository (for a release, `release/<version>`) if it exists, otherwise `main`; the `helm-charts-ref` input
+selects another revision.
 The logic of the workflows lives in scripts that also run locally: `scripts/test-chart.sh` (the chart test, against any
 cluster that has the image; its header shows how to load the image into kind or microk8s) and `scripts/ci/` (which chart
 revision is tested, the paired versions check, the chart update of a release, the floating tags a release moves
@@ -51,7 +53,8 @@ Mermaid diagrams parse).
 
 The integration tests wait for texts in the server's logs. Those texts are listed in
 `tests/AspNetCore.Ignite.IntegrationTests/ServerLog.cs`, and a unit test fails when one of them is no longer part of a
-message in the server's code: after rewording a log message, update that list.
+message in the server's code: after rewording a log message, update that list. Likewise, `DocumentationTests` fails
+when a setting of the server is not in [Configuration](configuration.md).
 
 Run by hand (Run workflow), the Release workflow is a dry run: it builds the package and the image for every
 platform, and publishes nothing.
@@ -63,8 +66,9 @@ install the chart with its image.
 
 1. Merge the release branch of this repository into `main`.
 2. Publish a GitHub release whose tag is the version (e.g., `2.19.0`, or `2.19.0-rc.1`; the workflow refuses a tag
-   that is not a version). The Release workflow tests once more, and publishes the package (to GitHub Packages, and to
-   nuget.org with a `NUGET_API_KEY` secret) and the image. The image is also tagged `2.19`, `2` and `latest`, each only
+   that is not a version). The Release workflow tests once more (with the chart of the version's release branch, if
+   the chart repository still has it), and publishes the package (to GitHub Packages, and to nuget.org with a
+   `NUGET_API_KEY` secret) and the image. The image is also tagged `2.19`, `2` and `latest`, each only
    when the release is the highest of its line: a patch of an older line (e.g., `2.18.3` after `2.19.0`) moves only the
    tags of its own line, and a prerelease none. For a patch release of the image, it also opens a pull request on the
    chart repository that moves the chart to it (with a `HELM_CHARTS_TOKEN` secret): on the chart's branch of the same

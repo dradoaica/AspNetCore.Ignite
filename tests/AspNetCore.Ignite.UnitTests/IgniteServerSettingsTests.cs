@@ -81,6 +81,37 @@ public sealed class IgniteServerSettingsTests
     }
 
     [Theory]
+    [InlineData("false", null, null, true)]
+    [InlineData("true", null, null, false)]
+    [InlineData("false", "a:47500", null, false)]
+    [InlineData("false", null, "/config/ignite.xml", false)]
+    public void Validate_SpiPort_WithoutEndpoints_NeedsTheStaticIpFinder(
+        string useStaticIpFinder,
+        string? clusterEndpoints,
+        string? configFile,
+        bool invalid
+    )
+    {
+        // Without the static IP finder, the discovery that SPI_PORT configures would fall back to multicast.
+        var settings = Load(
+            new Dictionary<string, string?>
+            {
+                ["SPI_PORT"] = "47600",
+                ["USE_TCP_DISCOVERY_STATIC_IP_FINDER"] = useStaticIpFinder,
+                ["CLUSTER_ENDPOINTS"] = clusterEndpoints,
+                ["CONFIG_FILE"] = configFile,
+                ["K8S_NAMESPACE"] = "prod",
+                ["K8S_SERVICE_NAME"] = "ignite-svc",
+            }
+        );
+
+        Assert.Equal(
+            invalid,
+            settings.Validate().Any(error => error.StartsWith("SPI_PORT (-SpiPort) needs", StringComparison.Ordinal))
+        );
+    }
+
+    [Theory]
     [InlineData("CLUSTER_ENDPOINTS:0", "cmd:47500")]
     [InlineData("CLUSTER_ENDPOINTS", "cmd:47500")]
     public void Load_Lists_ComeFromTheSourceOfTheHighestPriority(string key, string value)

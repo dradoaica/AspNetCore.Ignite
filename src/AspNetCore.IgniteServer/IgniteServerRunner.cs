@@ -1,5 +1,4 @@
 using Apache.Ignite.Core;
-using Apache.Ignite.Core.Common;
 using Apache.Ignite.Core.Discovery.Tcp;
 using Apache.Ignite.Core.Events;
 using AspNetCore.IgniteServer.Listeners;
@@ -18,6 +17,10 @@ namespace AspNetCore.IgniteServer;
 ///         node's Stopped event come from others. All lifecycle state is guarded by one lock, <c>gate</c>. Ignite itself
 ///         is never called under that lock, because starting, stopping and reading the cluster can take long, and Ignite's
 ///         threads call back into this class.
+///     </para>
+///     <para>
+///         The activation of the cluster and its deactivation by a stopping last server node take turns in
+///         <see cref="ClusterActivator" />, which begins no activation once a stop or restart of the node has begun.
 ///     </para>
 /// </summary>
 internal sealed class IgniteServerRunner : IDisposable
@@ -57,7 +60,7 @@ internal sealed class IgniteServerRunner : IDisposable
     // The latest stop. Ignite stops a node only once, so a later Stop() waits for this one rather than start another.
     private Task<bool>? nodeStop;
 
-    // True from the cluster's activation until a stop begins.
+    // True from the cluster's activation until a stop or restart begins.
     private bool ready;
 
     // What Restart() or Stop() asked for. Stop is final. Run consumes Restart once the node has stopped.
@@ -240,16 +243,30 @@ internal sealed class IgniteServerRunner : IDisposable
             deactivatedToRestart = false;
         }
 
-        var activated = await activator.ActivateAsync(
-                startedNode,
-                persistent,
-                Configuration.AuthenticationEnabled,
-                reactivate,
-                stopped.Task
-            )
-            .ConfigureAwait(false);
+        bool activated;
+        try
+        {
+            activated = await activator.ActivateAsync(
+                    startedNode,
+                    persistent,
+                    Configuration.AuthenticationEnabled,
+                    reactivate,
+                    stopped.Task,
+                    () => IsStopping(startedNode)
+                )
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsStopping(startedNode))
+        {
+            // A node that stops while its cluster is activated fails the calls of the activation.
+            logger.Debug(ex, "The activation ended with the stop of the node.");
+            activated = false;
+        }
+
         if (!activated)
         {
+            // Waited for, so that a restart does not start the next node beside this one.
+            await stopped.Task.ConfigureAwait(false);
             logger.Information("'{IgniteInstance}' stopped before activation.", startedNode.Name);
             return;
         }
@@ -277,13 +294,14 @@ internal sealed class IgniteServerRunner : IDisposable
             EventType.NodeSegmented
         );
 
+        // Before the node is ready: IsReady asks the tracker whether the node is still catching up after its start.
+        RebalanceTracker.OnRunning();
         lock (gate)
         {
-            // Not ready when a stop began during the activation.
-            ready = ReferenceEquals(node, startedNode);
+            // Not ready when a stop or restart began during the activation.
+            ready = !IsStoppingUnderGate(startedNode);
         }
 
-        RebalanceTracker.OnRunning();
         logger.Information(
             "Ignite server runner is running (DiscoverySpi LocalPort={DiscoverySpiLocalPort}), press CTRL+C to " +
             "terminate.",
@@ -292,6 +310,19 @@ internal sealed class IgniteServerRunner : IDisposable
         var stoppedInstance = await stopped.Task.ConfigureAwait(false);
         logger.Information("'{IgniteInstance}' stopped.", stoppedInstance);
     }
+
+    /// <summary>Whether a stop or restart of <paramref name="startedNode" /> began, or it stopped on its own.</summary>
+    private bool IsStopping(IIgnite startedNode)
+    {
+        lock (gate)
+        {
+            return IsStoppingUnderGate(startedNode);
+        }
+    }
+
+    // A started node stops being the running one when a stop takes it (StopRunningNode), or when it stops on its own.
+    private bool IsStoppingUnderGate(IIgnite startedNode) =>
+        request != Request.None || !ReferenceEquals(node, startedNode);
 
     /// <summary>
     ///     The node's Stopped event. A node that stops on its own (e.g., segmented) is still the running node here; one
@@ -323,6 +354,7 @@ internal sealed class IgniteServerRunner : IDisposable
             }
 
             request = Request.Restart;
+            ready = false;
         }
 
         logger.Information("Restarting Ignite server runner...");
@@ -382,8 +414,8 @@ internal sealed class IgniteServerRunner : IDisposable
     ///     <para>
     ///         The GRACEFUL shutdown policy waits until the node's partitions have copies on other nodes. That can take long
     ///         (e.g., while another node restarts too), and never happens for the cluster's last server node. So the last
-    ///         server node deactivates the cluster first (<see cref="DeactivateIfLastServerNode" />), and when
-    ///         <paramref name="restarting" />, the next run activates it again.
+    ///         server node deactivates the cluster first (<see cref="ClusterActivator.DeactivateIfLastServerNode" />), and
+    ///         when <paramref name="restarting" />, the next run activates it again.
     ///     </para>
     /// </summary>
     private bool StopNodeGracefully(TimeSpan timeout, bool restarting)
@@ -401,7 +433,9 @@ internal sealed class IgniteServerRunner : IDisposable
             return false;
         }
 
-        if (DeactivateIfLastServerNode(Remaining(timeout, elapsed)) && restarting)
+        if (Node is { } runningNode &&
+            activator.DeactivateIfLastServerNode(runningNode, Remaining(timeout, elapsed)) &&
+            restarting)
         {
             lock (gate)
             {
@@ -415,45 +449,6 @@ internal sealed class IgniteServerRunner : IDisposable
 
     private static TimeSpan Remaining(TimeSpan timeout, Stopwatch elapsed) =>
         timeout > elapsed.Elapsed ? timeout - elapsed.Elapsed : TimeSpan.Zero;
-
-    /// <summary>
-    ///     The cluster's last server node deactivates the cluster before it stops, so that it can stop at once (a
-    ///     persistent one checkpoints its data, and the next start activates it again). Returns true when it deactivated the
-    ///     cluster.
-    /// </summary>
-    private bool DeactivateIfLastServerNode(TimeSpan timeout)
-    {
-        if (Node is not { } runningNode)
-        {
-            return false;
-        }
-
-        try
-        {
-            var cluster = runningNode.GetCluster();
-            if (!cluster.IsActive() || cluster.ForServers().GetNodes().Count > 1)
-            {
-                return false;
-            }
-
-            logger.Information(
-                "The node is the cluster's last server node: deactivating the cluster so that it stops at once."
-            );
-            if (Task.Run(() => cluster.SetActive(false)).Wait(timeout))
-            {
-                return true;
-            }
-
-            logger.Warning("The cluster was not deactivated within {Timeout}.", timeout);
-        }
-        catch (Exception ex) when (ex is IgniteException or InvalidOperationException or AggregateException)
-        {
-            // Not fatal: the graceful stop that follows may still succeed, or time out.
-            logger.Warning(ex, "The cluster was not deactivated before the stop.");
-        }
-
-        return false;
-    }
 
     /// <summary>
     ///     Begins to stop the running node, cancelling its jobs or waiting for them, and returns that stop. Returns null

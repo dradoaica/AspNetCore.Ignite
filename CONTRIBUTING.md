@@ -72,8 +72,9 @@ please open an issue to discuss the approach before starting work.
 2. Keep each PR focused on a single change. Small fixes (typos, docs) don't need an issue first.
 3. Follow the existing code style; it is defined in `.editorconfig`. Run `dotnet format` before committing.
 4. Add or update tests where it makes sense, and make sure the solution builds without new warnings.
-5. Update the docs if you change settings, CLI options, ports or Docker usage: `docs/configuration.md` for the server,
-   `docs/client.md` for the client library, and `docs/upgrading.md` for breaking changes.
+5. Update the docs if you change settings, CLI options, ports or Docker usage: `docs/configuration.md` for the server
+   (a unit test checks that it names every server setting), `docs/client.md` for the client library, and
+   `docs/upgrading.md` for breaking changes.
 6. After rewording a log message that the integration tests wait for, update
    `tests/AspNetCore.Ignite.IntegrationTests/ServerLog.cs` (a unit test checks the list against the code).
 7. Never commit real certificates, key stores, passwords or other secrets.
