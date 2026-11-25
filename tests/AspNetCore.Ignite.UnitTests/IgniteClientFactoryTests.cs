@@ -8,6 +8,25 @@ namespace AspNetCore.Ignite.UnitTests;
 
 public sealed class IgniteClientFactoryTests
 {
+    /// <summary>docs/upgrading.md promises that the next major version removes them: this test remembers it.</summary>
+    [Fact]
+    public void ObsoleteCacheFactoryMembers_AreRemovedInTheNextMajorVersion()
+    {
+        var major = typeof(CacheFactory).Assembly.GetName().Version!.Major;
+        var obsolete = typeof(CacheFactory).GetMembers()
+            .Where(member => Attribute.IsDefined(member, typeof(ObsoleteAttribute)))
+            .Select(member => member.Name)
+            .Distinct()
+            .ToList();
+
+        Assert.NotEmpty(obsolete);
+        Assert.True(
+            major <= 2,
+            $"Version {major}.x: remove the obsolete members of CacheFactory ({string.Join(", ", obsolete)}), their " +
+            "test (CacheFactory_ForwardsItsObsoleteClientMembers), this test, and their note in docs/upgrading.md."
+        );
+    }
+
     [Fact]
     public void GetIgniteClientConfiguration_Defaults()
     {

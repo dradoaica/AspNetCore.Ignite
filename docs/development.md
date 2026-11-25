@@ -67,8 +67,9 @@ install the chart with its image.
 1. Merge the release branch of this repository into `main`.
 2. Publish a GitHub release whose tag is the version (e.g., `2.19.0`, or `2.19.0-rc.1`; the workflow refuses a tag
    that is not a version). The Release workflow tests once more (with the chart of the version's release branch, if
-   the chart repository still has it), and publishes the package (to GitHub Packages, and to nuget.org with a
-   `NUGET_API_KEY` secret) and the image. The image is also tagged `2.19`, `2` and `latest`, each only
+   the chart repository still has it), and publishes the image, then the package (to GitHub Packages, and to
+   nuget.org with a `NUGET_API_KEY` secret): an image that fails to push publishes no package. The image is also
+   tagged `2.19`, `2` and `latest`, each only
    when the release is the highest of its line: a patch of an older line (e.g., `2.18.3` after `2.19.0`) moves only the
    tags of its own line, and a prerelease none. For a patch release of the image, it also opens a pull request on the
    chart repository that moves the chart to it (with a `HELM_CHARTS_TOKEN` secret): on the chart's branch of the same

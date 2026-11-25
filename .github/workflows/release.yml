@@ -78,8 +78,13 @@ jobs:
           repo="${GITHUB_REPOSITORY#*/}"
           echo "image=ghcr.io/${owner,,}/${repo,,}-server" >> "$GITHUB_OUTPUT"
 
+  # after the image, so that a failed image push publishes no package (the package names the image's version); a dry
+  # run, which pushes no image (image-manifest is skipped), packs the package all the same
   packages:
-    needs: [ tests, version ]
+    needs: [ tests, version, image-manifest ]
+    if: >-
+      ${{ !cancelled() && needs.tests.result == 'success' && needs.version.result == 'success' &&
+      (needs.image-manifest.result == 'success' || github.event_name != 'release') }}
     permissions:
       contents: read # to checkout codebase
       packages: write # to push NuGet packages to GitHub Packages
