@@ -113,8 +113,10 @@ public sealed class IgniteServerHostedServiceTests
     [Fact]
     public async Task StopAsync_StopsWaitingForTheNode_AtTheHostsTimeout()
     {
-        using var service = await StartAsync(60);
+        // Declared first, so disposed last: the stop that the host stopped waiting for goes on, and the service's
+        // Dispose may begin it instead when it has not taken the node yet.
         using ManualResetEventSlim release = new();
+        using var service = await StartAsync(60);
         launcher.BeforeStopped = () => release.Wait();
         using CancellationTokenSource hostTimeout = new(TimeSpan.FromMilliseconds(200));
         var stopwatch = Stopwatch.StartNew();

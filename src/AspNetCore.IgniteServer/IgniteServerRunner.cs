@@ -193,9 +193,17 @@ internal sealed class IgniteServerRunner : IDisposable
         // out) is not waited for: that node stops with the process.
         var stop = StopRunningNode(true);
         var timeout = TimeSpan.FromSeconds(settings.GracefulStopTimeoutInSeconds);
-        if (stop != null && !stop.Wait(timeout))
+        try
         {
-            logger.Warning("The Ignite node did not stop within {Timeout}; it stops with the process.", timeout);
+            if (stop != null && !stop.Wait(timeout))
+            {
+                logger.Warning("The Ignite node did not stop within {Timeout}; it stops with the process.", timeout);
+            }
+        }
+        catch (AggregateException ex)
+        {
+            // Dispose must not throw: the node stops with the process.
+            logger.Warning(ex.InnerException ?? ex, "The Ignite node failed to stop; it stops with the process.");
         }
     }
 

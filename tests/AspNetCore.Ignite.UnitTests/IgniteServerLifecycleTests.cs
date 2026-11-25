@@ -125,6 +125,20 @@ public sealed class IgniteServerLifecycleTests
     }
 
     [Fact]
+    public async Task Dispose_DoesNotThrow_WhenTheStopFails()
+    {
+        FakeNodeLauncher launcher = new();
+        var runner = CreateRunner(launcher);
+        _ = runner.Run();
+        await FakeNodeLauncher.Eventually(() => runner.Node != null);
+        launcher.BeforeStopped = () => throw new InvalidOperationException("The JVM is gone.");
+
+        runner.Dispose();
+
+        Assert.Equal(1, launcher.Stops);
+    }
+
+    [Fact]
     public async Task Stop_WhileTheNodeStarts_WaitsForTheStart_AndStopsTheNode()
     {
         FakeNodeLauncher launcher = new();
@@ -139,8 +153,10 @@ public sealed class IgniteServerLifecycleTests
         Assert.True(starting.Wait(Timeout));
 
         var stop = Task.Run(() => runner.Stop(Timeout));
+        await FakeNodeLauncher.Eventually(() => runner.CurrentPhase == Phase.Stopping);
+        // Once the stop has begun, time for it to report a stop while the node still starts, which it must not do.
+        // (Only a broken stop could pass in that time; a working one cannot fail.)
         await Task.Delay(200);
-        // it does not report a stop while the node still starts
         Assert.False(stop.IsCompleted);
         release.Set();
 
