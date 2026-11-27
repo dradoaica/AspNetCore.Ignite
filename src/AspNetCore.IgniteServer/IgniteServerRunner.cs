@@ -74,7 +74,8 @@ internal sealed class IgniteServerRunner : IDisposable
 
     // The phase changes the runner makes; Transition refuses any other. Staying in the same phase is always allowed.
     // The changes to Stopped from Starting, Activating, Running and Restarting are those of a Run that throws.
-    private static readonly Dictionary<Phase, Phase[]> AllowedTransitions = new()
+    // docs/tlaplus/ServerLifecycle has the same table (Allowed); a unit test keeps them equal.
+    internal static readonly IReadOnlyDictionary<Phase, Phase[]> AllowedTransitions = new Dictionary<Phase, Phase[]>
     {
         [Phase.Idle] = [Phase.Starting, Phase.Stopping,],
         [Phase.Starting] = [Phase.Activating, Phase.Stopping, Phase.Stopped,],

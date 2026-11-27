@@ -97,7 +97,8 @@ please open an issue to discuss the approach before starting work.
   heavy dependencies without discussing it first.
 - **Node lifecycle.** A change to how `IgniteServerRunner` starts, restarts or stops the node updates the state diagram
   and the table of each call in each phase in [Architecture](docs/architecture.md#node-lifecycle), the allowed changes
-  in `IgniteServerRunner.Transition`, and adds a test of the new ordering to `IgniteServerLifecycleTests`.
+  in `IgniteServerRunner.Transition`, the TLA+ spec in `docs/tlaplus/ServerLifecycle` (and its results in
+  `docs/tlaplus/README.md`), and adds a test of the new ordering to `IgniteServerLifecycleTests`.
 - **Configuration.** New server settings should be configurable through `appsettings.json` and environment variables (so
   they work in Docker and Kubernetes), with safe, backward-compatible defaults, and validated in
   `IgniteServerSettings.Validate`.

@@ -397,3 +397,7 @@ FodyWeavers.xsd
 # JetBrains Rider
 .idea/
 *.sln.iml
+
+# TLC (docs/tlaplus): its state directory and the traces of violations
+docs/tlaplus/**/states/
+docs/tlaplus/**/*_TTrace_*

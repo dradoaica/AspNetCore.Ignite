@@ -29,6 +29,8 @@
         <Compile Include="..\AspNetCore.Ignite.IntegrationTests\ServerLog.cs" Link="ServerLog.cs"/>
         <!-- the settings reference, checked against the server's settings by DocumentationTests -->
         <None Include="..\..\docs\configuration.md" Link="docs\configuration.md" CopyToOutputDirectory="PreserveNewest"/>
+        <!-- the TLA+ spec of the node lifecycle, whose phase changes DocumentationTests checks against the runner's -->
+        <None Include="..\..\docs\tlaplus\ServerLifecycle\ServerLifecycle.tla" Link="docs\tlaplus\ServerLifecycle.tla" CopyToOutputDirectory="PreserveNewest"/>
     </ItemGroup>
 
     <ItemGroup>

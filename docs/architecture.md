@@ -187,6 +187,10 @@ nodes never run at once.
 | `Stopping`   | `NotRunning`                                                                                                                                          | Waits for the stop in progress                                                                                                             | –                                            |
 | `Stopped`    | `NotRunning`                                                                                                                                          | Returns true at once                                                                                                                       | –                                            |
 
+[`docs/tlaplus/ServerLifecycle`](tlaplus/README.md) models this table as a TLA+ spec: TLC checks every interleaving of
+these calls, the node's own stop and the stop tasks (two nodes never run at once, a requested stop is never undone, a
+node is stopped once, and a stop always ends the run).
+
 `Dispose` requests a stop like `Stop`, and stops a node that is still running with its jobs cancelled, waiting at most
 `GRACEFUL_STOP_TIMEOUT_IN_SECONDS`. It does not wait for a stop that began earlier: that node stops with the process.
 
@@ -274,7 +278,7 @@ See [Development](development.md) for how to run them.
 |----------------------------------------------|-----------------------------------------------------------------|
 | A setting (name, default, validation)        | `IgniteServerSettings*.cs`, then `docs/configuration.md`        |
 | How a setting configures the node            | `IgniteConfigurationFactory.cs`, or `config/spring-config*.xml` |
-| Start, restart and stop                      | `IgniteServerRunner.cs`, `NodeRun.cs` (tests: `IgniteServerLifecycleTests`, `NodeRunTests`) |
+| Start, restart and stop                      | `IgniteServerRunner.cs`, `NodeRun.cs` (tests: `IgniteServerLifecycleTests`, `NodeRunTests`; spec: `ServerLifecycle.tla`) |
 | Cluster activation and the baseline          | `ClusterActivator.cs`                                           |
 | Host integration, exit codes                 | `IgniteServerHostedService.cs`, `ServerExit.cs`, `Program.cs`   |
 | Certificate rotation                         | `SslFileRestarter.cs`, `Utils/FileChangeWatcher.cs`             |
