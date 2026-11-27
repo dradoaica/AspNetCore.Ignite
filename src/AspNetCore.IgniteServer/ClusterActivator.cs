@@ -177,8 +177,14 @@ internal sealed class ClusterActivator(
     }
 
     /// <summary>
-    ///     The baseline topology, or null when none was set yet (Ignite.NET documents null but throws a Java
-    ///     NullPointerException instead).
+    ///     The baseline topology, or null when none was set yet.
+    ///     <para>
+    ///         Ignite.NET documents null there, but its Java side reads the missing baseline's size and fails. Verified
+    ///         on Ignite.NET 2.18.0, on a persistent node that was never activated: <c>IgniteException: Java exception
+    ///         occurred [class=java.lang.NullPointerException, message=Cannot invoke "java.util.Collection.size()"
+    ///         because "blt" is null]</c>. No upstream issue was found. On an Ignite upgrade, call
+    ///         <c>ICluster.GetBaselineTopology</c> on such a node: once it returns null, this catch can go.
+    ///     </para>
     /// </summary>
     internal static ICollection<IBaselineNode>? GetBaselineTopology(ICluster cluster)
     {
