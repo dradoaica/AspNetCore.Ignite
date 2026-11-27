@@ -25,6 +25,11 @@ namespace AspNetCore.IgniteServer;
 ///         under one lock, <c>gate</c>. Ignite is never called while it is held, because starting, stopping and reading
 ///         the cluster can take long, and Ignite's threads call back into this class.
 ///     </para>
+///     <para>
+///         Lock order: <see cref="NodeRun" /> has a lock of its own, which may be taken while <c>gate</c> is held, never
+///         the other way round (NodeRun calls nothing under its lock). <c>ClusterActivator</c>'s <c>stateLock</c> is never
+///         taken under either.
+///     </para>
 /// </summary>
 internal sealed class IgniteServerRunner : IDisposable
 {
