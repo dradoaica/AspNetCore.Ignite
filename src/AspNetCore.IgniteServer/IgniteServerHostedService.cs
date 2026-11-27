@@ -86,9 +86,9 @@ internal sealed class IgniteServerHostedService : BackgroundService
     {
         try
         {
-            // Off the host's thread, so that the host can stop waiting at its own timeout. Validation keeps
-            // GRACEFUL_STOP_TIMEOUT_IN_SECONDS below that timeout, so it runs out first only when the host is stopped
-            // some other way.
+            // On another thread, so that the host can give up at its own timeout. Validation keeps
+            // GRACEFUL_STOP_TIMEOUT_IN_SECONDS below that timeout, so the host gives up first only when it was stopped
+            // with a shorter one.
             var graceful = await Task.Run(
                     () => runner.Stop(TimeSpan.FromSeconds(settings.GracefulStopTimeoutInSeconds)),
                     CancellationToken.None

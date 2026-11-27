@@ -66,8 +66,8 @@ internal sealed class ClusterActivator(
         bool newCluster;
         lock (stateLock)
         {
-            // Checked under the lock: a stop that began before has the cluster left as it is, and one that begins now
-            // waits for this activation (DeactivateIfLastServerNode).
+            // Checked under the lock, so a stop either comes first (the cluster is then left inactive) or waits until
+            // this activation has finished (DeactivateIfLastServerNode).
             if (stopping.IsCompleted)
             {
                 logger.Information("The cluster is not activated: the node is being stopped.");
@@ -90,8 +90,8 @@ internal sealed class ClusterActivator(
 
         cluster.SetBaselineAutoAdjustEnabledFlag(true);
         cluster.SetBaselineAutoAdjustTimeout((long)settings.GetBaselineAutoAdjustTimeout(persistent).TotalMilliseconds);
-        // Users exist only with authentication. Without it, there is no password to set. A node that is being stopped
-        // leaves the password to its next start.
+        // Only with authentication are there users, and so a password to set. A node that is being stopped skips
+        // this; its next start sets the password.
         if (authenticationEnabled && !string.IsNullOrWhiteSpace(settings.IgniteUserPassword) && !stopping.IsCompleted)
         {
             try

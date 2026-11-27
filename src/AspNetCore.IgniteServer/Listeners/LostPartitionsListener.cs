@@ -111,8 +111,9 @@ internal sealed class LostPartitionsListener : IEventListener<CacheRebalancingEv
         IEnumerable<string> hostNames
     )
     {
-        // Ignite raises one event per lost partition, so only the first event of each cache in this batch is logged.
-        // That holds even when this node still remembers an earlier loss of the cache that another node has reset.
+        // Ignite raises one event per lost partition: only the first event of each cache in a batch is logged.
+        // `reported` is cleared after every batch, so a new loss is logged even when `lost` still has the cache from an
+        // earlier one (e.g., that another node has reset since).
         lost.TryAdd(cacheName, 0);
         if (reported.TryAdd(cacheName, 0))
         {
