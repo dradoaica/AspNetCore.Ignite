@@ -119,7 +119,9 @@ flowchart LR
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Starting: Run
+    [*] --> Idle
+    Idle --> Starting: Run
+    Idle --> Stopping: Stop before the start
     Starting --> Activating: started
     state Activating {
         [*] --> WaitingForServerNodes: persistent, first activation
@@ -133,8 +135,9 @@ stateDiagram-v2
     }
     Activating --> Restarting: Restart (no activation)
     Running --> Restarting: Restart (SSL files changed)
-    Restarting --> Starting: the node stopped
-    Starting --> Stopping: Stop, once started
+    Restarting --> Idle: the node stopped
+    Starting --> Stopping: Stop (the node is stopped once started)
+    Starting --> Stopped: the start failed
     Activating --> Stopping: Stop (no activation)
     Running --> Stopping: Stop (SIGTERM)
     Restarting --> Stopping: Stop, or the restart timed out
@@ -144,9 +147,9 @@ stateDiagram-v2
     Stopped --> [*]
 ```
 
-The states are the values of `IgniteServerRunner.Phase` (`Idle` comes before the first start, and between the stop and
-the start of a restart); the states inside `Activating` and `Running` are those of `ClusterActivator` and
-`RebalanceTracker`.
+The states are the values of `IgniteServerRunner.Phase`. `IgniteServerRunner.Transition` refuses any change that the
+diagram does not show, so the diagram and the code cannot drift apart unnoticed. The states inside `Activating` and
+`Running` are those of `ClusterActivator` and `RebalanceTracker`.
 
 * **Started** (`/health/startup`) once the node has joined the topology, also while its cluster waits for
   `ACTIVATION_MIN_SERVER_NODES`, so that a startup probe does not restart nodes waiting for each other.
@@ -165,6 +168,23 @@ the start of a restart); the states inside `Activating` and `Running` are those 
   nodes.
 * **A node that stops on its own** (e.g., segmented from the cluster) stops the server with exit code `1`, and its
   container restarts.
+
+What each call does in each phase. Every start of the node is stopped once: the first stop begins it, and a later stop
+or restart waits for that same stop instead of beginning another. `Run` returns only once its node has stopped, so two
+nodes never run at once.
+
+| Phase        | `Restart(timeout)`                                                                                                                                    | `Stop(timeout)`                                                                                                                            | The node stops on its own                    |
+|--------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------|
+| `Idle`       | `NotRunning`                                                                                                                                          | Goes to `Stopping`; `Run` starts no node. Returns true.                                                                                    | –                                            |
+| `Starting`   | `NotRunning`: the node may have read the old files, so `SslFileRestarter` asks again later                                                            | Goes to `Stopping`, waits for the start, then stops the node. False if the start outlasts the timeout; `Run` still stops the node once started. | Seen even before the start returns: `Run` returns false |
+| `Activating` | Goes to `Restarting`: the cluster is not activated, the node stops, and `Run` starts it again                                                          | Goes to `Stopping`: an activation not yet begun is skipped, one in progress ends first; then the graceful stop    | `Run` returns false (exit code `1`)          |
+| `Running`    | Goes to `Restarting`: the node stops (the last server node deactivates the cluster first) and `Run` starts it again. `TimedOut` goes to `Stopping` instead | Goes to `Stopping`: the graceful stop (the last server node deactivates the cluster first)                                                | `Run` returns false (exit code `1`)          |
+| `Restarting` | `NotRunning`                                                                                                                                          | Goes to `Stopping`: waits for the restart's stop, and `Run` starts no node again                                                          | Part of the restart: `Run` starts it again   |
+| `Stopping`   | `NotRunning`                                                                                                                                          | Waits for the stop in progress                                                                                                             | –                                            |
+| `Stopped`    | `NotRunning`                                                                                                                                          | Returns true at once                                                                                                                       | –                                            |
+
+`Dispose` requests a stop like `Stop`, and stops a node that is still running with its jobs cancelled, waiting at most
+`GRACEFUL_STOP_TIMEOUT_IN_SECONDS`. It does not wait for a stop that began earlier: that node stops with the process.
 
 ### Certificate rotation
 
