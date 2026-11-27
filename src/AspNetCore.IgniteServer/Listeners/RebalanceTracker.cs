@@ -90,7 +90,13 @@ internal sealed class RebalanceTracker(ILogger logger, TimeSpan maxWait, TimePro
     }
 
     /// <summary>
-    ///     True while the node catches up after its start, that is, until it holds its data.
+    ///     Observes the node now and returns true while it catches up after its start, that is, until it holds its data.
+    ///     <para>
+    ///         Each call advances the catch-up: it records when the node is first seen in the baseline, and ends the
+    ///         catch-up for good once the node has settled. Only the readiness probe and the <c>node_ready</c> gauge call
+    ///         it (through <see cref="IgniteServerRunner.IsReady" />); the baseline is read from Ignite, which the
+    ///         rebalancing events do not report.
+    ///     </para>
     ///     <para>
     ///         A joining node gets partitions only once the baseline auto-adjust has added it to the baseline, so it is
     ///         catching up while it is not in the baseline, for at most <c>maxWait</c> after it runs.
@@ -106,7 +112,7 @@ internal sealed class RebalanceTracker(ILogger logger, TimeSpan maxWait, TimePro
     ///     </para>
     /// </summary>
     /// <param name="isInBaseline">Whether the node is in the baseline now (read only while it catches up).</param>
-    public bool IsCatchingUp(Func<bool> isInBaseline)
+    public bool ObserveCatchingUp(Func<bool> isInBaseline)
     {
         if (caughtUp)
         {

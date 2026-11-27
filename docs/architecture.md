@@ -155,9 +155,11 @@ diagram does not show, so the diagram and the code cannot drift apart unnoticed.
   `ACTIVATION_MIN_SERVER_NODES`, so that a startup probe does not restart nodes waiting for each other.
 * **Ready** (`/health/readiness`) once the cluster is active and, with `READY_WHEN_REBALANCED`, the node has caught up:
   it is in the baseline (which the baseline auto-adjust adds it to) and has not rebalanced for 10 seconds
-  (`RebalanceTracker`). A rolling restart therefore moves on only once the restarted node holds its data again. So that
-  a node is never unready for good, it is ready anyway `REBALANCE_READINESS_MAX_WAIT_IN_SECONDS` (600 by default) after
-  it runs when it is still not in the baseline, and a rebalance that started longer ago than that is ignored.
+  (`RebalanceTracker`). A rolling restart therefore moves on only once the restarted node holds its data again. The
+  catch-up advances when readiness is read (the probe, the `node_ready` gauge), because the baseline is read from
+  Ignite on each read. So that a node is never unready for good, it is ready anyway
+  `REBALANCE_READINESS_MAX_WAIT_IN_SECONDS` (600 by default) after it runs when it is still not in the baseline, and a
+  rebalance that started longer ago than that is ignored.
 * **Restart and stop requests** move the run to `Restarting` or `Stopping`: a stop always wins over a restart, and a
   restart is taken by the next start. A request that comes during the activation means the cluster is not activated.
   `Restart` returns `Restarting`, `NotRunning` or `TimedOut`.

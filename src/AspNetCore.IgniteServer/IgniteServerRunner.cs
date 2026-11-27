@@ -179,7 +179,7 @@ internal sealed class IgniteServerRunner : IDisposable
 
             return readyNode != null &&
                    !(settings.ReadyWhenRebalanced &&
-                     RebalanceTracker.IsCatchingUp(() => ClusterActivator.IsInBaseline(readyNode)));
+                     RebalanceTracker.ObserveCatchingUp(() => ClusterActivator.IsInBaseline(readyNode)));
         }
     }
 

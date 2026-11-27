@@ -19,14 +19,14 @@ public sealed class RebalanceTrackerTests
 
         tracker.OnStarted("a");
         tracker.OnStarted("b");
-        Assert.True(tracker.IsCatchingUp(InBaseline));
+        Assert.True(tracker.ObserveCatchingUp(InBaseline));
         Assert.Equal(["a", "b",], tracker.RebalancingCaches.Order());
 
         tracker.OnStopped("a");
         Assert.Equal(["b",], tracker.RebalancingCaches);
         tracker.OnStopped("b");
 
-        Assert.False(tracker.IsCatchingUp(InBaseline));
+        Assert.False(tracker.ObserveCatchingUp(InBaseline));
     }
 
     [Fact]
@@ -37,9 +37,9 @@ public sealed class RebalanceTrackerTests
         tracker.OnStarted("a");
 
         time.Advance(MaxWait - TimeSpan.FromSeconds(1));
-        Assert.True(tracker.IsCatchingUp(InBaseline));
+        Assert.True(tracker.ObserveCatchingUp(InBaseline));
         time.Advance(TimeSpan.FromSeconds(1));
-        Assert.False(tracker.IsCatchingUp(InBaseline));
+        Assert.False(tracker.ObserveCatchingUp(InBaseline));
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public sealed class RebalanceTrackerTests
         Assert.Empty(tracker.RebalancingCaches);
         // the restarted node catches up again
         tracker.OnStarted("b");
-        Assert.True(tracker.IsCatchingUp(InBaseline));
+        Assert.True(tracker.ObserveCatchingUp(InBaseline));
     }
 
     [Fact]
@@ -67,9 +67,9 @@ public sealed class RebalanceTrackerTests
         tracker.OnStarted("recent");
 
         // "stuck" exceeded the max wait, "recent" did not: still rebalancing
-        Assert.True(tracker.IsCatchingUp(InBaseline));
+        Assert.True(tracker.ObserveCatchingUp(InBaseline));
         tracker.OnStopped("recent");
-        Assert.False(tracker.IsCatchingUp(InBaseline));
+        Assert.False(tracker.ObserveCatchingUp(InBaseline));
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class RebalanceTrackerTests
             tracker.OnStarted("a");
         }
 
-        Assert.False(tracker.IsCatchingUp(InBaseline));
+        Assert.False(tracker.ObserveCatchingUp(InBaseline));
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public sealed class RebalanceTrackerTests
         // e.g., another node left: every node rebalances, and none must become unready
         tracker.OnStarted("a");
 
-        Assert.False(tracker.IsCatchingUp(InBaseline));
+        Assert.False(tracker.ObserveCatchingUp(InBaseline));
         Assert.Equal(["a",], tracker.RebalancingCaches);
     }
 
@@ -110,13 +110,13 @@ public sealed class RebalanceTrackerTests
         tracker.OnRunning();
         tracker.OnStarted("a");
         tracker.OnStopped("a");
-        Assert.False(tracker.IsCatchingUp(InBaseline));
+        Assert.False(tracker.ObserveCatchingUp(InBaseline));
         time.Advance(RebalanceTracker.CatchUpSettleTime - TimeSpan.FromSeconds(1));
 
         // Ignite rebalances the caches one after another
         tracker.OnStarted("b");
 
-        Assert.True(tracker.IsCatchingUp(InBaseline));
+        Assert.True(tracker.ObserveCatchingUp(InBaseline));
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public sealed class RebalanceTrackerTests
 
         tracker.OnStarted("b");
 
-        Assert.True(tracker.IsCatchingUp(InBaseline));
+        Assert.True(tracker.ObserveCatchingUp(InBaseline));
     }
 
     [Fact]
@@ -140,12 +140,12 @@ public sealed class RebalanceTrackerTests
         RebalanceTracker tracker = new(Logger.None, MaxWait, time);
         tracker.OnRunning();
         tracker.OnStarted("stuck");
-        Assert.True(tracker.IsCatchingUp(InBaseline));
+        Assert.True(tracker.ObserveCatchingUp(InBaseline));
         time.Advance(MaxWait + RebalanceTracker.CatchUpSettleTime);
 
         tracker.OnStarted("later");
 
-        Assert.False(tracker.IsCatchingUp(InBaseline));
+        Assert.False(tracker.ObserveCatchingUp(InBaseline));
     }
 
     [Fact]
@@ -156,9 +156,9 @@ public sealed class RebalanceTrackerTests
         tracker.OnRunning();
 
         // a joining node holds no data until the baseline auto-adjust adds it
-        Assert.True(tracker.IsCatchingUp(NotInBaseline));
+        Assert.True(tracker.ObserveCatchingUp(NotInBaseline));
         time.Advance(MaxWait);
-        Assert.False(tracker.IsCatchingUp(NotInBaseline));
+        Assert.False(tracker.ObserveCatchingUp(NotInBaseline));
     }
 
     [Fact]
@@ -168,17 +168,17 @@ public sealed class RebalanceTrackerTests
         RebalanceTracker tracker = new(Logger.None, MaxWait, time);
         tracker.OnRunning();
         time.Advance(TimeSpan.FromMinutes(1));
-        Assert.True(tracker.IsCatchingUp(NotInBaseline));
+        Assert.True(tracker.ObserveCatchingUp(NotInBaseline));
 
         // the baseline auto-adjust adds the node, which then receives its partitions
         tracker.OnStarted("a");
-        Assert.True(tracker.IsCatchingUp(InBaseline));
+        Assert.True(tracker.ObserveCatchingUp(InBaseline));
         tracker.OnStopped("a");
-        Assert.False(tracker.IsCatchingUp(InBaseline));
+        Assert.False(tracker.ObserveCatchingUp(InBaseline));
         time.Advance(RebalanceTracker.CatchUpSettleTime);
         tracker.OnStarted("b");
 
-        Assert.False(tracker.IsCatchingUp(InBaseline));
+        Assert.False(tracker.ObserveCatchingUp(InBaseline));
     }
 
     /// <summary>A running node, in the baseline, that rebalanced after its start and has been quiet since.</summary>
@@ -188,9 +188,9 @@ public sealed class RebalanceTrackerTests
         tracker.OnStarted("a");
         tracker.OnRunning();
         tracker.OnStopped("a");
-        Assert.False(tracker.IsCatchingUp(InBaseline));
+        Assert.False(tracker.ObserveCatchingUp(InBaseline));
         time.Advance(RebalanceTracker.CatchUpSettleTime);
-        Assert.False(tracker.IsCatchingUp(InBaseline));
+        Assert.False(tracker.ObserveCatchingUp(InBaseline));
         return tracker;
     }
 }
