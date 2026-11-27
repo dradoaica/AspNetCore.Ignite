@@ -50,15 +50,33 @@ VARIABLES
     stopPc, stopRun, stopResult,
     rsPc, rsRun, rsResult,
     dPc, dRun,
-    env,
+    ownStop,      \* per start: the node stopped on its own (a history variable, bounded by MaxEnvEvents)
     stopReqRuns,  \* nruns when Stop or Dispose first requested a stop; -1 before
     timedOut,     \* a Restart returned TimedOut
     badTransition, wrongRun, undoneDeactivation   \* what the invariants rule out
 
-vars == <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact,
-          rstopping, rstopped, rown, stopCalls, active, stateLock, runPc, runI, runResult,
-          stopPc, stopRun, stopResult, rsPc, rsRun, rsResult, dPc, dRun, env, stopReqRuns,
-          timedOut, badTransition, wrongRun, undoneDeactivation>>
+\* Each variable is in one group. An action leaves the groups it does not touch UNCHANGED as a whole, and names the
+\* variables it leaves unchanged only in the groups it touches.
+phaseVars == <<phase, badTransition>>                       \* changed together by Transition
+runnerVars == <<disposed, deactToRestart, current, nruns>>  \* the rest of IgniteServerRunner's state
+nodeRunVars == <<rnode, rstopping, rstopped, rown>>         \* NodeRun's node and signals
+stopTaskVars == <<rstop, tpc, tres>>                        \* NodeRun's stop (what BeginStop changes)
+taskVars == <<tdeact, stopCalls>>                           \* what the stop task did
+clusterVars == <<active, stateLock>>
+igniteVars == <<jvm, ownStop>>
+runThreadVars == <<runPc, runI, runResult>>
+stopVars == <<stopPc, stopRun, stopResult>>
+restartVars == <<rsPc, rsRun, rsResult>>
+disposeVars == <<dPc, dRun>>
+ghostVars == <<stopReqRuns, timedOut, wrongRun, undoneDeactivation>>
+callerVars == <<stopVars, restartVars, disposeVars>>
+
+vars == <<phaseVars, runnerVars, nodeRunVars, stopTaskVars, taskVars, clusterVars, igniteVars, runThreadVars,
+          callerVars, ghostVars>>
+
+\* everything but the Run thread's own variables
+exceptRunThread == <<phaseVars, runnerVars, nodeRunVars, stopTaskVars, taskVars, clusterVars, igniteVars, callerVars,
+                     ghostVars>>
 
 TypeOK ==
     /\ phase \in Phases
@@ -68,6 +86,7 @@ TypeOK ==
     /\ rstop \in [Runs -> {"none", "graceful", "restart", "cancel"}]
     /\ tpc \in [Runs -> {"none", "deact", "deactIn", "flag", "stop", "waitCb", "done"}]
     /\ stateLock \in {"free", "act", "deact"}
+    /\ ownStop \in [Runs -> BOOLEAN]
 
 \* IgniteServerRunner.Transition: a refused change is recorded (the code throws)
 Transition(to) ==
@@ -102,7 +121,7 @@ Init ==
     /\ rsPc = [r \in Restarters |-> "init"] /\ rsRun = [r \in Restarters |-> 0]
     /\ rsResult = [r \in Restarters |-> "none"]
     /\ dPc = "init" /\ dRun = 0
-    /\ env = 0 /\ stopReqRuns = -1 /\ timedOut = FALSE
+    /\ ownStop = [i \in Runs |-> FALSE] /\ stopReqRuns = -1 /\ timedOut = FALSE
     /\ badTransition = FALSE /\ wrongRun = FALSE /\ undoneDeactivation = FALSE
 
 -----------------------------------------------------------------------------
@@ -113,10 +132,7 @@ RunCall ==
     /\ IF disposed
        THEN runPc' = "done" /\ runResult' = "threw"   \* ObjectDisposedException, before the try
        ELSE runPc' = "o1" /\ UNCHANGED runResult
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact,
-                   rstopping, rstopped, rown, stopCalls, active, stateLock, runI, stopPc, stopRun,
-                   stopResult, rsPc, rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut,
-                   badTransition, wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<exceptRunThread, runI>>
 
 \* RunOnce, first lock: no start after a stop; otherwise Starting and a new NodeRun
 RunBegin ==
@@ -128,9 +144,8 @@ RunBegin ==
             /\ Transition("Starting")
             /\ nruns' = nruns + 1 /\ current' = nruns + 1 /\ runI' = nruns + 1
             /\ runPc' = "start"
-    /\ UNCHANGED <<disposed, deactToRestart, jvm, rnode, rstop, tpc, tres, tdeact, rstopping, rstopped, rown,
-                   stopCalls, active, stateLock, runResult, stopPc, stopRun, stopResult, rsPc, rsRun,
-                   rsResult, dPc, dRun, env, stopReqRuns, timedOut, wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<disposed, deactToRestart, nodeRunVars, stopTaskVars, taskVars, clusterVars, igniteVars,
+                   runResult, callerVars, ghostVars>>
 
 \* Ignition.Start brings the node up (its AfterNodeStart); Start has not returned yet
 \* Without other server nodes, the cluster is this node's: a persistent one may activate itself (its baseline is
@@ -139,20 +154,16 @@ JvmUp ==
     /\ runPc = "start" /\ jvm[runI] = "none"
     /\ jvm' = [jvm EXCEPT ![runI] = "up"]
     /\ IF LastServer THEN active' \in BOOLEAN ELSE UNCHANGED active
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, rnode, rstop, tpc, tres, tdeact,
-                   rstopping, rstopped, rown, stopCalls, stateLock, runPc, runI, runResult,
-                   stopPc, stopRun, stopResult, rsPc, rsRun, rsResult, dPc, dRun, env, stopReqRuns,
-                   timedOut, badTransition, wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, stopTaskVars, taskVars, stateLock, ownStop, runThreadVars,
+                   callerVars, ghostVars>>
 
 \* Ignition.Start throws before the node is up: OnStarted(null), and Run throws
 StartFails ==
     /\ runPc = "start" /\ jvm[runI] = "none"
     /\ rnode' = [rnode EXCEPT ![runI] = "failed"]
     /\ runPc' = "finally" /\ runResult' = "threw"
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rstop, tpc, tres, tdeact,
-                   rstopping, rstopped, rown, stopCalls, active, stateLock, runI, stopPc, stopRun,
-                   stopResult, rsPc, rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut,
-                   badTransition, wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, rstopping, rstopped, rown, stopTaskVars, taskVars, clusterVars,
+                   igniteVars, runI, callerVars, ghostVars>>
 
 \* Start returns (also when the node already stopped on its own); second lock: OnStarted, Activating unless Stopping
 StartReturns ==
@@ -161,30 +172,24 @@ StartReturns ==
     /\ IF phase = "Stopping"
        THEN runPc' = "beginStop" /\ UNCHANGED <<phase, badTransition>>
        ELSE Transition("Activating") /\ runPc' = "o5"
-    /\ UNCHANGED <<disposed, deactToRestart, current, nruns, jvm, rstop, tpc, tres, tdeact, rstopping,
-                   rstopped, rown, stopCalls, active, stateLock, runI, runResult, stopPc, stopRun,
-                   stopResult, rsPc, rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, wrongRun,
-                   undoneDeactivation>>
+    /\ UNCHANGED <<runnerVars, rstopping, rstopped, rown, stopTaskVars, taskVars, clusterVars, igniteVars, runI,
+                   runResult, callerVars, ghostVars>>
 
 \* A stop came during the start: RunOnce begins the same graceful stop (in case Stop gave up)
 RunBeginsStop ==
     /\ runPc = "beginStop"
     /\ BeginStop(runI, "graceful")
     /\ runPc' = "waitStopped"
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, tdeact, rstopping, rstopped,
-                   rown, stopCalls, active, stateLock, runI, runResult, stopPc, stopRun, stopResult, rsPc,
-                   rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition, wrongRun,
-                   undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, taskVars, clusterVars, igniteVars, runI, runResult,
+                   callerVars, ghostVars>>
 
 \* Third lock: the run takes deactivatedToRestart
 TakeReactivate ==
     /\ runPc = "o5"
     /\ deactToRestart' = FALSE
     /\ runPc' = "activate"
-    /\ UNCHANGED <<phase, disposed, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact, rstopping, rstopped,
-                   rown, stopCalls, active, stateLock, runI, runResult, stopPc, stopRun, stopResult, rsPc,
-                   rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition, wrongRun,
-                   undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, disposed, current, nruns, nodeRunVars, stopTaskVars, taskVars, clusterVars,
+                   igniteVars, runI, runResult, callerVars, ghostVars>>
 
 \* ClusterActivator.ActivateAsync takes stateLock; no activation once the node is being stopped
 ActivateEnter ==
@@ -192,10 +197,8 @@ ActivateEnter ==
     /\ IF rstopping[runI]
        THEN runPc' = "notActivated" /\ UNCHANGED stateLock
        ELSE runPc' = "activating" /\ stateLock' = "act"
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact,
-                   rstopping, rstopped, rown, stopCalls, active, runI, runResult, stopPc, stopRun, stopResult,
-                   rsPc, rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition, wrongRun,
-                   undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, stopTaskVars, taskVars, active, igniteVars, runI, runResult,
+                   callerVars, ghostVars>>
 
 \* Under stateLock: IsActive, SetActive(true). A stopped node throws: caught by RunOnce when the node is stopping
 ActivateExit ==
@@ -209,9 +212,8 @@ ActivateExit ==
        ELSE /\ IF rstopping[runI] THEN runPc' = "notActivated" /\ UNCHANGED runResult
                ELSE runPc' = "finally" /\ runResult' = "threw"
             /\ UNCHANGED <<active, undoneDeactivation>>
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact,
-                   rstopping, rstopped, rown, stopCalls, runI, stopPc, stopRun, stopResult, rsPc, rsRun,
-                   rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition, wrongRun>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, stopTaskVars, taskVars, igniteVars, runI, callerVars,
+                   stopReqRuns, timedOut, wrongRun>>
 
 \* The rest of ActivateAsync (baseline, password): a stopped node throws, caught when stopping
 Configure ==
@@ -219,18 +221,12 @@ Configure ==
     /\ IF jvm[runI] = "up" THEN runPc' = "listen" /\ UNCHANGED runResult
        ELSE IF rstopping[runI] THEN runPc' = "notActivated" /\ UNCHANGED runResult
        ELSE runPc' = "finally" /\ runResult' = "threw"
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact,
-                   rstopping, rstopped, rown, stopCalls, active, stateLock, runI, stopPc, stopRun, stopResult,
-                   rsPc, rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition, wrongRun,
-                   undoneDeactivation>>
+    /\ UNCHANGED <<exceptRunThread, runI>>
 
 NotActivated ==
     /\ runPc = "notActivated" /\ rstopped[runI]
     /\ runPc' = "after"
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact,
-                   rstopping, rstopped, rown, stopCalls, active, stateLock, runI, runResult, stopPc, stopRun,
-                   stopResult, rsPc, rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition,
-                   wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<exceptRunThread, runI, runResult>>
 
 \* The event listeners (LocalListen) and the log of the running node: a stopped node may throw, caught when the node
 \* is being stopped or restarted (as in the activation)
@@ -240,27 +236,20 @@ Listen ==
        \/ /\ jvm[runI] # "up"
           /\ IF rstopping[runI] THEN runPc' = "waitStopped" /\ UNCHANGED runResult
              ELSE runPc' = "finally" /\ runResult' = "threw"
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact,
-                   rstopping, rstopped, rown, stopCalls, active, stateLock, runI, stopPc, stopRun, stopResult,
-                   rsPc, rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition, wrongRun,
-                   undoneDeactivation>>
+    /\ UNCHANGED <<exceptRunThread, runI>>
 
 \* Fourth lock: Running, unless a stop or restart began, or the node stopped on its own
 ToRunning ==
     /\ runPc = "toRunning"
     /\ IF phase = "Activating" THEN Transition("Running") ELSE UNCHANGED <<phase, badTransition>>
     /\ runPc' = "waitStopped"
-    /\ UNCHANGED <<disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact, rstopping,
-                   rstopped, rown, stopCalls, active, stateLock, runI, runResult, stopPc, stopRun, stopResult,
-                   rsPc, rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<runnerVars, nodeRunVars, stopTaskVars, taskVars, clusterVars, igniteVars, runI, runResult,
+                   callerVars, ghostVars>>
 
 WaitStopped ==
     /\ runPc = "waitStopped" /\ rstopped[runI]
     /\ runPc' = "after"
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact,
-                   rstopping, rstopped, rown, stopCalls, active, stateLock, runI, runResult, stopPc, stopRun,
-                   stopResult, rsPc, rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition,
-                   wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<exceptRunThread, runI, runResult>>
 
 \* Run, after RunOnce: start again after a restart, otherwise return whether the stop was requested
 AfterRunOnce ==
@@ -270,18 +259,16 @@ AfterRunOnce ==
             /\ runPc' = "finally"
             /\ UNCHANGED <<phase, badTransition>>
        ELSE Transition("Idle") /\ runPc' = "o1" /\ UNCHANGED runResult
-    /\ UNCHANGED <<disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact, rstopping,
-                   rstopped, rown, stopCalls, active, stateLock, runI, stopPc, stopRun, stopResult, rsPc, rsRun,
-                   rsResult, dPc, dRun, env, stopReqRuns, timedOut, wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<runnerVars, nodeRunVars, stopTaskVars, taskVars, clusterVars, igniteVars, runI, callerVars,
+                   ghostVars>>
 
 \* Run's finally, its own lock
 RunFinally ==
     /\ runPc = "finally"
     /\ Transition("Stopped")
     /\ runPc' = "done"
-    /\ UNCHANGED <<disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact, rstopping,
-                   rstopped, rown, stopCalls, active, stateLock, runI, runResult, stopPc, stopRun, stopResult,
-                   rsPc, rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<runnerVars, nodeRunVars, stopTaskVars, taskVars, clusterVars, igniteVars, runI, runResult,
+                   callerVars, ghostVars>>
 
 -----------------------------------------------------------------------------
 (* Stop(timeout), from the hosted service's StopAsync *)
@@ -291,9 +278,8 @@ StopCall ==
     /\ RequestStop
     /\ stopRun' = current
     /\ IF current = 0 THEN stopPc' = "done" /\ stopResult' = "true" ELSE stopPc' = "waitStarted" /\ UNCHANGED stopResult
-    /\ UNCHANGED <<disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact, rstopped,
-                   rown, stopCalls, active, stateLock, runPc, runI, runResult, rsPc, rsRun, rsResult, dPc, dRun,
-                   env, timedOut, wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<runnerVars, rnode, rstopped, rown, stopTaskVars, taskVars, clusterVars, igniteVars,
+                   runThreadVars, restartVars, disposeVars, timedOut, wrongRun, undoneDeactivation>>
 
 \* NodeRun.StopWithin: once started, begin (or join) the graceful stop
 StopBegins ==
@@ -301,26 +287,21 @@ StopBegins ==
     /\ BeginStop(stopRun, "graceful")
     /\ IF rnode[stopRun] = "failed" THEN stopPc' = "done" /\ stopResult' = "true"
        ELSE stopPc' = "waitTask" /\ UNCHANGED stopResult
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, tdeact, rstopping, rstopped,
-                   rown, stopCalls, active, stateLock, runPc, runI, runResult, stopRun, rsPc, rsRun, rsResult,
-                   dPc, dRun, env, stopReqRuns, timedOut, badTransition, wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, taskVars, clusterVars, igniteVars, runThreadVars, stopRun,
+                   restartVars, disposeVars, ghostVars>>
 
 StopEnds ==
     /\ stopPc = "waitTask" /\ tpc[stopRun] = "done"
     /\ stopPc' = "done" /\ stopResult' = IF tres[stopRun] THEN "true" ELSE "false"
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact,
-                   rstopping, rstopped, rown, stopCalls, active, stateLock, runPc, runI, runResult, stopRun,
-                   rsPc, rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition, wrongRun,
-                   undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, stopTaskVars, taskVars, clusterVars, igniteVars,
+                   runThreadVars, stopRun, restartVars, disposeVars, ghostVars>>
 
 \* The timeout runs out while waiting for the start or the stop
 StopGivesUp ==
     /\ Timeouts /\ stopPc \in {"waitStarted", "waitTask"}
     /\ stopPc' = "done" /\ stopResult' = "false"
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact,
-                   rstopping, rstopped, rown, stopCalls, active, stateLock, runPc, runI, runResult, stopRun,
-                   rsPc, rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition, wrongRun,
-                   undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, stopTaskVars, taskVars, clusterVars, igniteVars,
+                   runThreadVars, stopRun, restartVars, disposeVars, ghostVars>>
 
 -----------------------------------------------------------------------------
 (* Restart(timeout), from SslFileRestarter *)
@@ -335,42 +316,33 @@ RestartCall(r) ==
             /\ rstopping' = [rstopping EXCEPT ![current] = TRUE]
             /\ rsPc' = [rsPc EXCEPT ![r] = "waitStarted"]
             /\ UNCHANGED rsResult
-    /\ UNCHANGED <<disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact, rstopped,
-                   rown, stopCalls, active, stateLock, runPc, runI, runResult, stopPc, stopRun, stopResult,
-                   dPc, dRun, env, stopReqRuns, timedOut, wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<runnerVars, rnode, rstopped, rown, stopTaskVars, taskVars, clusterVars, igniteVars,
+                   runThreadVars, stopVars, disposeVars, ghostVars>>
 
 RestartBegins(r) ==
     /\ rsPc[r] = "waitStarted" /\ rnode[rsRun[r]] # "pending"
     /\ BeginStop(rsRun[r], "restart")
     /\ rsPc' = [rsPc EXCEPT ![r] = IF rnode[rsRun[r]] = "failed" THEN "ok" ELSE "waitTask"]
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, tdeact, rstopping, rstopped,
-                   rown, stopCalls, active, stateLock, runPc, runI, runResult, stopPc, stopRun, stopResult,
-                   rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition, wrongRun,
-                   undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, taskVars, clusterVars, igniteVars, runThreadVars,
+                   stopVars, rsRun, rsResult, disposeVars, ghostVars>>
 
 RestartTaskEnds(r) ==
     /\ rsPc[r] = "waitTask" /\ tpc[rsRun[r]] = "done"
     /\ rsPc' = [rsPc EXCEPT ![r] = IF tres[rsRun[r]] THEN "ok" ELSE "late"]
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact,
-                   rstopping, rstopped, rown, stopCalls, active, stateLock, runPc, runI, runResult, stopPc,
-                   stopRun, stopResult, rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition,
-                   wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, stopTaskVars, taskVars, clusterVars, igniteVars,
+                   runThreadVars, stopVars, rsRun, rsResult, disposeVars, ghostVars>>
 
 RestartGivesUp(r) ==
     /\ Timeouts /\ rsPc[r] \in {"waitStarted", "waitTask"}
     /\ rsPc' = [rsPc EXCEPT ![r] = "late"]
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact,
-                   rstopping, rstopped, rown, stopCalls, active, stateLock, runPc, runI, runResult, stopPc,
-                   stopRun, stopResult, rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition,
-                   wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, stopTaskVars, taskVars, clusterVars, igniteVars,
+                   runThreadVars, stopVars, rsRun, rsResult, disposeVars, ghostVars>>
 
 RestartOk(r) ==
     /\ rsPc[r] = "ok"
     /\ rsPc' = [rsPc EXCEPT ![r] = "done"] /\ rsResult' = [rsResult EXCEPT ![r] = "Restarting"]
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact,
-                   rstopping, rstopped, rown, stopCalls, active, stateLock, runPc, runI, runResult, stopPc,
-                   stopRun, stopResult, rsRun, dPc, dRun, env, stopReqRuns, timedOut, badTransition, wrongRun,
-                   undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, stopTaskVars, taskVars, clusterVars, igniteVars,
+                   runThreadVars, stopVars, rsRun, disposeVars, ghostVars>>
 
 \* The stop did not end in time; second lock: TimedOut (then Stopping) only if Run has not taken the restart
 RestartLate(r) ==
@@ -382,9 +354,8 @@ RestartLate(r) ==
          [] OTHER ->
               rsResult' = [rsResult EXCEPT ![r] = "Restarting"] /\ UNCHANGED <<phase, badTransition, timedOut>>
     /\ rsPc' = [rsPc EXCEPT ![r] = "done"]
-    /\ UNCHANGED <<disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact, rstopping,
-                   rstopped, rown, stopCalls, active, stateLock, runPc, runI, runResult, stopPc, stopRun,
-                   stopResult, rsRun, dPc, dRun, env, stopReqRuns, wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<runnerVars, nodeRunVars, stopTaskVars, taskVars, clusterVars, igniteVars, runThreadVars,
+                   stopVars, rsRun, disposeVars, stopReqRuns, wrongRun, undoneDeactivation>>
 
 -----------------------------------------------------------------------------
 (* Dispose, which the host calls after StopAsync; with a timeout, StopAsync may have given up while Stop goes on *)
@@ -395,19 +366,16 @@ DisposeCall ==
     /\ RequestStop
     /\ dRun' = current
     /\ dPc' = "begin"
-    /\ UNCHANGED <<deactToRestart, current, nruns, jvm, rnode, rstop, tpc, tres, tdeact, rstopped, rown,
-                   stopCalls, active, stateLock, runPc, runI, runResult, stopPc, stopRun, stopResult, rsPc,
-                   rsRun, rsResult, env, timedOut, wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<deactToRestart, current, nruns, rnode, rstopped, rown, stopTaskVars, taskVars, clusterVars,
+                   igniteVars, runThreadVars, stopVars, restartVars, timedOut, wrongRun, undoneDeactivation>>
 
 \* NodeRun.BeginStopIfNoneBegan: a stop with the jobs cancelled, only if no stop began; then a bounded wait
 DisposeBegins ==
     /\ dPc = "begin"
     /\ IF dRun # 0 THEN BeginStop(dRun, "cancel") ELSE UNCHANGED <<rstop, tpc, tres>>
     /\ dPc' = "done"
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, tdeact, rstopping, rstopped,
-                   rown, stopCalls, active, stateLock, runPc, runI, runResult, stopPc, stopRun, stopResult, rsPc,
-                   rsRun, rsResult, dRun, env, stopReqRuns, timedOut, badTransition, wrongRun,
-                   undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, taskVars, clusterVars, igniteVars, runThreadVars,
+                   stopVars, restartVars, dRun, ghostVars>>
 
 -----------------------------------------------------------------------------
 (* The stop task of start i (NodeRun.BeginStop runs it on the thread pool) *)
@@ -416,18 +384,14 @@ DisposeBegins ==
 TaskDeactEnter(i) ==
     /\ tpc[i] = "deact" /\ stateLock = "free"
     /\ stateLock' = "deact" /\ tpc' = [tpc EXCEPT ![i] = "deactIn"]
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tres, tdeact, rstopping,
-                   rstopped, rown, stopCalls, active, runPc, runI, runResult, stopPc, stopRun, stopResult, rsPc,
-                   rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition, wrongRun,
-                   undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, rstop, tres, taskVars, active, igniteVars,
+                   runThreadVars, callerVars, ghostVars>>
 
 TaskDeactGivesUp(i) ==
     /\ Timeouts /\ tpc[i] = "deact"
     /\ tpc' = [tpc EXCEPT ![i] = "stop"]
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tres, tdeact, rstopping,
-                   rstopped, rown, stopCalls, active, stateLock, runPc, runI, runResult, stopPc, stopRun,
-                   stopResult, rsPc, rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition,
-                   wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, rstop, tres, taskVars, clusterVars, igniteVars,
+                   runThreadVars, callerVars, ghostVars>>
 
 \* Under stateLock: an active cluster whose last server node this is is deactivated (a stopped node cannot)
 TaskDeactivate(i) ==
@@ -437,18 +401,15 @@ TaskDeactivate(i) ==
          /\ tdeact' = [tdeact EXCEPT ![i] = deact]
          /\ tpc' = [tpc EXCEPT ![i] = IF deact /\ rstop[i] = "restart" THEN "flag" ELSE "stop"]
     /\ stateLock' = "free"
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tres, rstopping, rstopped,
-                   rown, stopCalls, runPc, runI, runResult, stopPc, stopRun, stopResult, rsPc, rsRun, rsResult,
-                   dPc, dRun, env, stopReqRuns, timedOut, badTransition, wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, rstop, tres, stopCalls, igniteVars, runThreadVars,
+                   callerVars, ghostVars>>
 
 \* The runner's lock: the next run activates the cluster again
 TaskFlag(i) ==
     /\ tpc[i] = "flag"
     /\ deactToRestart' = TRUE /\ tpc' = [tpc EXCEPT ![i] = "stop"]
-    /\ UNCHANGED <<phase, disposed, current, nruns, jvm, rnode, rstop, tres, tdeact, rstopping, rstopped, rown,
-                   stopCalls, active, stateLock, runPc, runI, runResult, stopPc, stopRun, stopResult, rsPc,
-                   rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition, wrongRun,
-                   undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, disposed, current, nruns, nodeRunVars, rstop, tres, taskVars, clusterVars,
+                   igniteVars, runThreadVars, callerVars, ghostVars>>
 
 \* launcher.Stop: the GRACEFUL policy holds the last server node of an active cluster; an unknown node returns false
 Blocked(i) == LastServer /\ active
@@ -468,31 +429,26 @@ TaskStop(i) ==
        ELSE /\ tpc' = [tpc EXCEPT ![i] = "done"]
             /\ tres' = [tres EXCEPT ![i] = FALSE]
             /\ UNCHANGED <<jvm, active>>
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, rnode, rstop, tdeact, rstopping, rstopped,
-                   rown, stateLock, runPc, runI, runResult, stopPc, stopRun, stopResult, rsPc, rsRun,
-                   rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition, wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, rstop, tdeact, stateLock, ownStop, runThreadVars,
+                   callerVars, ghostVars>>
 
 \* Ignition.Stop returns once the node's AfterNodeStop has been delivered
 TaskStopReturns(i) ==
     /\ tpc[i] = "waitCb" /\ jvm[i] = "down"
     /\ tpc' = [tpc EXCEPT ![i] = "done"] /\ tres' = [tres EXCEPT ![i] = TRUE]
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, jvm, rnode, rstop, tdeact, rstopping,
-                   rstopped, rown, stopCalls, active, stateLock, runPc, runI, runResult, stopPc, stopRun,
-                   stopResult, rsPc, rsRun, rsResult, dPc, dRun, env, stopReqRuns, timedOut, badTransition,
-                   wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, rstop, taskVars, clusterVars, igniteVars,
+                   runThreadVars, callerVars, ghostVars>>
 
 -----------------------------------------------------------------------------
 (* Ignite *)
 
 \* The node stops on its own (e.g., segmented)
 NodeStopsOnItsOwn(i) ==
-    /\ jvm[i] = "up" /\ env < MaxEnvEvents
-    /\ jvm' = [jvm EXCEPT ![i] = "cb"] /\ env' = env + 1
+    /\ jvm[i] = "up" /\ Cardinality({j \in Runs : ownStop[j]}) < MaxEnvEvents
+    /\ jvm' = [jvm EXCEPT ![i] = "cb"] /\ ownStop' = [ownStop EXCEPT ![i] = TRUE]
     /\ ClusterGoesWith(i)
-    /\ UNCHANGED <<phase, disposed, deactToRestart, current, nruns, rnode, rstop, tpc, tres, tdeact, rstopping,
-                   rstopped, rown, stopCalls, stateLock, runPc, runI, runResult, stopPc, stopRun,
-                   stopResult, rsPc, rsRun, rsResult, dPc, dRun, stopReqRuns, timedOut, badTransition,
-                   wrongRun, undoneDeactivation>>
+    /\ UNCHANGED <<phaseVars, runnerVars, nodeRunVars, stopTaskVars, taskVars, stateLock, runThreadVars,
+                   callerVars, ghostVars>>
 
 \* AfterNodeStop reaches NodeStopHandler: OnNodeStopped signals the current run
 AfterNodeStop(i) ==
@@ -506,9 +462,8 @@ AfterNodeStop(i) ==
               /\ rown' = [rown EXCEPT ![current] = own]
               /\ rstopping' = [rstopping EXCEPT ![current] = TRUE]
               /\ rstopped' = [rstopped EXCEPT ![current] = TRUE]
-    /\ UNCHANGED <<disposed, deactToRestart, current, nruns, rnode, rstop, tpc, tres, tdeact, stopCalls, active,
-                   stateLock, runPc, runI, runResult, stopPc, stopRun, stopResult, rsPc, rsRun, rsResult, dPc,
-                   dRun, env, stopReqRuns, timedOut, undoneDeactivation>>
+    /\ UNCHANGED <<runnerVars, rnode, stopTaskVars, taskVars, clusterVars, ownStop, runThreadVars, callerVars,
+                   stopReqRuns, timedOut, undoneDeactivation>>
 
 -----------------------------------------------------------------------------
 
@@ -565,12 +520,12 @@ RunResultHonest ==
     /\ runResult = "false" => \E i \in Runs : rown[i]
     /\ runResult = "true" => stopReqRuns # -1 \/ timedOut
 
-\* Run throws only when it must: a failed start, a Run called after Dispose, or a node that stopped on its own. A
-\* requested stop or restart never makes it throw (the hosted service would report a restart as a failure).
+\* Run throws only when it must: a Run called after Dispose, or a start of its own that failed or whose node stopped
+\* on its own. A requested stop or restart never makes it throw (the hosted service would report a restart as a
+\* failure).
 RunThrowsOnlyOnFailure ==
-    runResult = "threw" => \/ \E i \in Runs : rnode[i] = "failed"
-                           \/ runPc = "done" /\ nruns = 0 /\ disposed
-                           \/ env > 0
+    runResult = "threw" => \/ runI = 0 /\ disposed
+                           \/ runI # 0 /\ (rnode[runI] = "failed" \/ ownStop[runI])
 
 \* Liveness: once Stop is called, Run returns, and so do Stop and every Restart that was called
 StopEndsTheRun == stopPc # "init" ~> runPc = "done"

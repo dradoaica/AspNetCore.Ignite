@@ -22,7 +22,9 @@ ignored by git.
 ## ServerLifecycle
 
 Each action of `ServerLifecycle.tla` is one `lock (gate)` block of the runner, one call of `NodeRun`, or one call into
-Ignite, and names the code it stands for:
+Ignite, and names the code it stands for. Every variable is in one group (`phaseVars`, `nodeRunVars`, `runThreadVars`,
+...): an action leaves the groups it does not touch `UNCHANGED` as a whole, so a new variable goes into a group and
+changes only the actions that use that group.
 
 | Spec                                                              | Code                                                                                                   |
 |-------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------|
@@ -60,7 +62,9 @@ Abstractions:
 Invariants: `AtMostOneNode` (two nodes never run at once), `StopWins` (no start after a requested stop),
 `OneStopPerNode` (`launcher.Stop` once per start), `PhaseMatchesNode` (`Activating` or `Running` only while the node is
 up), `NoBadTransition` (`IgniteServerRunner.AllowedTransitions`), `CallbackForCurrentRun` (`OnNodeStopped` concerns the
-current run), `NoActivationUndoesDeactivation`, `RunResultHonest` (what `Run` returns) and `RunThrowsOnlyOnFailure`.
+current run), `NoActivationUndoesDeactivation`, `RunResultHonest` (what `Run` returns) and `RunThrowsOnlyOnFailure`
+(`Run` throws only after a `Dispose`, or for a start of its own that failed or whose node stopped on its own, which
+the history variable `ownStop` records per start).
 Liveness, with fair threads and Ignite delivering `AfterNodeStop`: once `Stop` is called, `Run` returns
 (`StopEndsTheRun`), and so do `Stop` and every `Restart` that was called (`CallsReturn`).
 
