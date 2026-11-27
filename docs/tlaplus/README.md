@@ -72,12 +72,12 @@ Mutation checks: each property catches the bug it is there for (each a one-line 
 
 | Mutation                                                                                        | Config                     | Caught by                                  |
 |-------------------------------------------------------------------------------------------------|----------------------------|--------------------------------------------|
-| A node that stops on its own leaves the phase as it is (the code before `006d5c8`)              | `MCSafety.cfg`             | `PhaseMatchesNode` (7-state trace)         |
+| A node that stops on its own leaves the phase as it is (an earlier version of the runner)       | `MCSafety.cfg`             | `PhaseMatchesNode` (7-state trace)         |
 | `NodeRun.BeginStop` begins a stop on every call                                                 | `MCSafety.cfg`             | `OneStopPerNode` (12)                      |
 | `RunOnce` starts a node after a stop was requested                                              | `MCSafety.cfg`             | `StopWins` (4)                             |
 | The activation does not check whether the node is being stopped                                 | `MCSafetyLastServer.cfg`   | `NoActivationUndoesDeactivation` (12)      |
 | `RunOnce` returns without waiting for its node to stop                                          | `MCSafety.cfg`             | `AtMostOneNode` (16, checked alone)        |
-| The node's `Stopped` event, subscribed after `Start` returns, misses a stop during the start (the code before `17f3ffc`) | `MCLiveness.cfg` | `StopEndsTheRun` (19)            |
+| The node's `Stopped` event, subscribed after `Start` returns, misses a stop during the start (an earlier version of the runner, before the lifecycle handler) | `MCLiveness.cfg` | `StopEndsTheRun` (19)            |
 | The last server node stops without deactivating its cluster                                     | `MCLivenessLastServer.cfg` | `StopEndsTheRun`, `CallsReturn` (13)       |
 | Nothing catches the listeners' failure on a node stopped or restarted meanwhile (finding 1)     | `MCSafety.cfg`             | `RunThrowsOnlyOnFailure` (14)              |
 
