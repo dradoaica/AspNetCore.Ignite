@@ -25,7 +25,10 @@ internal sealed partial class IgniteServerSettings
     [ConfigurationKeyName("JVM_G1_HEAP_REGION_MB")]
     public int? JvmG1HeapRegionMb { get; set; }
 
-    /// <summary>Extra JVM options, separated by spaces.</summary>
+    /// <summary>
+    ///     Extra JVM options, separated by spaces; quotes keep a value with spaces in one option, e.g.,
+    ///     <c>"-Dapp.name=my app"</c>.
+    /// </summary>
     [ConfigurationKeyName("EXTRA_JVM_OPTS")]
     public string? ExtraJvmOpts { get; set; }
 
@@ -77,6 +80,11 @@ internal sealed partial class IgniteServerSettings
         RequirePositive(errors, "SERVICE_THREAD_POOL_SIZE", ServiceThreadPoolSize);
         RequirePositive(errors, "STRIPED_THREAD_POOL_SIZE", StripedThreadPoolSize);
         RequirePositive(errors, "DATA_STREAMER_THREAD_POOL_SIZE", DataStreamerThreadPoolSize);
+        if (IgniteConfigurationFactory.SplitJvmOptions(ExtraJvmOpts) == null)
+        {
+            errors.Add("EXTRA_JVM_OPTS has an unclosed quote.");
+        }
+
         if (JvmG1HeapRegionMb is { } regionMb && (regionMb > 32 || (regionMb & (regionMb - 1)) != 0))
         {
             errors.Add("JVM_G1_HEAP_REGION_MB must be a power of 2 from 1 to 32.");

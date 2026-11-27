@@ -371,4 +371,27 @@ public sealed class IgniteConfigurationFactoryTests
 
         Assert.Equal(expected, configuration.DataStorageConfiguration.DefaultDataRegionConfiguration.PageEvictionMode);
     }
+
+    [Theory]
+    [InlineData(null, new string[0])]
+    [InlineData("  ", new string[0])]
+    [InlineData(" -Xss1m   -Dfoo=bar ", new[] { "-Xss1m", "-Dfoo=bar", })]
+    [InlineData("\"-Dapp.name=my app\" -Xss1m", new[] { "-Dapp.name=my app", "-Xss1m", })]
+    [InlineData("-Dapp.name='my app' -Dq=\"it's\"", new[] { "-Dapp.name=my app", "-Dq=it's", })]
+    [InlineData("-Dempty=\"\"", new[] { "-Dempty=", })]
+    public void SplitJvmOptions_SplitsAtWhitespace_OutsideQuotes(string? options, string[] expected) =>
+        Assert.Equal(expected, IgniteConfigurationFactory.SplitJvmOptions(options));
+
+    [Fact]
+    public void SplitJvmOptions_WithAnUnclosedQuote_IsNull_AndAValidationError()
+    {
+        Assert.Null(IgniteConfigurationFactory.SplitJvmOptions("\"-Dapp.name=my app"));
+        Assert.Contains(
+            "EXTRA_JVM_OPTS has an unclosed quote.",
+            new IgniteServerSettings
+            {
+                ExtraJvmOpts = "-Dapp.name='my app",
+            }.Validate()
+        );
+    }
 }

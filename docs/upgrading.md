@@ -36,6 +36,8 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
 * SSL restarts are graceful and jittered; the process exits with `1` on failures and with `2` when the node did not
   stop gracefully (it always exited with `0`).
 * Logs go to the console only (JSON in the image); the file sink is opt-in.
+* `EXTRA_JVM_OPTS` is split as a shell would: quotes keep a value with spaces in one option and are removed (they
+  were passed to the JVM as they were).
 
 ### Image
 

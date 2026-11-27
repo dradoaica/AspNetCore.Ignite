@@ -160,7 +160,8 @@ These settings apply only when set (otherwise the default configuration, or `-Co
 - `JVM_MAX_DIRECT_MEMORY_MB`: `-XX:MaxDirectMemorySize` (e.g., off-heap + checkpoint buffer + system regions, see
   [Configuring Memory](#configuring-memory)).
 - `JVM_G1_HEAP_REGION_MB`: G1 heap region size (power of 2, 1-32).
-- `EXTRA_JVM_OPTS`: Extra JVM options, separated by spaces.
+- `EXTRA_JVM_OPTS`: Extra JVM options, separated by spaces. Double or single quotes keep a value with spaces in one
+  option, as in a shell: `-Xss1m "-Dapp.name=my app"`.
 - `EXTRA_CLASSPATH`: Extra Java classpath entries separated by `:` (a directory adds its jars), e.g., extra Ignite
   modules on a volume (Linux paths: `:` and `;` both separate entries).
 - `FAILURE_DETECTION_TIMEOUT_MS` / `CLIENT_FAILURE_DETECTION_TIMEOUT_MS` / `NETWORK_TIMEOUT_MS`: Timeouts (defaults

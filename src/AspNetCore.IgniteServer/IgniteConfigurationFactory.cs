@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Xml.Linq;
 
 namespace AspNetCore.IgniteServer;
@@ -223,8 +224,8 @@ internal static class IgniteConfigurationFactory
         SetJvmOption(jvmOptions, "-XX:MaxDirectMemorySize=", settings.JvmMaxDirectMemoryMb);
         SetJvmOption(jvmOptions, "-XX:G1HeapRegionSize=", settings.JvmG1HeapRegionMb);
         jvmOptions.AddRange(
-            settings.ExtraJvmOpts?.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ??
-            []
+            SplitJvmOptions(settings.ExtraJvmOpts) ??
+            throw new InvalidOperationException("EXTRA_JVM_OPTS has an unclosed quote (see Validate).")
         );
         // Also when a -ConfigFile replaced the JVM options: without the add-opens, Ignite fails to start on Java 17.
         foreach (var option in ReadAddOpensJvmOptions().Append(ReduceSignalUsageJvmOption))
@@ -242,6 +243,68 @@ internal static class IgniteConfigurationFactory
             igniteConfiguration.JvmClasspath = string.IsNullOrEmpty(igniteConfiguration.JvmClasspath) ? classpath
                 : $"{igniteConfiguration.JvmClasspath}{Path.PathSeparator}{classpath}";
         }
+    }
+
+    /// <summary>
+    ///     Splits options at whitespace, as a shell would: double or single quotes keep a value with spaces in one
+    ///     option (<c>"-Dname=a b"</c> or <c>-Dname='a b'</c>), and are removed. Null when a quote is not closed.
+    /// </summary>
+    internal static List<string>? SplitJvmOptions(string? options)
+    {
+        List<string> split = [];
+        if (string.IsNullOrWhiteSpace(options))
+        {
+            return split;
+        }
+
+        StringBuilder current = new();
+        var inOption = false;
+        char? quote = null;
+        foreach (var c in options)
+        {
+            if (quote != null)
+            {
+                if (c == quote)
+                {
+                    quote = null;
+                }
+                else
+                {
+                    current.Append(c);
+                }
+            }
+            else if (c is '"' or '\'')
+            {
+                quote = c;
+                inOption = true;
+            }
+            else if (char.IsWhiteSpace(c))
+            {
+                if (inOption)
+                {
+                    split.Add(current.ToString());
+                    current.Clear();
+                    inOption = false;
+                }
+            }
+            else
+            {
+                current.Append(c);
+                inOption = true;
+            }
+        }
+
+        if (quote != null)
+        {
+            return null;
+        }
+
+        if (inOption)
+        {
+            split.Add(current.ToString());
+        }
+
+        return split;
     }
 
     /// <summary>The JDK internals Ignite needs on Java 17, from config/jvm-add-opens.args (which control.sh reads too).</summary>
