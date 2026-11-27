@@ -30,7 +30,8 @@ public sealed class IgniteServerLifecycleTests
         await FakeNodeLauncher.Eventually(() => launcher.Started == 2 && runner.Node != null);
         Assert.True(runner.Stop(Timeout));
 
-        await run.WaitAsync(Timeout);
+        // true: the run ended with the stop that was requested
+        Assert.True(await run.WaitAsync(Timeout));
         Assert.Equal(2, launcher.Started);
     }
 
@@ -43,8 +44,40 @@ public sealed class IgniteServerLifecycleTests
 
         launcher.Stop(runner.Node!.Name, false);
 
-        await run.WaitAsync(Timeout);
+        // false: nobody asked for that stop
+        Assert.False(await run.WaitAsync(Timeout));
         Assert.Equal(1, launcher.Started);
+        Assert.Equal(Phase.Stopped, runner.CurrentPhase);
+    }
+
+    [Fact]
+    public async Task NodeThatStopsBeforeItsStartReturns_EndsTheRun()
+    {
+        // The stop is seen through the lifecycle handler of the configuration, which is in place before the start.
+        FakeNodeLauncher launcher = new()
+        {
+            StopsWhileStarting = true,
+        };
+        using var runner = CreateRunner(launcher);
+
+        Assert.False(await runner.Run().WaitAsync(Timeout));
+        Assert.Null(runner.Node);
+        Assert.Equal(Phase.Stopped, runner.CurrentPhase);
+    }
+
+    [Fact]
+    public async Task StartThatFails_EndsTheRunInStopped()
+    {
+        FakeNodeLauncher launcher = new()
+        {
+            BeforeStarted = () => throw new InvalidOperationException("The JVM failed to start."),
+        };
+        using var runner = CreateRunner(launcher);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => runner.Run().WaitAsync(Timeout));
+        Assert.Equal(Phase.Stopped, runner.CurrentPhase);
+        // nothing to stop
+        Assert.True(runner.Stop(Timeout));
     }
 
     [Fact]
@@ -194,7 +227,7 @@ public sealed class IgniteServerLifecycleTests
         using var runner = CreateRunner(launcher);
 
         Assert.True(runner.Stop(Timeout));
-        await runner.Run().WaitAsync(Timeout);
+        Assert.True(await runner.Run().WaitAsync(Timeout));
 
         Assert.Equal(0, launcher.Started);
     }

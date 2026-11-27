@@ -14,9 +14,14 @@ namespace AspNetCore.IgniteServer;
 ///     Runs the Ignite node for the lifetime of the host: renders its Spring configuration, starts it, restarts it when
 ///     its SSL files change (<see cref="SslFileRestarter" />), stops it with the host, and sets the exit code.
 ///     <para>
-///         The runner is created with the service, so it always exists: a stop that comes before the node starts is
-///         handled by the runner itself (<see cref="IgniteServerRunner.Run" /> then starts no node). An invalid
-///         configuration fails the host's start, with exit code 1.
+///         The constructor renders the Spring configuration to a file and creates the runner, so that the runner always
+///         exists: a stop that comes before the node starts is handled by the runner itself
+///         (<see cref="IgniteServerRunner.Run" /> then starts no node). An invalid configuration fails the construction,
+///         and so the host's start, with exit code 1. The rendered file may contain keystore passwords: it is deleted
+///         when the run ends (<see cref="RunAsync" />), when the construction fails, and in <see cref="Dispose" />.
+///     </para>
+///     <para>
+///         Whether a stop was requested is the runner's to know: <see cref="IgniteServerRunner.Run" /> returns it.
 ///     </para>
 /// </summary>
 internal sealed class IgniteServerHostedService : BackgroundService
@@ -29,11 +34,8 @@ internal sealed class IgniteServerHostedService : BackgroundService
     private readonly IgniteServerSettings settings;
 
     // The rendered Spring configuration. Every (re)start of the node reads it, so it is deleted only once the node has
-    // stopped for good. It may contain keystore passwords.
+    // stopped for good.
     private readonly string springConfigPath;
-
-    // Set before the node is stopped, so that RunAsync does not report that stop as a failure.
-    private volatile bool stopping;
 
     public IgniteServerHostedService(
         IgniteServerSettings settings,
@@ -73,7 +75,8 @@ internal sealed class IgniteServerHostedService : BackgroundService
         nodeState.SetRunner(runner);
     }
 
-    private bool IsStopping => stopping || lifetime.ApplicationStopping.IsCancellationRequested;
+    // The host signals ApplicationStopping before it calls StopAsync.
+    private bool IsStopping => lifetime.ApplicationStopping.IsCancellationRequested;
 
     // Since .NET 10, the host runs all of ExecuteAsync on a thread pool thread: the long Ignition.Start does not
     // delay the start of the host.
@@ -81,7 +84,6 @@ internal sealed class IgniteServerHostedService : BackgroundService
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        stopping = true;
         try
         {
             // Off the host's thread, so that the host can stop waiting at its own timeout. Validation keeps
@@ -122,9 +124,8 @@ internal sealed class IgniteServerHostedService : BackgroundService
         try
         {
             // WaitAsync lets the host stop even when the node itself cannot.
-            await runner.Run().WaitAsync(stoppingToken).ConfigureAwait(false);
-
-            if (!stopping && !stoppingToken.IsCancellationRequested)
+            var stopRequested = await runner.Run().WaitAsync(stoppingToken).ConfigureAwait(false);
+            if (!stopRequested && !IsStopping)
             {
                 logger.Error("The Ignite node stopped unexpectedly, stopping the server.");
                 Fail();
@@ -134,7 +135,7 @@ internal sealed class IgniteServerHostedService : BackgroundService
         {
             // The host is stopping; a node that is still running stops with the process.
         }
-        catch (Exception ex) when (!stopping)
+        catch (Exception ex) when (!IsStopping)
         {
             logger.Fatal(ex, "The Ignite server failed.");
             Fail();

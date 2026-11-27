@@ -1,6 +1,7 @@
 using Apache.Ignite.Core;
 using Apache.Ignite.Core.Cluster;
 using Apache.Ignite.Core.Events;
+using Apache.Ignite.Core.Lifecycle;
 using AspNetCore.IgniteServer;
 using System.Collections.Concurrent;
 using Xunit;
@@ -10,7 +11,8 @@ namespace AspNetCore.Ignite.UnitTests;
 /// <summary>
 ///     Starts fake nodes in a cluster of <see cref="ServerNodes" /> server nodes (two by default, so that a stopping node
 ///     does not deactivate it). A start runs <see cref="BeforeStarted" />, and a stop runs <see cref="BeforeStopped" />,
-///     raises the node's Stopped event and runs <see cref="AfterStopped" />, so a test can hold either back; it can also
+///     notifies the lifecycle handlers of the node's configuration (AfterNodeStop) and runs <see cref="AfterStopped" />,
+///     so a test can hold either back; it can also
 ///     hold back the reads of the cluster (<see cref="BeforeClusterRead" />) and its activation
 ///     (<see cref="BeforeActivated" />).
 /// </summary>
@@ -19,7 +21,7 @@ internal sealed class FakeNodeLauncher : INodeLauncher
     private static readonly TimeSpan EventuallyTimeout = TimeSpan.FromSeconds(10);
 
     private readonly ConcurrentQueue<string> activatedNodes = new();
-    private readonly ConcurrentDictionary<string, EventHandler> stoppedHandlers = new();
+    private readonly ConcurrentDictionary<string, ILifecycleHandler[]> lifecycleHandlers = new();
     private int deactivations;
     private int failedClusterReads;
     private int started;
@@ -40,6 +42,9 @@ internal sealed class FakeNodeLauncher : INodeLauncher
     /// <summary>The server nodes of the cluster, this node included: with one, a stopping node deactivates it.</summary>
     public int ServerNodes { get; set; } = 2;
 
+    /// <summary>Makes the nodes stop on their own before their start returns (e.g., segmented at once).</summary>
+    public bool StopsWhileStarting { get; set; }
+
     /// <summary>The nodes whose cluster was activated, in order.</summary>
     public IReadOnlyList<string> ActivatedNodes => [.. activatedNodes,];
 
@@ -57,6 +62,13 @@ internal sealed class FakeNodeLauncher : INodeLauncher
     {
         BeforeStarted();
         var name = $"node-{Interlocked.Increment(ref started)}";
+        // Ignite notifies the lifecycle handlers of the configuration, as the runner relies on.
+        lifecycleHandlers[name] = [.. configuration.LifecycleHandlers ?? [],];
+        if (StopsWhileStarting)
+        {
+            NotifyStopped(name);
+        }
+
         var active = false;
         var servers = Fake.Of<IClusterGroup>((member, _) => member switch
             {
@@ -79,10 +91,9 @@ internal sealed class FakeNodeLauncher : INodeLauncher
         var events = Fake.Of<IEvents>((member, _) =>
             member == nameof(IEvents.LocalListen) ? null : throw new NotSupportedException(member)
         );
-        return Fake.Of<IIgnite>((member, args) => member switch
+        return Fake.Of<IIgnite>((member, _) => member switch
             {
                 nameof(IIgnite.Name) => name,
-                "add_" + nameof(IIgnite.Stopped) => Done(() => stoppedHandlers[name] = (EventHandler)args[0]!),
                 nameof(IIgnite.GetCluster) => ReadCluster(cluster),
                 nameof(IIgnite.GetEvents) => events,
                 nameof(IIgnite.GetConfiguration) => configuration,
@@ -95,9 +106,17 @@ internal sealed class FakeNodeLauncher : INodeLauncher
     {
         Interlocked.Increment(ref stops);
         BeforeStopped();
-        stoppedHandlers[name](name, EventArgs.Empty);
+        NotifyStopped(name);
         AfterStopped();
         return true;
+    }
+
+    private void NotifyStopped(string name)
+    {
+        foreach (var handler in lifecycleHandlers[name])
+        {
+            handler.OnLifecycleEvent(LifecycleEventType.AfterNodeStop);
+        }
     }
 
     /// <summary>Waits until <paramref name="condition" /> holds, failing the test after ten seconds.</summary>
