@@ -201,8 +201,13 @@ public class IgniteManager : IIgniteManager, IDisposable
     private static RetryPolicy CreateRetryPolicy(int retryCount) => Policy.Handle<Exception>(IsTransient)
         .WaitAndRetry(Math.Max(0, retryCount), RetryDelay);
 
-    // exponential backoff: 2, 4, 8, ... seconds
-    private static TimeSpan RetryDelay(int retryAttempt) => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt));
+    /// <summary>The longest wait between two retries.</summary>
+    internal static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(30);
+
+    // Exponential backoff (2, 4, 8, 16 seconds), then every 30 seconds: a larger retry count does not mean waits of
+    // minutes between attempts.
+    internal static TimeSpan RetryDelay(int retryAttempt) =>
+        retryAttempt >= 5 ? MaxRetryDelay : TimeSpan.FromSeconds(Math.Pow(2, retryAttempt));
 
     internal static bool IsTransient(Exception ex) => ex switch
     {

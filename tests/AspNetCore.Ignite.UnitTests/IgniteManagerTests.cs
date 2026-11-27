@@ -53,6 +53,14 @@ public sealed class IgniteManagerTests
     public void IsTransient_ClassifiesExceptions(Exception exception, bool expected) =>
         Assert.Equal(expected, IgniteManager.IsTransient(exception));
 
+    [Theory]
+    [InlineData(1, 2)]
+    [InlineData(4, 16)]
+    [InlineData(5, 30)]
+    [InlineData(20, 30)]
+    public void RetryDelay_GrowsExponentially_UpToThirtySeconds(int retryAttempt, int expectedSeconds) =>
+        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), IgniteManager.RetryDelay(retryAttempt));
+
     [Fact]
     public async Task ConcurrentCallers_ShareOneConnectionAttempt()
     {

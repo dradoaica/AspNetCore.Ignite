@@ -11,7 +11,7 @@ public interface IIgniteManager
 {
     /// <summary>
     ///     The thin client, for SQL, compute, transactions, cluster state, etc. The first use connects and blocks the
-    ///     calling thread until it has connected, through all connection retries (about two minutes with the default
+    ///     calling thread until it has connected, through all connection retries (about 90 seconds with the default
     ///     <c>ConnectRetryCount</c>). In asynchronous code, use <see cref="GetClientAsync" /> instead.
     /// </summary>
     IIgniteClient Client { get; }

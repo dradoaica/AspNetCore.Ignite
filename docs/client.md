@@ -46,9 +46,11 @@ there is one:
 - `EnableClusterDiscovery` (setting `ASPNETCORE_IGNITE_ENABLE_CLUSTER_DISCOVERY`, default `true`): Connects to the other
   server nodes too (partition awareness): turn it off when their addresses are not reachable.
 - `RetryLimit`, `SocketTimeout` (default `5`, `30 s`): Thin client retries of read operations and socket timeout.
-- `ConnectRetryCount`, `OperationRetryCount` (default `6`, `3`): Retries (exponential backoff) of connecting and, once
-  connected, of transient failures (lost connection, cluster not active). A connection that fails after its retries
-  fails the operation at once.
+- `ConnectRetryCount`, `OperationRetryCount` (default `6`, `3`): Retries of connecting and, once connected, of
+  transient failures (lost connection, cluster not active), after waits of 2, 4, 8 and 16 seconds, then of 30 seconds
+  each. A connection that fails after its retries fails the operation at once. With the defaults, the first use of
+  the synchronous members (`Client`, `GetOrCreateCacheClient`) blocks its thread for up to about 90 seconds while the
+  cluster is unreachable: in asynchronous code, use `GetClientAsync` and `GetOrCreateCacheClientAsync`.
 - `Cache.Backups` (default `1`): Backups of created caches.
 - `Cache.EnablePlatformCache` (default `false`): Keeps a deserialized copy of every entry in the .NET memory of the
   (.NET) server nodes: faster reads there, but roughly double the memory per entry. Only for caches created through a

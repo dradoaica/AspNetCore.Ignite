@@ -44,7 +44,10 @@ public sealed class IgniteClientOptions
     /// <summary>The socket timeout of the thin client.</summary>
     public TimeSpan SocketTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
-    /// <summary>Connection attempts (exponential backoff: 2, 4, 8, ... seconds) when the first operation connects.</summary>
+    /// <summary>
+    ///     Connection retries when the first operation connects, after waits of 2, 4, 8 and 16 seconds, then of 30
+    ///     seconds each (with the default 6, about 90 seconds in all).
+    /// </summary>
     public int ConnectRetryCount { get; set; } = 6;
 
     /// <summary>

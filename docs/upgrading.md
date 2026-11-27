@@ -55,6 +55,8 @@ The published images 2.17.0 and 2.18.0 (also tagged `2.18`, `2` and `latest`) do
   `CacheFactory.GetOrCreateCache` creates through a thick client or a server node.
 * The client retries only transient failures, a lost connection or a cluster that is not active (yet): other errors of
   the server (e.g., an invalid cache configuration) surface at once instead of after the retries.
+* The wait between retries grows to 30 seconds at most (2, 4, 8, 16, 30, 30, ... seconds): with the default 6
+  connection retries, a client gives up after about 90 seconds instead of about two minutes.
 * `GroupByValueType` names the cache groups of generic value types with several type arguments without assembly
   versions: new caches of such types may join another group than the existing ones, which keep theirs.
 * `CacheFactory.GetIgniteClientConfiguration`, `CacheFactory.ConnectAsClient` and `CacheFactory.DefaultEndpoint` move
