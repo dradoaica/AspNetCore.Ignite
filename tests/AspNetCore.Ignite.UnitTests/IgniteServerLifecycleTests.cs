@@ -369,6 +369,35 @@ public sealed class IgniteServerLifecycleTests
         await run.WaitAsync(Timeout);
     }
 
+    /// <summary>
+    ///     Found by the TLA+ spec (docs/tlaplus, RunThrowsOnlyOnFailure): a restart after the activation, before the
+    ///     event listeners are registered, fails those calls to the stopped node. It must restart the node, not fail
+    ///     the run (the hosted service would stop the server with exit code 1).
+    /// </summary>
+    [Fact]
+    public async Task RestartBetweenTheActivationAndTheListeners_RestartsTheNode()
+    {
+        FakeNodeLauncher launcher = new();
+        using var runner = CreateRunner(launcher);
+        RestartResult? restart = null;
+        var held = 0;
+        launcher.BeforeLocalListen = () =>
+        {
+            if (Interlocked.Exchange(ref held, 1) == 0)
+            {
+                // on the Run thread: the stop does not need it
+                restart = runner.Restart(Timeout);
+                throw new InvalidOperationException("The node is stopped.");
+            }
+        };
+
+        var run = Task.Run(runner.Run);
+        await FakeNodeLauncher.Eventually(() => launcher.Started == 2 && runner.CurrentPhase == Phase.Running);
+        Assert.Equal(RestartResult.Restarting, restart);
+        Assert.True(runner.Stop(Timeout));
+        Assert.True(await run.WaitAsync(Timeout));
+    }
+
     [Fact]
     public async Task StopOfTheLastServerNode_WaitsForTheActivationInProgress_ThenDeactivatesTheCluster()
     {

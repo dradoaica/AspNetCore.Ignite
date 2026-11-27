@@ -341,6 +341,39 @@ internal sealed class IgniteServerRunner : IDisposable
 
         // Disposed when this node has stopped.
         using LostPartitionsListener lostPartitions = new(node, logger, settings.AutoResetLostPartitions, persistent);
+        try
+        {
+            ListenToEvents(node, lostPartitions);
+            // Before the node can be ready: IsReady asks the tracker whether the node is still catching up.
+            RebalanceTracker.OnRunning();
+            lock (gate)
+            {
+                // Unless a stop or restart began during the activation, or the node stopped on its own.
+                if (phase == Phase.Activating)
+                {
+                    Transition(Phase.Running);
+                }
+            }
+
+            logger.Information(
+                "Ignite server runner is running (DiscoverySpi LocalPort={DiscoverySpiLocalPort}), press CTRL+C to " +
+                "terminate.",
+                (node.GetConfiguration().DiscoverySpi as TcpDiscoverySpi)?.LocalPort
+            );
+        }
+        catch (Exception ex) when (run.Stopping.IsCompleted)
+        {
+            // As in the activation: a stop or restart that came in the meantime fails these calls to the node. Without
+            // this, a restart there (SSL files renewed) would fail the server (docs/tlaplus, RunThrowsOnlyOnFailure).
+            logger.Debug(ex, "The node was stopped before it ran.");
+        }
+
+        await run.Stopped.ConfigureAwait(false);
+        logger.Information("'{IgniteInstance}' stopped.", node.Name);
+    }
+
+    private void ListenToEvents(IIgnite node, LostPartitionsListener lostPartitions)
+    {
         var events = node.GetEvents();
         events.LocalListen<CacheRebalancingEvent>(lostPartitions, EventType.CacheRebalancePartDataLost);
         events.LocalListen<DiscoveryEvent>(
@@ -356,25 +389,6 @@ internal sealed class IgniteServerRunner : IDisposable
             EventType.NodeFailed,
             EventType.NodeSegmented
         );
-
-        // Before the node can be ready: IsReady asks the tracker whether the node is still catching up.
-        RebalanceTracker.OnRunning();
-        lock (gate)
-        {
-            // Unless a stop or restart began during the activation, or the node stopped on its own.
-            if (phase == Phase.Activating)
-            {
-                Transition(Phase.Running);
-            }
-        }
-
-        logger.Information(
-            "Ignite server runner is running (DiscoverySpi LocalPort={DiscoverySpiLocalPort}), press CTRL+C to " +
-            "terminate.",
-            (node.GetConfiguration().DiscoverySpi as TcpDiscoverySpi)?.LocalPort
-        );
-        await run.Stopped.ConfigureAwait(false);
-        logger.Information("'{IgniteInstance}' stopped.", node.Name);
     }
 
     /// <summary>

@@ -36,6 +36,9 @@ internal sealed class FakeNodeLauncher : INodeLauncher
     /// <summary>Runs at the start of every <see cref="IIgnite.GetCluster" /> of the nodes.</summary>
     public Action BeforeClusterRead { get; set; } = () => { };
 
+    /// <summary>Runs at the start of every <see cref="IEvents.LocalListen{T}(IEventListener{T}, int[])" /> of the nodes.</summary>
+    public Action BeforeLocalListen { get; set; } = () => { };
+
     /// <summary>Runs when a cluster is activated, before it is active.</summary>
     public Action BeforeActivated { get; set; } = () => { };
 
@@ -89,7 +92,7 @@ internal sealed class FakeNodeLauncher : INodeLauncher
             }
         );
         var events = Fake.Of<IEvents>((member, _) =>
-            member == nameof(IEvents.LocalListen) ? null : throw new NotSupportedException(member)
+            member == nameof(IEvents.LocalListen) ? Done(BeforeLocalListen) : throw new NotSupportedException(member)
         );
         return Fake.Of<IIgnite>((member, _) => member switch
             {
