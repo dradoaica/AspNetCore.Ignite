@@ -8,6 +8,7 @@ using AspNetCore.IgniteServer;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
+using System.Reflection;
 using Xunit;
 
 namespace AspNetCore.Ignite.UnitTests;
@@ -69,6 +70,52 @@ public sealed class IgniteConfigurationFactoryTests
                         logEvent.RenderMessage().Contains("PEER_ASSEMBLY_LOADING")
         );
     }
+
+    /// <summary>
+    ///     ApplyConfigurationFile copies the properties whose names the file's XML uses. This fails when Ignite.NET's XML
+    ///     names and property names ever differ, which would make a -ConfigFile setting be skipped without a word.
+    /// </summary>
+    [Fact]
+    public void ConfigurationFile_AppliesEveryScalarPropertyThatIgniteWritesToXml()
+    {
+        IgniteConfiguration source = new();
+        List<PropertyInfo> properties = [];
+        foreach (var property in typeof(IgniteConfiguration).GetProperties())
+        {
+            if (property is not { CanRead: true, CanWrite: true, } ||
+                property.GetCustomAttribute<ObsoleteAttribute>() != null ||
+                property.Name == nameof(IgniteConfiguration.PeerAssemblyLoadingMode) ||
+                NonDefaultValue(property.PropertyType) is not { } value)
+            {
+                continue;
+            }
+
+            property.SetValue(source, value);
+            properties.Add(property);
+        }
+
+        var configuration = IgniteConfigurationFactory.CreateDefault();
+        IgniteConfigurationFactory.ApplyConfigurationFile(configuration, source.ToXml(), Logger.None);
+
+        Assert.True(properties.Count > 30, $"only {properties.Count} properties were checked");
+        Assert.All(
+            properties,
+            property => Assert.True(
+                Equals(property.GetValue(source), property.GetValue(configuration)),
+                $"{property.Name} was not applied from the XML"
+            )
+        );
+    }
+
+    private static object? NonDefaultValue(Type type) => (Nullable.GetUnderlyingType(type) ?? type) switch
+    {
+        var t when t == typeof(bool) => true,
+        var t when t == typeof(int) => 4242,
+        var t when t == typeof(long) => 4242L,
+        var t when t == typeof(TimeSpan) => TimeSpan.FromSeconds(4242),
+        var t when t == typeof(string) => "value-4242",
+        _ => null,
+    };
 
     [Fact]
     public void ConfigurationFile_KeepsTheJvmOptionsAndEventTypesTheServerNeeds()
