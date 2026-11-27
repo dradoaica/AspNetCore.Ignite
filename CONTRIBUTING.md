@@ -69,7 +69,10 @@ please open an issue to discuss the approach before starting work.
 ## Pull Requests
 
 1. Fork the repository and create a branch from `main`.
-2. Keep each PR focused on a single change. Small fixes (typos, docs) don't need an issue first.
+2. Keep each PR focused on a single change. Small fixes (typos, docs) don't need an issue first. Within a PR, make
+   each commit one change that builds and passes the tests on its own, with a subject that says what changed: a list
+   of unrelated changes in one commit cannot be reverted or bisected one by one. Squash `WIP` and formatting-only
+   commits into the commit they belong to before the PR is merged.
 3. Follow the existing code style; it is defined in `.editorconfig`. Run `dotnet format` before committing.
 4. Add or update tests where it makes sense, and make sure the solution builds without new warnings.
 5. Update the docs if you change settings, CLI options, ports or Docker usage: `docs/configuration.md` for the server
@@ -92,6 +95,9 @@ please open an issue to discuss the approach before starting work.
   verified by SHA-256. An `Override` attribute keeps a newer version (e.g., for a fixed vulnerability): say why in it.
 - **Library compatibility.** `AspNetCore.Ignite` targets .NET 10 (`net10.0`); don't raise the target framework or add
   heavy dependencies without discussing it first.
+- **Node lifecycle.** A change to how `IgniteServerRunner` starts, restarts or stops the node updates the state diagram
+  and the table of each call in each phase in [Architecture](docs/architecture.md#node-lifecycle), the allowed changes
+  in `IgniteServerRunner.Transition`, and adds a test of the new ordering to `IgniteServerLifecycleTests`.
 - **Configuration.** New server settings should be configurable through `appsettings.json` and environment variables (so
   they work in Docker and Kubernetes), with safe, backward-compatible defaults, and validated in
   `IgniteServerSettings.Validate`.
