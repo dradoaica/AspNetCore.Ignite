@@ -47,7 +47,7 @@ selects another revision.
 The logic of the workflows lives in scripts that also run locally: `scripts/test-chart.sh` (the chart test, against any
 cluster that has the image; its header shows how to load the image into kind or microk8s) and `scripts/ci/` (which chart
 revision is tested, the paired versions check, the chart update of a release, the floating tags a release moves
-(`release-tags.sh`), and `check-docs.sh`, which checks that
+(`release-tags.sh`, whose cases `test-release-tags.sh` checks on every build), and `check-docs.sh`, which checks that
 the names of [Architecture](architecture.md)'s "Where to change what" table exist and, with `--diagrams`, that its
 Mermaid diagrams parse).
 

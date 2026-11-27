@@ -38,7 +38,8 @@ permissions:
   contents: read
 
 jobs:
-  # the names of docs/architecture.md's "Where to change what" exist, and the Mermaid diagrams of docs/ parse
+  # the names of docs/architecture.md's "Where to change what" exist, the Mermaid diagrams of docs/ parse, and the
+  # release scripts give the expected results (they run only at a release otherwise)
   docs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -47,6 +48,8 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Check Docs
         run: scripts/ci/check-docs.sh --diagrams
+      - name: Test Release Scripts
+        run: scripts/ci/test-release-tags.sh
 
   # the server image, built once for the integration tests and the chart jobs
   image:
