@@ -6,7 +6,6 @@ using AspNetCore.IgniteServer.Listeners;
 using Serilog;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,14 +16,14 @@ namespace AspNetCore.IgniteServer;
 ///     Starts, activates and stops one Ignite server node, configured by the settings.
 ///     <para>
 ///         State: <see cref="Phase" /> says where the runner is (docs/architecture.md draws it as a state diagram, with a
-///         table of what each call does in each phase). Each start of the node is a <see cref="NodeRun" />, which holds
-///         that node and the signals of its start and stop. Only <see cref="Transition" /> changes the phase.
+///         table of what each call does in each phase). Only <see cref="Transition" /> changes it. Each start of the node
+///         is a <see cref="NodeRun" />, which holds that node, the signals of its start and stop, and its stop.
 ///     </para>
 ///     <para>
 ///         Threads: <see cref="Run" /> runs the node. <see cref="Restart" />, <see cref="Stop" />,
-///         <see cref="Dispose" /> and the node's stop come from other threads. All the state is read and written under
-///         one lock, <c>gate</c>. Ignite is never called while it is held, because starting, stopping and reading the
-///         cluster can take long, and Ignite's threads call back into this class.
+///         <see cref="Dispose" /> and the node's stop come from other threads. The runner's state is read and written
+///         under one lock, <c>gate</c>. Ignite is never called while it is held, because starting, stopping and reading
+///         the cluster can take long, and Ignite's threads call back into this class.
 ///     </para>
 /// </summary>
 internal sealed class IgniteServerRunner : IDisposable
@@ -63,17 +62,21 @@ internal sealed class IgniteServerRunner : IDisposable
         /// <summary>A restart stops the node. Once it has stopped, Run starts it again.</summary>
         Restarting,
 
-        /// <summary>A stop was requested. Run starts no node again.</summary>
+        /// <summary>
+        ///     The node stops, or has stopped, for good: a stop was requested, or the node stopped on its own
+        ///     (<see cref="NodeRun.StoppedOnItsOwn" />). Run starts no node again.
+        /// </summary>
         Stopping,
 
-        /// <summary>Run has returned. Final.</summary>
+        /// <summary>Run has returned (or thrown). Final.</summary>
         Stopped,
     }
 
     // The phase changes the runner makes; Transition refuses any other. Staying in the same phase is always allowed.
+    // The changes to Stopped from Starting, Activating, Running and Restarting are those of a Run that throws.
     private static readonly Dictionary<Phase, Phase[]> AllowedTransitions = new()
     {
-        [Phase.Idle] = [Phase.Starting, Phase.Stopping, Phase.Stopped,],
+        [Phase.Idle] = [Phase.Starting, Phase.Stopping,],
         [Phase.Starting] = [Phase.Activating, Phase.Stopping, Phase.Stopped,],
         [Phase.Activating] = [Phase.Running, Phase.Restarting, Phase.Stopping, Phase.Stopped,],
         [Phase.Running] = [Phase.Restarting, Phase.Stopping, Phase.Stopped,],
@@ -151,21 +154,22 @@ internal sealed class IgniteServerRunner : IDisposable
         }
     }
 
-    /// <summary>The running node, or null while it is (re)starting, stopping or stopped.</summary>
+    /// <summary>The running node (Activating or Running), or null while it is (re)starting, stopping or stopped.</summary>
     public IIgnite? Node
     {
         get
         {
             lock (gate)
             {
-                return RunningNodeUnderGate();
+                return phase is Phase.Activating or Phase.Running ? currentRun?.Node : null;
             }
         }
     }
 
     /// <summary>
     ///     True while the node is running and its cluster is active. With READY_WHEN_REBALANCED, the node must also have
-    ///     caught up after its start (received its partitions).
+    ///     caught up after its start (received its partitions). Each read also advances that catch-up
+    ///     (<see cref="RebalanceTracker.ObserveCatchingUp" />).
     /// </summary>
     public bool IsReady
     {
@@ -174,7 +178,7 @@ internal sealed class IgniteServerRunner : IDisposable
             IIgnite? readyNode;
             lock (gate)
             {
-                readyNode = phase == Phase.Running ? RunningNodeUnderGate() : null;
+                readyNode = phase == Phase.Running ? currentRun?.Node : null;
             }
 
             return readyNode != null &&
@@ -190,7 +194,7 @@ internal sealed class IgniteServerRunner : IDisposable
     /// </summary>
     public void Dispose()
     {
-        Task<bool>? stop;
+        NodeRun? run;
         lock (gate)
         {
             if (disposed)
@@ -200,12 +204,12 @@ internal sealed class IgniteServerRunner : IDisposable
 
             disposed = true;
             RequestStopUnderGate();
-            stop = currentRun is { Stop: null, } run
-                ? BeginNodeStopUnderGate(run, node => launcher.Stop(node.Name, true)) : null;
+            run = currentRun;
         }
 
         try
         {
+            var stop = run?.BeginStopIfNoneBegan(node => launcher.Stop(node.Name, true));
             if (stop != null && !stop.Wait(GracefulStopTimeout))
             {
                 logger.Warning(
@@ -241,7 +245,7 @@ internal sealed class IgniteServerRunner : IDisposable
                 {
                     if (phase != Phase.Restarting)
                     {
-                        return phase == Phase.Stopping;
+                        return currentRun?.StoppedOnItsOwn != true;
                     }
 
                     Transition(Phase.Idle);
@@ -276,31 +280,34 @@ internal sealed class IgniteServerRunner : IDisposable
         logger.Information("Starting Ignite server runner...");
         RebalanceTracker.Reset();
         IIgnite node;
-        bool stopRequested;
         try
         {
             node = launcher.Start(Configuration);
-            lock (gate)
-            {
-                run.Node = node;
-                stopRequested = phase == Phase.Stopping;
-                if (!stopRequested)
-                {
-                    Transition(Phase.Activating);
-                }
-            }
         }
-        finally
+        catch
         {
-            run.Started.TrySetResult();
+            run.OnStarted(null);
+            throw;
+        }
+
+        bool stopRequested;
+        lock (gate)
+        {
+            run.OnStarted(node);
+            // also when the node stopped on its own before its start returned (OnNodeStopped)
+            stopRequested = phase == Phase.Stopping;
+            if (!stopRequested)
+            {
+                Transition(Phase.Activating);
+            }
         }
 
         if (stopRequested)
         {
             // Stop() was called while the node started, and stops it now. This begins the same stop in case Stop()
             // gave up waiting for the start (it then returned false).
-            _ = BeginGracefulStop(run, GracefulStopTimeout, false);
-            await run.Stopped.Task.ConfigureAwait(false);
+            _ = run.BeginStop(startedNode => StopGracefully(startedNode, GracefulStopTimeout, false));
+            await run.Stopped.ConfigureAwait(false);
             logger.Information("'{IgniteInstance}' stopped.", node.Name);
             return;
         }
@@ -316,9 +323,9 @@ internal sealed class IgniteServerRunner : IDisposable
         bool activated;
         try
         {
-            activated = await activator.ActivateAsync(node, reactivate, run.Stopping.Task).ConfigureAwait(false);
+            activated = await activator.ActivateAsync(node, reactivate, run.Stopping).ConfigureAwait(false);
         }
-        catch (Exception ex) when (run.Stopping.Task.IsCompleted)
+        catch (Exception ex) when (run.Stopping.IsCompleted)
         {
             // The node was stopped during the activation, which then fails to call it.
             logger.Debug(ex, "The activation ended with the stop of the node.");
@@ -327,7 +334,7 @@ internal sealed class IgniteServerRunner : IDisposable
 
         if (!activated)
         {
-            await run.Stopped.Task.ConfigureAwait(false);
+            await run.Stopped.ConfigureAwait(false);
             logger.Information("'{IgniteInstance}' stopped before activation.", node.Name);
             return;
         }
@@ -354,7 +361,7 @@ internal sealed class IgniteServerRunner : IDisposable
         RebalanceTracker.OnRunning();
         lock (gate)
         {
-            // Unless a stop or restart began during the activation.
+            // Unless a stop or restart began during the activation, or the node stopped on its own.
             if (phase == Phase.Activating)
             {
                 Transition(Phase.Running);
@@ -366,7 +373,7 @@ internal sealed class IgniteServerRunner : IDisposable
             "terminate.",
             (node.GetConfiguration().DiscoverySpi as TcpDiscoverySpi)?.LocalPort
         );
-        await run.Stopped.Task.ConfigureAwait(false);
+        await run.Stopped.ConfigureAwait(false);
         logger.Information("'{IgniteInstance}' stopped.", node.Name);
     }
 
@@ -380,18 +387,18 @@ internal sealed class IgniteServerRunner : IDisposable
         lock (gate)
         {
             // A node that is still starting may have read the previous files: SslFileRestarter asks again later.
-            if (phase is not (Phase.Activating or Phase.Running) || RunningNodeUnderGate() == null)
+            if (phase is not (Phase.Activating or Phase.Running) || currentRun == null)
             {
                 return RestartResult.NotRunning;
             }
 
             Transition(Phase.Restarting);
-            run = currentRun!;
-            run.Stopping.TrySetResult();
+            run = currentRun;
+            run.RequestStop();
         }
 
         logger.Information("Restarting Ignite server runner...");
-        if (StopGracefully(run, timeout, true))
+        if (run.StopWithin(timeout, (node, timeLeft) => StopGracefully(node, timeLeft, true)))
         {
             return RestartResult.Restarting;
         }
@@ -428,7 +435,7 @@ internal sealed class IgniteServerRunner : IDisposable
 
         logger.Information("Stopping Ignite server runner...");
         // No run: Run has not started the node, and now never will.
-        if (run == null || StopGracefully(run, timeout, false))
+        if (run == null || run.StopWithin(timeout, (node, timeLeft) => StopGracefully(node, timeLeft, false)))
         {
             logger.Information("Ignite server runner stopped.");
             return true;
@@ -451,80 +458,30 @@ internal sealed class IgniteServerRunner : IDisposable
             Transition(Phase.Stopping);
         }
 
-        currentRun?.Stopping.TrySetResult();
+        currentRun?.RequestStop();
     }
 
     /// <summary>
-    ///     Waits for the node of <paramref name="run" /> to start, then stops it (or joins a stop already in progress),
-    ///     all within <paramref name="timeout" />. Returns false when the node did not stop in time.
-    /// </summary>
-    private bool StopGracefully(NodeRun run, TimeSpan timeout, bool restarting)
-    {
-        var elapsed = Stopwatch.StartNew();
-        if (!run.Started.Task.Wait(timeout))
-        {
-            return false;
-        }
-
-        var stop = BeginGracefulStop(run, Remaining(timeout, elapsed), restarting);
-        // No node: its start failed, so there is nothing to stop.
-        return stop?.Wait(Remaining(timeout, elapsed)) ?? true;
-    }
-
-    /// <summary>
-    ///     Begins the graceful stop of the started node of <paramref name="run" />, unless a stop began already, and
-    ///     returns the stop in progress.
+    ///     The graceful stop of a started node, on a thread pool thread (<see cref="NodeRun.BeginStop" />).
     ///     <para>
     ///         The GRACEFUL shutdown policy waits until the node's partitions have copies on other nodes. That never
     ///         happens for the last server node of a cluster, so that node deactivates the cluster first
-    ///         (<see cref="ClusterActivator.DeactivateIfLastServerNode" />). When <paramref name="restarting" />, the next
-    ///         run then activates it again.
+    ///         (<see cref="ClusterActivator.DeactivateIfLastServerNode" />, within <paramref name="deactivationTimeout" />).
+    ///         When <paramref name="restarting" />, the next run then activates it again.
     ///     </para>
     /// </summary>
-    private Task<bool>? BeginGracefulStop(NodeRun run, TimeSpan deactivationTimeout, bool restarting)
+    private bool StopGracefully(IIgnite node, TimeSpan deactivationTimeout, bool restarting)
     {
-        lock (gate)
+        if (activator.DeactivateIfLastServerNode(node, deactivationTimeout) && restarting)
         {
-            return BeginNodeStopUnderGate(
-                run,
-                node =>
-                {
-                    if (activator.DeactivateIfLastServerNode(node, deactivationTimeout) && restarting)
-                    {
-                        lock (gate)
-                        {
-                            deactivatedToRestart = true;
-                        }
-                    }
-
-                    return launcher.Stop(node.Name, false);
-                }
-            );
-        }
-    }
-
-    /// <summary>
-    ///     The node of a run is stopped once (Ignite stops a node only once): the first caller begins
-    ///     <paramref name="stop" /> on a thread pool thread, and later callers get that same stop. Null while the node is
-    ///     still starting, or when its start failed.
-    /// </summary>
-    private static Task<bool>? BeginNodeStopUnderGate(NodeRun run, Func<IIgnite, bool> stop)
-    {
-        if (run.Node is not { } node)
-        {
-            return null;
+            lock (gate)
+            {
+                deactivatedToRestart = true;
+            }
         }
 
-        return run.Stop ??= run.Stopped.Task.IsCompleted ? Task.FromResult(true) : Task.Run(() => stop(node));
+        return launcher.Stop(node.Name, false);
     }
-
-    /// <summary>
-    ///     The node of the current run while it is running: started, not yet stopped, and with no stop or restart
-    ///     requested. The phase stays Activating or Running when the node stops on its own, until Run returns.
-    /// </summary>
-    private IIgnite? RunningNodeUnderGate() =>
-        phase is Phase.Activating or Phase.Running && currentRun is { Stopped.Task.IsCompleted: false, } run
-            ? run.Node : null;
 
     /// <summary>Called by Ignite (<see cref="NodeStopHandler" />) once the node has stopped, however it stopped.</summary>
     private void OnNodeStopped()
@@ -532,8 +489,20 @@ internal sealed class IgniteServerRunner : IDisposable
         lock (gate)
         {
             // Only one node runs at a time (RunOnce returns once its node has stopped), so this is the current one.
-            currentRun?.Stopping.TrySetResult();
-            currentRun?.Stopped.TrySetResult();
+            if (currentRun is not { } run)
+            {
+                return;
+            }
+
+            // Every requested stop changes the phase first (to Restarting or Stopping), so a node that stops in one of
+            // these phases stopped on its own.
+            var onItsOwn = phase is Phase.Starting or Phase.Activating or Phase.Running;
+            if (onItsOwn)
+            {
+                Transition(Phase.Stopping);
+            }
+
+            run.OnStopped(onItsOwn);
         }
     }
 
@@ -545,31 +514,6 @@ internal sealed class IgniteServerRunner : IDisposable
         }
 
         phase = to;
-    }
-
-    private static TimeSpan Remaining(TimeSpan timeout, Stopwatch elapsed) =>
-        timeout > elapsed.Elapsed ? timeout - elapsed.Elapsed : TimeSpan.Zero;
-
-    /// <summary>One start of the node, until it has stopped. Its fields are written under <c>gate</c>.</summary>
-    private sealed class NodeRun
-    {
-        /// <summary>Completes when Ignition.Start has returned (or thrown).</summary>
-        public readonly TaskCompletionSource Started = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        /// <summary>Completes when the node has stopped.</summary>
-        public readonly TaskCompletionSource Stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        /// <summary>
-        ///     Completes when a stop or restart is requested, or the node has stopped: the activation then ends
-        ///     (<see cref="ClusterActivator" />).
-        /// </summary>
-        public readonly TaskCompletionSource Stopping = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        /// <summary>The started node; null until Ignition.Start returns it.</summary>
-        public IIgnite? Node;
-
-        /// <summary>The stop of the node, once one began.</summary>
-        public Task<bool>? Stop;
     }
 
     /// <summary>

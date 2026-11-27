@@ -137,18 +137,20 @@ stateDiagram-v2
     Running --> Restarting: Restart (SSL files changed)
     Restarting --> Idle: the node stopped
     Starting --> Stopping: Stop (the node is stopped once started)
-    Starting --> Stopped: the start failed
     Activating --> Stopping: Stop (no activation)
     Running --> Stopping: Stop (SIGTERM)
     Restarting --> Stopping: Stop, or the restart timed out
+    Starting --> Stopping: the node stopped on its own
+    Activating --> Stopping: the node stopped on its own
+    Running --> Stopping: the node stopped on its own
     Stopping --> Stopped: the node stopped
-    Activating --> Stopped: the node stopped on its own
-    Running --> Stopped: the node stopped on its own
     Stopped --> [*]
 ```
 
 The states are the values of `IgniteServerRunner.Phase`. `IgniteServerRunner.Transition` refuses any change that the
-diagram does not show, so the diagram and the code cannot drift apart unnoticed. The states inside `Activating` and
+diagram does not show, so the diagram and the code cannot drift apart unnoticed. The one exception is a `Run` that
+throws (e.g., a failed start), which ends in `Stopped` from the phase it is in. Each start of the node is a `NodeRun`:
+its node, the signals of its start and stop, and its one stop. The states inside `Activating` and
 `Running` are those of `ClusterActivator` and `RebalanceTracker`.
 
 * **Started** (`/health/startup`) once the node has joined the topology, also while its cluster waits for
@@ -178,9 +180,9 @@ nodes never run at once.
 | Phase        | `Restart(timeout)`                                                                                                                                    | `Stop(timeout)`                                                                                                                            | The node stops on its own                    |
 |--------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------|
 | `Idle`       | `NotRunning`                                                                                                                                          | Goes to `Stopping`; `Run` starts no node. Returns true.                                                                                    | –                                            |
-| `Starting`   | `NotRunning`: the node may have read the old files, so `SslFileRestarter` asks again later                                                            | Goes to `Stopping`, waits for the start, then stops the node. False if the start outlasts the timeout; `Run` still stops the node once started. | Seen even before the start returns: `Run` returns false |
-| `Activating` | Goes to `Restarting`: the cluster is not activated, the node stops, and `Run` starts it again                                                          | Goes to `Stopping`: an activation not yet begun is skipped, one in progress ends first; then the graceful stop    | `Run` returns false (exit code `1`)          |
-| `Running`    | Goes to `Restarting`: the node stops (the last server node deactivates the cluster first) and `Run` starts it again. `TimedOut` goes to `Stopping` instead | Goes to `Stopping`: the graceful stop (the last server node deactivates the cluster first)                                                | `Run` returns false (exit code `1`)          |
+| `Starting`   | `NotRunning`: the node may have read the old files, so `SslFileRestarter` asks again later                                                            | Goes to `Stopping`, waits for the start, then stops the node. False if the start outlasts the timeout; `Run` still stops the node once started. | Goes to `Stopping`, seen even before the start returns; `Run` returns false |
+| `Activating` | Goes to `Restarting`: the cluster is not activated, the node stops, and `Run` starts it again                                                          | Goes to `Stopping`: an activation not yet begun is skipped, one in progress ends first; then the graceful stop    | Goes to `Stopping`; `Run` returns false (exit code `1`) |
+| `Running`    | Goes to `Restarting`: the node stops (the last server node deactivates the cluster first) and `Run` starts it again. `TimedOut` goes to `Stopping` instead | Goes to `Stopping`: the graceful stop (the last server node deactivates the cluster first)                                                | Goes to `Stopping`; `Run` returns false (exit code `1`) |
 | `Restarting` | `NotRunning`                                                                                                                                          | Goes to `Stopping`: waits for the restart's stop, and `Run` starts no node again                                                          | Part of the restart: `Run` starts it again   |
 | `Stopping`   | `NotRunning`                                                                                                                                          | Waits for the stop in progress                                                                                                             | –                                            |
 | `Stopped`    | `NotRunning`                                                                                                                                          | Returns true at once                                                                                                                       | –                                            |
@@ -272,7 +274,7 @@ See [Development](development.md) for how to run them.
 |----------------------------------------------|-----------------------------------------------------------------|
 | A setting (name, default, validation)        | `IgniteServerSettings*.cs`, then `docs/configuration.md`        |
 | How a setting configures the node            | `IgniteConfigurationFactory.cs`, or `config/spring-config*.xml` |
-| Start, restart and stop                      | `IgniteServerRunner.cs` (tests: `IgniteServerLifecycleTests`)   |
+| Start, restart and stop                      | `IgniteServerRunner.cs`, `NodeRun.cs` (tests: `IgniteServerLifecycleTests`, `NodeRunTests`) |
 | Cluster activation and the baseline          | `ClusterActivator.cs`                                           |
 | Host integration, exit codes                 | `IgniteServerHostedService.cs`, `ServerExit.cs`, `Program.cs`   |
 | Certificate rotation                         | `SslFileRestarter.cs`, `Utils/FileChangeWatcher.cs`             |

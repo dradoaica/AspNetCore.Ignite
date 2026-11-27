@@ -1,3 +1,4 @@
+using Apache.Ignite.Core.Lifecycle;
 using AspNetCore.IgniteServer;
 using Serilog;
 using Serilog.Core;
@@ -48,6 +49,33 @@ public sealed class IgniteServerLifecycleTests
         Assert.False(await run.WaitAsync(Timeout));
         Assert.Equal(1, launcher.Started);
         Assert.Equal(Phase.Stopped, runner.CurrentPhase);
+    }
+
+    [Fact]
+    public async Task NodeThatStopsOnItsOwn_IsNoLongerRunning_AtOnce()
+    {
+        FakeNodeLauncher launcher = new();
+        using var runner = CreateRunner(launcher);
+        // Notified right after the runner's own handler, as Ignite notifies them in order: what the runner says
+        // between the node's stop and the end of the run.
+        (Phase Phase, bool HasNode, bool IsReady, RestartResult Restart)? seen = null;
+        runner.Configuration.LifecycleHandlers =
+        [
+            .. runner.Configuration.LifecycleHandlers,
+            new LifecycleProbe(() => seen = (runner.CurrentPhase, runner.Node != null, runner.IsReady,
+                runner.Restart(Timeout))),
+        ];
+        var run = runner.Run();
+
+        launcher.Stop(runner.Node!.Name, false);
+
+        Assert.False(await run.WaitAsync(Timeout));
+        // Stopped when the run already ended on another thread; never a phase of a running node
+        Assert.NotNull(seen);
+        Assert.Contains(seen.Value.Phase, (Phase[])[Phase.Stopping, Phase.Stopped,]);
+        Assert.False(seen.Value.HasNode);
+        Assert.False(seen.Value.IsReady);
+        Assert.Equal(RestartResult.NotRunning, seen.Value.Restart);
     }
 
     [Fact]
@@ -417,4 +445,15 @@ public sealed class IgniteServerLifecycleTests
         null,
         launcher
     );
+
+    private sealed class LifecycleProbe(Action onStopped) : ILifecycleHandler
+    {
+        public void OnLifecycleEvent(LifecycleEventType evt)
+        {
+            if (evt == LifecycleEventType.AfterNodeStop)
+            {
+                onStopped();
+            }
+        }
+    }
 }
